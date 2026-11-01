@@ -361,7 +361,7 @@ def row_record(r: pd.Series, ck: dict | None = None, acr: dict | None = None) ->
         "funnel_id": r["funnel_id"],
         "customer": r["customer"],
         "team": r["team"], "am": r["am"], "am_key": r["am_key"],
-        "acr_type": r["acr_type"] or r["acr_raw"],
+        "acr_type": r["acr_type"] if isinstance(r["acr_type"], str) else r["acr_raw"],
         "status": r["status"],
         "win_ym": R.ym_label(r["win_ym"]),
         "rev_ym": R.ym_label(r["rev_ym"]),
@@ -431,8 +431,8 @@ def overview_view(ds: Dataset, p: Params) -> dict:
             out.append(row_record(r, None if cks is None else cks.loc[i].to_dict()))
         return out
 
-    upcoming = prog[sched.isin(["이번 달", "다음 달"])].sort_values(["win_ym", "contract_amt"], ascending=[True, False])
-    overdue = prog[sched == "예정월 경과"].sort_values("win_ym")
+    upcoming = prog[sched.isin(["이번 달", "다음 달"])].sort_values(["win_ym", "contract_amt"], ascending=[True, False], kind="mergesort")
+    overdue = prog[sched == "예정월 경과"].sort_values("win_ym", kind="mergesort")
     r_dec = prog_r[(prog_r["new_monthly"] < prog_r["prev_monthly"]) | (prog_r["monthly"] < 0)]
     team_checks = []
     if not ck.empty:
@@ -467,7 +467,7 @@ def overview_view(ds: Dataset, p: Params) -> dict:
         "overdue_count": int(len(overdue)),
         "renewal_decrease": rows_of(r_dec, 10),
         "renewal_decrease_count": int(len(r_dec)),
-        "churn": rows_of(churn.sort_values("prev_monthly", ascending=False), 10),
+        "churn": rows_of(churn.sort_values("prev_monthly", ascending=False, kind="mergesort"), 10),
         "team_checks": team_checks,
         "priority": priority_rows(df, p, ck, limit=20),
         "basis": {
