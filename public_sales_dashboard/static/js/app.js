@@ -31,6 +31,8 @@
     if (S.ui.srcUnit === "unknown" || !UNIT_WON[S.ui.srcUnit]) return 1;
     return UNIT_WON[S.ui.srcUnit] / UNIT_WON[S.ui.dispUnit];
   }
+  // 서버에서 원본 단위가 확정(SOURCE_UNIT≠unknown)되면 화면에서 바꿀 수 없음
+  function unitLocked() { return !!(S.meta && S.meta.unit && S.meta.unit.source_unit !== "unknown"); }
   function unitName() { return S.ui.srcUnit === "unknown" ? "원본 단위·확인 필요" : S.ui.dispUnit; }
   function conv(v) { return v == null ? null : v * unitFactor(); }
   function fmtNum(v, dec) {
@@ -78,6 +80,7 @@
     $("th_imm").value = f.th.imminent_months; $("th_prob").value = f.th.high_probability;
     $("u_src").value = S.ui.srcUnit; $("u_disp").value = S.ui.dispUnit; $("u_dec").value = String(S.ui.dec);
     $("u_disp").disabled = S.ui.srcUnit === "unknown";
+    $("u_src").disabled = unitLocked();
     updateCounts();
   }
   function renderAmList() {
@@ -122,7 +125,7 @@
     const th0 = S.meta.defaults.th;
     f.th = { stale_days: num("th_stale", th0.stale_days), large_contract_amount: num("th_large", th0.large_contract_amount),
       large_renewal_monthly: num("th_large_r", th0.large_renewal_monthly), imminent_months: num("th_imm", th0.imminent_months), high_probability: num("th_prob", th0.high_probability) };
-    S.ui.srcUnit = $("u_src").value; S.ui.dispUnit = $("u_disp").value; S.ui.dec = parseInt($("u_dec").value, 10);
+    S.ui.srcUnit = unitLocked() ? S.meta.unit.source_unit : $("u_src").value; S.ui.dispUnit = $("u_disp").value; S.ui.dec = parseInt($("u_dec").value, 10);
     store.set("filters", f); store.set("ui", S.ui);
     updateCounts();
   }
@@ -147,7 +150,8 @@
     }
     const u = $("unitChip");
     u.className = S.ui.srcUnit === "unknown" ? "chip warn" : "chip ok";
-    u.textContent = S.ui.srcUnit === "unknown" ? "단위: 원본 단위·확인 필요(변환 안 함)" : `단위: ${S.ui.dispUnit} (원본 ${S.ui.srcUnit})`;
+    u.textContent = S.ui.srcUnit === "unknown" ? "단위: 원본 단위·확인 필요(변환 안 함)"
+      : (S.ui.dispUnit === S.ui.srcUnit ? `단위: ${S.ui.dispUnit}` : `단위: ${S.ui.dispUnit} (원본 ${S.ui.srcUnit} 환산)`);
     if (j && j.applied) {
       const a = j.applied;
       $("pageSub").textContent = `기준일 ${a["기준일"]} · 조회기간 ${a["조회기간"]} · ${a["ACR 기준"]}`;
@@ -655,7 +659,7 @@
       let h = "";
       h += `<h3>원본 · 업로드 시각</h3>${d.empty ? '<p class="neg">원본 데이터 없음</p>' : `<dl class="basis"><dt>파일</dt><dd>${esc(d.meta.file_name)}</dd><dt>업로드</dt><dd>${esc(d.meta.uploaded_at)}</dd><dt>건수</dt><dd>${cnt(d.meta.row_count)}건 (대상 본부 ${cnt(d.summary.in_scope_rows)}건)</dd></dl>`}`;
       h += `<h3>적용 필터</h3><dl class="basis">${Object.entries(a).map(([k, val]) => `<dt>${esc(k)}</dt><dd>${esc(typeof val === "object" ? Object.entries(val).map(([x, y]) => `${x}=${y}`).join(", ") : val)}</dd>`).join("")}</dl>`;
-      h += `<h3>금액 단위</h3><p>${S.ui.srcUnit === "unknown" ? '<span class="chip warn">원본 단위·확인 필요</span> 원본 숫자를 변환 없이 표시합니다.' : `원본 ${esc(S.ui.srcUnit)} → 표시 ${esc(S.ui.dispUnit)}`} 계산 중 반올림 없음, 표시할 때만 소수 ${S.ui.dec}자리.</p>`;
+      h += `<h3>금액 단위</h3><p>${S.ui.srcUnit === "unknown" ? '<span class="chip warn">원본 단위·확인 필요</span> 원본 숫자를 변환 없이 표시합니다.' : `원본 ${esc(S.ui.srcUnit)}${unitLocked() ? "(서버 설정 확정)" : ""} → 표시 ${esc(S.ui.dispUnit)}`} 계산 중 반올림 없음, 표시할 때만 소수 ${S.ui.dec}자리.</p>`;
       if (!d.empty) {
         h += `<h3>데이터 품질 · 제외</h3><dl class="basis"><dt>집계 제외</dt><dd>${cnt(d.summary.agg_excluded_rows)}건 (중복 그룹 ${d.quality.dup_group_count}개)</dd><dt>품질 확인 행</dt><dd>${cnt(d.quality.rows_with_issues)}건</dd>
           ${d.metrics.map((m) => `<dt>${esc(m.metric)}</dt><dd>확정 조건 ${m.confirmed_rows}건 중 포함 ${m.included}건${Object.keys(m.excluded).length ? " · 제외 " + Object.entries(m.excluded).map(([k, x]) => `${esc(k)} ${x}건`).join(", ") : ""}</dd>`).join("")}</dl>`;
@@ -708,7 +712,8 @@
     S.f.products = S.f.products.filter((p) => S.meta.options.products.includes(p));
     const ui = store.get("ui", null);
     if (ui) Object.assign(S.ui, ui);
-    if (!saved && S.meta.unit.source_unit !== "unknown") S.ui.srcUnit = S.meta.unit.source_unit;
+    if (unitLocked()) S.ui.srcUnit = S.meta.unit.source_unit; // 확정 단위는 저장된 화면 설정보다 우선
+    if (!UNIT_WON[S.ui.dispUnit]) S.ui.dispUnit = "백만원";
     renderFilterInputs();
   }
 

@@ -63,8 +63,9 @@ WAITRESS_THREADS = _env_int("WAITRESS_THREADS", 8)
 
 # ---------------------------------------------------------------- 금액 단위
 UNIT_FACTORS_TO_WON = {"원": 1, "천원": 1_000, "백만원": 1_000_000, "억원": 100_000_000}
-# 원본 금액 단위. 'unknown' = 원본 단위·확인 필요(변환 불가)
-SOURCE_UNIT = _env("SOURCE_UNIT", "unknown")
+# 원본 금액 단위. 유선Funnel 원본은 백만원으로 확인됨(업무 확인 완료).
+# 'unknown' 으로 두면 '원본 단위·확인 필요'(변환 불가) 상태로 표시
+SOURCE_UNIT = _env("SOURCE_UNIT", "백만원")
 if SOURCE_UNIT not in UNIT_FACTORS_TO_WON:
     SOURCE_UNIT = "unknown"
 
@@ -72,9 +73,9 @@ if SOURCE_UNIT not in UNIT_FACTORS_TO_WON:
 BUSINESS_DEFAULTS = {
     # 최근영업활동내역 저장일시가 기준일로부터 N일 초과 경과하면 '미갱신'
     "stale_days": _env_int("STALE_DAYS", 30),
-    # 대형 사업(A/C 진행 중): 계약기간매출 ≥ 값 (원본 단위)
+    # 대형 사업(A/C 진행 중): 계약기간매출 ≥ 값 (원본 단위=백만원, 1000 = 10억원)
     "large_contract_amount": _env_float("LARGE_CONTRACT_AMOUNT", 1000),
-    # 대형 재계약(R 진행 중): 기존 월매출 ≥ 값 (원본 단위)
+    # 대형 재계약(R 진행 중): 기존 월매출 ≥ 값 (원본 단위=백만원, 30 = 월 3천만원)
     "large_renewal_monthly": _env_float("LARGE_RENEWAL_MONTHLY", 30),
     # 예정 임박: 기준월 포함 N개월(1 → 이번 달·다음 달)
     "imminent_months": _env_int("IMMINENT_MONTHS", 1),

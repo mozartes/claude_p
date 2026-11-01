@@ -227,7 +227,9 @@ def create_app(store: DataStore | None = None, prefix: str | None = None) -> Fla
         d = ds()
         if d.empty:
             return jsonify({"ok": False, "error": "자료 없음"}), 400
-        unit_src = b.get("source_unit") if b.get("source_unit") in C.UNIT_FACTORS_TO_WON else C.SOURCE_UNIT
+        # 서버에서 단위가 확정되어 있으면 서버 설정 우선
+        unit_src = C.SOURCE_UNIT if C.SOURCE_UNIT != "unknown" else (
+            b.get("source_unit") if b.get("source_unit") in C.UNIT_FACTORS_TO_WON else "unknown")
         sel, ck, basis, desc = A.drill_rows(d, p, b.get("drill"))
         q = str(b.get("q") or "")[:100]
         rows = [A.row_record(sel.loc[i], ck.loc[i].to_dict(),
@@ -242,6 +244,9 @@ def create_app(store: DataStore | None = None, prefix: str | None = None) -> Fla
                 ("products", "상품(월매출)"), ("updated_at", "최근 갱신일"), ("strategy_reg", "재계약전략 등록여부"),
                 ("acr_included", "ACR 포함"), ("acr_excl_reason", "ACR 제외 사유"), ("checks", "확인 사유"),
                 ("actions", "권장 확인 행동"), ("level", "우선순위 등급"), ("issues", "데이터 품질")]
+        if unit_src != "unknown":  # 금액 열 이름에 단위 표기
+            amt_keys = {"monthly", "contract_amt", "prev_monthly", "new_monthly"}
+            cols = [(k, f"{lb}({unit_src})" if k in amt_keys else lb) for k, lb in cols]
         recs = []
         for r in rows:
             rec = {}
@@ -258,7 +263,7 @@ def create_app(store: DataStore | None = None, prefix: str | None = None) -> Fla
         cond = [("생성시각", dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
                 ("원본 파일", d.meta.get("file_name")), ("원본 업로드 시각", d.meta.get("uploaded_at")),
                 ("목록 조건", desc), ("목록 내 검색", q or "없음"), ("행 수", len(df)),
-                ("금액 단위", f"원본 단위 그대로({unit_src if unit_src != 'unknown' else '원본 단위·확인 필요'}), 반올림 없음")]
+                ("금액 단위", f"{unit_src} (원본 값 그대로, 반올림 없음)" if unit_src != "unknown" else "원본 단위·확인 필요(원본 값 그대로, 반올림 없음)")]
         cond += [(k, json.dumps(v, ensure_ascii=False) if isinstance(v, dict) else v) for k, v in summ.items()]
         cond += [("지표 정의: " + k, v) for k, v in {
             "확정 ACR": "A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료; 월매출합계(증감액) 기준, 음수 유지",

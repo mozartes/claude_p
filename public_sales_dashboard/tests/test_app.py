@@ -133,9 +133,10 @@ def test_export_contents_match(client_factory):
     wb = load_workbook(io.BytesIO(r.data))
     ws = wb["목록"]
     hdr = [x.value for x in ws[1]]
-    vals = [rw[hdr.index("월매출합계")] for rw in ws.iter_rows(min_row=2, values_only=True)]
+    vals = [rw[hdr.index("월매출합계(백만원)")] for rw in ws.iter_rows(min_row=2, values_only=True)]
     assert len(vals) == acr["funnels"] and sum(vals) == acr["ACR"]
     cond = {rw[0]: rw[1] for rw in wb["조건_정의"].iter_rows(min_row=2, values_only=True)}
+    assert cond["금액 단위"].startswith("백만원")
     assert "기준일" in cond and "조회기간" in cond and "금액 단위" in cond and any(k.startswith("지표 정의") for k in cond)
 
 
@@ -159,3 +160,10 @@ def test_detail_paging_sort_search(client_factory):
     j = c.post("/api/detail", json={"filters": {}, "q": "고객07"}).get_json()["data"]
     assert j["total"] == 1
     assert c.get("/api/raw/2").get_json()["row"]["고객사"] == "고객00"
+
+
+def test_source_unit_default_million(client_factory):
+    import config as C
+    assert C.SOURCE_UNIT == "백만원"
+    c, _ = client_factory()
+    assert c.get("/api/meta").get_json()["unit"]["source_unit"] == "백만원"
