@@ -165,7 +165,7 @@
     const ds = j ? j.dataset : (S.meta ? S.meta.dataset : null);
     const chip = $("dataChip");
     if (!ds || ds.empty) { chip.className = "chip warn"; chip.textContent = "원본 데이터 없음"; }
-    else if (ds.sample) { chip.className = "chip warn"; chip.textContent = "예시 데이터(가상) 표시 중 · 데이터 관리에서 엑셀 선택"; }
+    else if (ds.sample) { chip.className = "chip warn"; chip.textContent = "예시 데이터 표시 중(팀·AM 실제, 금액·건수 가상) · 데이터 관리에서 엑셀 선택"; }
     else {
       chip.className = "chip gray";
       chip.textContent = `원본: ${ds.file_name || "-"} · ${ds.uploaded_at || "-"} · ${Number(ds.rows || ds.row_count || 0).toLocaleString()}건`
@@ -278,9 +278,10 @@
     const d = j.data;
     if (d.empty) { $("view").innerHTML = emptyState(); return; }
     const k = d.kpi, a = k.acr;
+    const sampleNote = j.dataset.sample ? '<div class="notice warn sample-banner"><span><b>예시 데이터</b> — 팀·AM은 실제 조직, 고객·금액·건수·일정은 가상 값입니다. 해당 AM의 실제 실적이 아닙니다.</span><span class="link" data-goto="data">실제 엑셀 선택</span></div>' : "";
     const ml = S.f.mode === "term" ? "계약기간 반영 추정" : "매출개시월 기준";
     const acDrill = { scope: "acr", acr_type: ["A", "C"] };
-    let h = `<div class="grid kpis">
+    let h = sampleNote + `<div class="grid kpis">
       ${kpiCard(`확정 A+C 월매출 증감액 (${ml})`, amt(a.AC), `A ${amt(a.A)} · C ${amt(a.C)} · Funnel ${cnt(a.funnels_A + a.funnels_C)}건`, "a", acDrill)}
       ${kpiCard(`확정 R 월매출 증감액 (${ml})`, amt(a.R), `재계약완료 Funnel ${cnt(a.funnels_R)}건 (음수=감액)`, "r", { scope: "acr", acr_type: ["R"] })}
       ${kpiCard(`확정 A+C+R 월매출 증감액 (${ml})`, amt(a.ACR), `고유 Funnel ${cnt(a.funnels)}건`, "", { scope: "acr" })}
@@ -632,7 +633,7 @@
       <p class="desc">보관본은 이 기기·이 브라우저에만 저장되며 다른 사람에게 보이지 않습니다. 공용 PC에서는 보관하지 마세요.</p></div>`;
     if (d.empty) h += `<div class="notice warn" style="margin-top:14px">현재 적용된 데이터가 없습니다. ${esc((d.meta && d.meta.reason) || "")}</div>`;
     else {
-      if (d.meta.sample) h += '<div class="notice warn" style="margin-top:14px">아래는 <b>가상 예시 데이터</b>의 품질 현황입니다. 실제 고객·AM·금액이 아닙니다.</div>';
+      if (d.meta.sample) h += '<div class="notice warn" style="margin-top:14px">아래는 <b>예시 데이터</b>의 품질 현황입니다. 팀·AM은 실제 조직이지만 고객·금액·건수는 가상 값으로, 해당 AM의 실제 실적이 아닙니다.</div>';
       h += qualityHtml(d);
     }
     $("view").innerHTML = h;
