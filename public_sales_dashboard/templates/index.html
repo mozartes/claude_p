@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>공공영업 통합 대시보드</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<div class="layout" id="app" data-api="{{ api_base }}" data-prefix="{{ prefix }}" data-admin="{{ '1' if admin_required else '0' }}">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-logo">공</div>
+      <div><h1>공공영업 통합 대시보드</h1><p>공공고객담당 · Funnel / ACR</p></div>
+    </div>
+    <ul class="nav" id="nav">
+      <li><button data-page="overview" class="active">종합 현황</button></li>
+      <li><button data-page="funnel">수주·Funnel 관리</button></li>
+      <li><button data-page="renewal">재계약·해지 관리</button></li>
+      <li><button data-page="acr">ACR 매출</button></li>
+      <li><button data-page="team">팀·AM 관리</button></li>
+      <li><button data-page="insight">고객·상품·입찰</button></li>
+      <li><button data-page="priority">우선 확인 Funnel</button></li>
+      <li><button data-page="detail">상세 목록</button></li>
+      <li><button data-page="data">데이터 관리</button></li>
+    </ul>
+    <button class="btn small ghost-dark mobile-toggle" id="toggleFilters" type="button">필터 열기/닫기</button>
+
+    <div class="filters" id="filters">
+      <div class="side-section">
+        <h3>기준일 · 기간</h3>
+        <div class="side-row"><label for="f_base">기준일</label><input type="date" id="f_base"></div>
+        <div class="side-row"><label for="f_from">시작월</label><input type="month" id="f_from"></div>
+        <div class="side-row"><label for="f_to">종료월</label><input type="month" id="f_to"></div>
+        <div class="side-note">기준일을 과거로 바꿔도 현재 파일의 상태로 판정합니다(과거 시점 상태 복원 아님).</div>
+      </div>
+      <div class="side-section">
+        <h3>집계 수준</h3>
+        <div class="seg" id="f_level">
+          <button data-v="all" class="on" type="button">담당 전체</button>
+          <button data-v="team" type="button">팀</button>
+          <button data-v="am" type="button">AM</button>
+        </div>
+      </div>
+      <div class="side-section">
+        <h3>팀</h3>
+        <div class="mini-actions"><span id="teamCount">전체</span><button type="button" id="teamClear">전체 선택 해제</button></div>
+        <div class="checklist" id="f_teams"></div>
+      </div>
+      <div class="side-section">
+        <h3>AM <span class="muted" style="font-weight:400">(선택 팀 연동)</span></h3>
+        <div class="side-row"><input type="text" id="amSearch" placeholder="AM 이름 검색"></div>
+        <div class="mini-actions"><span id="amCount">전체</span><button type="button" id="amClear">전체 선택 해제</button></div>
+        <div class="checklist" id="f_ams"></div>
+      </div>
+      <div class="side-section">
+        <h3>ACR 유형</h3>
+        <div class="checklist" id="f_types" style="max-height:none">
+          <label><input type="checkbox" value="A" checked> A (Acq.)</label>
+          <label><input type="checkbox" value="C" checked> C (Cul.)</label>
+          <label><input type="checkbox" value="R" checked> R (Ret.)</label>
+        </div>
+      </div>
+      <div class="side-section">
+        <h3>상품</h3>
+        <div class="side-row"><input type="text" id="prodSearch" placeholder="상품 검색"></div>
+        <div class="mini-actions"><span id="prodCount">전체(월매출합계)</span><button type="button" id="prodClear">선택 해제</button></div>
+        <div class="checklist" id="f_products"></div>
+      </div>
+      <div class="side-section">
+        <h3>검색 · ACR 기준</h3>
+        <div class="side-row"><input type="text" id="f_search" placeholder="고객사 · Funnel번호"></div>
+        <div class="side-row"><select id="f_mode">
+          <option value="start">매출개시월 기준 (기본)</option>
+          <option value="term">계약기간 반영 추정</option>
+        </select></div>
+        <details class="side-more">
+          <summary>보조 필터 (기본 미적용)</summary>
+          <div class="checklist" style="max-height:none">
+            <label><input type="checkbox" id="f_excl_midlarge"> 중대형퍼널제외=Y 제외</label>
+            <label><input type="checkbox" id="f_excl_rmr"> RMR제외=Y 제외</label>
+            <label><input type="checkbox" id="f_confirmed_only"> 확정자 입력 건만</label>
+          </div>
+        </details>
+        <details class="side-more">
+          <summary>업무 기준값</summary>
+          <div class="side-row"><label for="th_stale">미갱신(일)</label><input type="number" id="th_stale" min="0"></div>
+          <div class="side-row"><label for="th_large">대형 A/C</label><input type="number" id="th_large" min="0" title="계약기간매출 ≥ (원본 단위)"></div>
+          <div class="side-row"><label for="th_large_r">대형 R</label><input type="number" id="th_large_r" min="0" title="기존 월매출 ≥ (원본 단위)"></div>
+          <div class="side-row"><label for="th_imm">임박(개월)</label><input type="number" id="th_imm" min="0" max="12"></div>
+          <div class="side-row"><label for="th_prob">높은 가능성%</label><input type="number" id="th_prob" min="0" max="100"></div>
+          <div class="side-note">대형 A/C=계약기간매출, 대형 R=기존 월매출 기준(원본 단위). 임박 1 = 이번 달·다음 달.</div>
+        </details>
+        <details class="side-more">
+          <summary>금액 단위 · 표시</summary>
+          <div class="side-row"><label for="u_src">원본 단위</label><select id="u_src">
+            <option value="unknown">원본 단위·확인 필요</option><option>원</option><option>천원</option><option>백만원</option><option>억원</option>
+          </select></div>
+          <div class="side-row"><label for="u_disp">표시 단위</label><select id="u_disp">
+            <option>원</option><option>천원</option><option>백만원</option><option>억원</option>
+          </select></div>
+          <div class="side-row"><label for="u_dec">소수점</label><select id="u_dec">
+            <option value="0">0자리</option><option value="1">1자리</option><option value="2" selected>2자리</option><option value="3">3자리</option>
+          </select></div>
+          <div class="side-note">원본 단위를 확인하기 전에는 변환하지 않고 원본 숫자를 그대로 표시합니다.</div>
+        </details>
+      </div>
+      <div class="side-buttons">
+        <button class="btn primary" id="applyBtn" type="button">조회</button>
+        <button class="btn ghost-dark" id="resetBtn" type="button">필터 초기화</button>
+      </div>
+      <div class="side-note">조회 필터는 화면 범위 선택이며 접근 권한 통제가 아닙니다.</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <h2 id="pageTitle">종합 현황</h2>
+        <div class="sub" id="pageSub"></div>
+      </div>
+      <div class="top-actions">
+        <span class="chip gray" id="dataChip">데이터 확인 중</span>
+        <span class="chip warn" id="unitChip">단위: 원본 단위·확인 필요</span>
+        <button class="btn small" id="panelBtn" type="button">확인 패널</button>
+      </div>
+    </div>
+    <div class="applied" id="applied"></div>
+    <div id="view"><div class="state"><div class="spinner"></div>불러오는 중…</div></div>
+  </main>
+</div>
+
+<div class="drawer-bg" id="drawerBg"></div>
+<aside class="drawer" id="drawer" aria-label="확인 패널">
+  <button class="close-x" id="drawerClose" type="button" aria-label="닫기">×</button>
+  <h2 style="margin:0;font-size:17px">확인 패널</h2>
+  <div id="drawerBody"></div>
+</aside>
+
+<div class="modal-bg" id="modalBg"></div>
+<div class="modal" id="modal" role="dialog" aria-modal="true">
+  <button class="close-x" id="modalClose" type="button" aria-label="닫기">×</button>
+  <div id="modalBody"></div>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
