@@ -97,10 +97,10 @@ def create_app(store: DataStore | None = None, prefix: str | None = None) -> Fla
     def params_from_request() -> A.Params:
         if request.method == "POST" and request.is_json:
             body = request.get_json(silent=True) or {}
-            return A.parse_params(body.get("filters") or {})
+            return A.resolve_product_group(ds(), A.parse_params(body.get("filters") or {}))
         raw = request.args.get("filters")
         try:
-            return A.parse_params(json.loads(raw) if raw else {})
+            return A.resolve_product_group(ds(), A.parse_params(json.loads(raw) if raw else {}))
         except (ValueError, TypeError):
             return A.parse_params({})
 
@@ -159,6 +159,7 @@ def create_app(store: DataStore | None = None, prefix: str | None = None) -> Fla
             "ok": True,
             "dataset": {"empty": d.empty, **d.meta},
             "options": {"teams": teams, "ams": ams, "products": products,
+                        "product_groups": C.PRODUCT_GROUPS, "leased_products": C.LEASED_PRODUCTS,
                         "modes": R.MODES, "types": C.ACR_TYPE_LABEL},
             "defaults": {"base_date": p.base_date.isoformat(), "ym_from": R.ym_label(p.ym_from),
                          "ym_to": R.ym_label(p.ym_to), "th": C.BUSINESS_DEFAULTS},
@@ -218,7 +219,7 @@ def create_app(store: DataStore | None = None, prefix: str | None = None) -> Fla
         t0 = time.perf_counter()
         if request.method == "POST" and not request.is_json:
             try:
-                p = A.parse_params(json.loads(request.form.get("filters") or "{}"))
+                p = A.resolve_product_group(ds(), A.parse_params(json.loads(request.form.get("filters") or "{}")))
                 b = json.loads(request.form.get("q") or "{}")
             except ValueError:
                 p, b = A.parse_params({}), {}

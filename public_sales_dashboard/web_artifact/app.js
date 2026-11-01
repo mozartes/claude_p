@@ -84,7 +84,7 @@
     const d = S.meta.defaults;
     return {
       base_date: d.base_date, ym_from: d.ym_from, ym_to: d.ym_to, level: "all", teams: [], ams: [],
-      types: ["A", "C", "R"], products: [], search: "", mode: "start",
+      types: ["A", "C", "R"], products: [], product_group: "all", search: "", mode: "start",
       excl_midlarge: false, excl_rmr: false, confirmed_only: false, th: Object.assign({}, d.th),
     };
   }
@@ -95,6 +95,7 @@
     $("f_teams").innerHTML = o.teams.length ? o.teams.map((t) => `<label><input type="checkbox" value="${esc(t)}" ${f.teams.includes(t) ? "checked" : ""}> ${esc(t)}</label>`).join("") : '<span class="side-note">자료 없음</span>';
     renderAmList();
     document.querySelectorAll("#f_types input").forEach((i) => (i.checked = f.types.includes(i.value)));
+    $("f_pgroup").value = f.product_group || "all";
     renderProductList();
     $("f_search").value = f.search; $("f_mode").value = f.mode;
     $("f_excl_midlarge").checked = f.excl_midlarge; $("f_excl_rmr").checked = f.excl_rmr; $("f_confirmed_only").checked = f.confirmed_only;
@@ -116,16 +117,24 @@
     });
     $("f_ams").innerHTML = html || '<span class="side-note">해당 AM 없음</span>';
   }
+  // 상품 카테고리: 전용회선 = 국내전용+국제전용(원본 표기), 전용회선외 = 나머지
+  function inGroup(p, g) {
+    g = g || S.f.product_group || "all";
+    if (g === "all") return true;
+    const leased = (S.meta.options.leased_products || []).includes(p);
+    return g === "leased" ? leased : !leased;
+  }
   function renderProductList() {
     const q = ($("prodSearch").value || "").trim();
-    const list = S.meta.options.products.filter((p) => !q || p.toLowerCase().includes(q.toLowerCase()));
+    const list = S.meta.options.products.filter((p) => inGroup(p) && (!q || p.toLowerCase().includes(q.toLowerCase())));
     $("f_products").innerHTML = list.map((p) => `<label><input type="checkbox" value="${esc(p)}" ${S.f.products.includes(p) ? "checked" : ""}> ${esc(p)}</label>`).join("") || '<span class="side-note">자료 없음</span>';
   }
   function selectedValues(id) { return Array.from(document.querySelectorAll(`#${id} input:checked`)).map((i) => i.value); }
   function updateCounts() {
     $("teamCount").textContent = S.f.teams.length ? `${S.f.teams.length}개 선택` : "전체";
     $("amCount").textContent = S.f.ams.length ? `${S.f.ams.length}명 선택` : "전체";
-    $("prodCount").textContent = S.f.products.length ? `${S.f.products.length}개 선택(상품 월매출)` : "전체(월매출합계)";
+    const gl = { all: "전체(월매출합계)", leased: "전용회선 전체(상품 월매출)", non_leased: "전용회선외 전체(상품 월매출)" }[S.f.product_group || "all"];
+    $("prodCount").textContent = S.f.products.length ? `${S.f.products.length}개 선택(상품 월매출)` : gl;
   }
   function readFilters() {
     const f = S.f;
@@ -140,7 +149,8 @@
     f.types = selectedValues("f_types"); if (!f.types.length) f.types = ["A", "C", "R"];
     const prodSel = new Set(selectedValues("f_products"));
     const keepP = f.products.filter((k) => !document.querySelector(`#f_products input[value="${CSS.escape(k)}"]`));
-    f.products = Array.from(new Set([...keepP, ...prodSel]));
+    f.products = Array.from(new Set([...keepP, ...prodSel])).filter((x) => inGroup(x));
+    f.product_group = $("f_pgroup").value || "all";
     f.search = $("f_search").value.trim(); f.mode = $("f_mode").value;
     f.excl_midlarge = $("f_excl_midlarge").checked; f.excl_rmr = $("f_excl_rmr").checked; f.confirmed_only = $("f_confirmed_only").checked;
     const num = (id, d) => { const v = parseFloat($(id).value); return Number.isFinite(v) && v >= 0 ? v : d; };
@@ -178,7 +188,7 @@
     if (j && j.applied) {
       const a = j.applied;
       $("pageSub").textContent = `기준일 ${a["기준일"]} · 조회기간 ${a["조회기간"]} · ${a["ACR 기준"]}`;
-      const chips = [["집계", a["집계 수준"]], ["팀", a["팀"]], ["AM", a["AM"]], ["유형", a["ACR유형"]], ["상품", a["상품"]], ["검색", a["검색"]], ["보조필터", a["보조필터"]]];
+      const chips = [["집계", a["집계 수준"]], ["팀", a["팀"]], ["AM", a["AM"]], ["유형", a["ACR유형"]], ["상품 카테고리", a["상품 카테고리"] === "상품전체(모든 상품)" ? "전체" : a["상품 카테고리"]], ["상품", a["상품"]], ["검색", a["검색"]], ["보조필터", a["보조필터"]]];
       $("applied").innerHTML = chips.map(([k, v]) => `<span class="chip ${v === "전체" || v === "없음" || v === "미적용" ? "gray" : ""}">${esc(k)}: ${esc(String(v).length > 60 ? String(v).slice(0, 60) + "…" : v)}</span>`).join("");
     }
   }
@@ -751,6 +761,7 @@
     const amKeys = new Set(S.meta.options.ams.map((a) => a.key));
     S.f.ams = S.f.ams.filter((a) => amKeys.has(a));
     S.f.products = S.f.products.filter((p) => S.meta.options.products.includes(p));
+    if (!S.meta.options.product_groups || !S.meta.options.product_groups[S.f.product_group]) S.f.product_group = "all";
     const ui = store.get("ui", null);
     if (ui) Object.assign(S.ui, ui);
     if (unitLocked()) S.ui.srcUnit = S.meta.unit.source_unit; // 확정 단위는 저장된 화면 설정보다 우선
@@ -769,6 +780,7 @@
     $("f_products").addEventListener("change", (e) => { const v = e.target.value; if (e.target.checked) { if (!S.f.products.includes(v)) S.f.products.push(v); } else S.f.products = S.f.products.filter((x) => x !== v); updateCounts(); });
     $("amSearch").addEventListener("input", renderAmList);
     $("prodSearch").addEventListener("input", renderProductList);
+    $("f_pgroup").addEventListener("change", (e) => { S.f.product_group = e.target.value; S.f.products = S.f.products.filter((x) => inGroup(x)); renderProductList(); updateCounts(); });
     $("teamClear").addEventListener("click", () => { S.f.teams = []; renderFilterInputs(); });
     $("amClear").addEventListener("click", () => { S.f.ams = []; renderAmList(); updateCounts(); });
     $("prodClear").addEventListener("click", () => { S.f.products = []; renderProductList(); updateCounts(); });

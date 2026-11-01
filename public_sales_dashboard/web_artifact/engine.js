@@ -31,6 +31,9 @@
     IN_PROGRESS: ["Pre Sales", "제안완료"],
     ACR_CONFIRMED_STATUS: { A: "Win", C: "Win", R: "재계약완료" },
     UNASSIGNED_ORG: "조직 미입력",
+    LEASED_PRODUCTS: ["국내전용", "국제전용", "국외전용"],
+    PRODUCT_GROUPS: { all: "상품전체(모든 상품)", leased: "전용회선(국내전용+국제전용)", non_leased: "전용회선외(나머지 상품)" },
+    NO_PRODUCT_MATCH: "\u0000선택 상품 없음",
   };
   const isProg = (s) => s === "Pre Sales" || s === "제안완료";
   const isNum = (v) => typeof v === "number" && Number.isFinite(v);
@@ -417,17 +420,33 @@
     return {
       base_date: base, base_ms: Date.UTC(yy, mm - 1, +base.slice(8)), base_ym: yy * 100 + mm,
       ym_from: from, ym_to: to, level: ["all", "team", "am"].includes(d.level) ? d.level : "all",
-      teams: listOf(d.teams), ams: listOf(d.ams), types, products: listOf(d.products),
+      teams: listOf(d.teams), ams: listOf(d.ams), types, products: listOf(d.products), user_products: listOf(d.products),
+      product_group: CFG.PRODUCT_GROUPS[d.product_group] ? d.product_group : "all",
       search: String(d.search || "").trim().slice(0, 100), mode: MODES[d.mode] ? d.mode : "start",
       excl_midlarge: !!d.excl_midlarge, excl_rmr: !!d.excl_rmr, confirmed_only: !!d.confirmed_only, th,
     };
+  }
+  function resolveProductGroup(ds, p) {
+    p.products = p.user_products.slice();
+    if (p.product_group === "all" || ds.empty) return p;
+    const universe = Array.from(new Set(ds.df.filter((r) => r.in_scope).flatMap((r) => r.product_names))).sort();
+    const lz = new Set(CFG.LEASED_PRODUCTS);
+    const grp = universe.filter((n) => lz.has(n) === (p.product_group === "leased"));
+    const chosen = p.user_products.length ? p.user_products.filter((x) => grp.includes(x)) : grp;
+    p.products = chosen.length ? chosen : [CFG.NO_PRODUCT_MATCH];
+    return p;
+  }
+  function productSummary(p) {
+    if (p.product_group === "all") return p.user_products.join(", ") || "전체(월매출합계 사용)";
+    if (p.user_products.length) { const real = p.products.filter((x) => x !== CFG.NO_PRODUCT_MATCH); return real.join(", ") || "카테고리에 해당하는 선택 상품 없음"; }
+    return p.products[0] !== CFG.NO_PRODUCT_MATCH ? `${CFG.PRODUCT_GROUPS[p.product_group]} ${p.products.length}개 상품` : "해당 상품 없음";
   }
   function paramsSummary(p) {
     return {
       "기준일": p.base_date, "조회기간": `${ymLabel(p.ym_from)} ~ ${ymLabel(p.ym_to)}`,
       "집계 수준": { all: "담당 전체", team: "팀", am: "AM" }[p.level], "팀": p.teams.join(", ") || "전체",
       "AM": p.ams.map((a) => `${a.split("|").pop()}(${a.split("|")[0]})`).join(", ") || "전체",
-      "ACR유형": p.types.join(", "), "상품": p.products.join(", ") || "전체(월매출합계 사용)", "검색": p.search || "없음",
+      "ACR유형": p.types.join(", "), "상품 카테고리": CFG.PRODUCT_GROUPS[p.product_group], "상품": productSummary(p), "검색": p.search || "없음",
       "ACR 기준": MODES[p.mode],
       "보조필터": [["중대형퍼널제외=Y 제외", p.excl_midlarge], ["RMR제외=Y 제외", p.excl_rmr], ["확정자 입력 건만", p.confirmed_only]].filter((x) => x[1]).map((x) => x[0]).join(", ") || "미적용",
       "업무 기준": p.th,
@@ -566,7 +585,8 @@
     res.basis = {
       "기간 기준": p.mode === "start" ? "매출발생년월" : "매출발생년월부터 계약기간(월) 동안 매월 반영(시작월 포함)",
       "확정 조건": "A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
-      "금액": p.products.length ? "선택 상품의 대응 월매출(상품1~5)" : "월매출합계",
+      "금액": p.products.length ? "선택 상품·카테고리의 대응 월매출(상품1~5 슬롯 합)" : "월매출합계",
+      "상품 카테고리": CFG.PRODUCT_GROUPS[p.product_group] + (p.product_group !== "all" ? " — 전용회선 + 전용회선외 = 상품별 월매출 합계(월매출합계와 다른 행은 데이터 품질에 표시)" : ""),
       "R 해석": "월매출합계 = 재계약 증감액(음수 유지). 재계약 후 월매출(변경매출)은 합산하지 않음",
       "누적": `선택기간 시작월(${ymLabel(p.ym_from)})부터 누적`,
       "Funnel 건수": "월별 반복 반영 횟수가 아닌 고유 Funnel 수",
@@ -1010,7 +1030,7 @@
     const p = parseParams({});
     return {
       ok: true, dataset: Object.assign({ empty: d.empty }, d.meta),
-      options: { teams, ams, products, modes: MODES, types: CFG.ACR_TYPE_LABEL },
+      options: { teams, ams, products, product_groups: CFG.PRODUCT_GROUPS, leased_products: CFG.LEASED_PRODUCTS, modes: MODES, types: CFG.ACR_TYPE_LABEL },
       defaults: { base_date: p.base_date, ym_from: ymLabel(p.ym_from), ym_to: ymLabel(p.ym_to), th: Object.assign({}, CFG.BUSINESS_DEFAULTS) },
       unit: { source_unit: CFG.SOURCE_UNIT, units: ["원", "천원", "백만원", "억원"] },
       rules: rulesTable(p), admin_required: false,
@@ -1020,7 +1040,7 @@
   // app.js 의 api(path, body) 를 대신한다
   function call(path, body) {
     body = body || {};
-    const p = parseParams(body.filters || {});
+    const p = resolveProductGroup(state.ds, parseParams(body.filters || {}));
     if (path === "/meta") return meta();
     let m = path.match(/^\/view\/(\w+)$/);
     if (m) {
@@ -1043,7 +1063,7 @@
     CFG, LoadError, ISSUE_LABELS, RULES, MODES,
     parsers: { cleanStr, parseNum, parseYm, parseDate, parseProb },
     ym: { ymAdd, ymRange, ymDiff, ymLabel },
-    readWorkbook, buildDataset, computeAcr, parseParams, filterDf, computeChecks,
+    readWorkbook, buildDataset, computeAcr, parseParams: (d) => resolveProductGroup(state.ds, parseParams(d)), resolveProductGroup, filterDf, computeChecks,
     views: VIEWS, detailView, drillRows, exportWorkbook,
     stage, apply, setDataset, loadParsed, call, getDataset: () => state.ds,
   };

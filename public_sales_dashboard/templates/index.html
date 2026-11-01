@@ -62,7 +62,12 @@
         </div>
       </div>
       <div class="side-section">
-        <h3>상품</h3>
+        <h3>상품 카테고리 · 상품</h3>
+        <div class="side-row"><select id="f_pgroup" aria-label="상품 카테고리">
+          <option value="all">상품전체(모든 상품)</option>
+          <option value="leased">전용회선(국내전용+국제전용)</option>
+          <option value="non_leased">전용회선외(나머지 상품)</option>
+        </select></div>
         <div class="side-row"><input type="text" id="prodSearch" placeholder="상품 검색"></div>
         <div class="mini-actions"><span id="prodCount">전체(월매출합계)</span><button type="button" id="prodClear">선택 해제</button></div>
         <div class="checklist" id="f_products"></div>

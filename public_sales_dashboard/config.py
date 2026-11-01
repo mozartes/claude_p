@@ -126,6 +126,15 @@ COL = {
 }
 PRODUCT_SLOTS = 5  # Biz1~5 / 상품1~5 / 월매출1~5
 
+# 상품 카테고리. 원본 상품명 기준: 전용회선 = 국내전용 + 국제전용(원본 표기). '국외전용' 표기도 같은 묶음으로 인정
+LEASED_PRODUCTS = [x.strip() for x in _env("LEASED_PRODUCTS", "국내전용,국제전용,국외전용").split(",") if x.strip()]
+PRODUCT_GROUPS = {
+    "all": "상품전체(모든 상품)",
+    "leased": "전용회선(국내전용+국제전용)",
+    "non_leased": "전용회선외(나머지 상품)",
+}
+NO_PRODUCT_MATCH = "\u0000선택 상품 없음"
+
 # 없으면 적용 불가(업로드 거부)
 REQUIRED_COLUMNS = [
     "고객사", "수주년월", "월매출합계", "현재상황", "팀", "AM", "ACR유형",

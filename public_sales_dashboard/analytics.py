@@ -30,6 +30,8 @@ class Params:
     ams: list[str] = field(default_factory=list)
     types: list[str] = field(default_factory=lambda: ["A", "C", "R"])
     products: list[str] = field(default_factory=list)
+    product_group: str = "all"
+    user_products: list[str] = field(default_factory=list)
     search: str = ""
     mode: str = "start"
     excl_midlarge: bool = False
@@ -97,11 +99,40 @@ def parse_params(d: dict | None) -> Params:
     return Params(
         base_date=base, ym_from=ym_from, ym_to=ym_to, level=level,
         teams=_list(d.get("teams")), ams=_list(d.get("ams")), types=types,
-        products=_list(d.get("products")), search=str(d.get("search") or "").strip()[:100],
+        products=_list(d.get("products")), user_products=_list(d.get("products")),
+        product_group=d.get("product_group") if d.get("product_group") in C.PRODUCT_GROUPS else "all",
+        search=str(d.get("search") or "").strip()[:100],
         mode=d.get("mode") if d.get("mode") in R.MODES else "start",
         excl_midlarge=bool(d.get("excl_midlarge")), excl_rmr=bool(d.get("excl_rmr")),
         confirmed_only=bool(d.get("confirmed_only")), th=th,
     )
+
+
+def leased_set() -> set[str]:
+    return set(C.LEASED_PRODUCTS)
+
+
+def resolve_product_group(ds: Dataset, p: Params) -> Params:
+    """상품 카테고리를 실제 상품 목록으로 풀어 p.products 에 반영(개별 상품 선택이 있으면 교집합)."""
+    p.products = list(p.user_products)
+    if p.product_group == "all" or ds.empty:
+        return p
+    sc = ds.df[ds.df["in_scope"]]
+    universe = sorted({n for ns in sc["product_names"] for n in ns})
+    lz = leased_set()
+    grp = [n for n in universe if (n in lz) == (p.product_group == "leased")]
+    chosen = [x for x in p.user_products if x in grp] if p.user_products else grp
+    p.products = chosen or [C.NO_PRODUCT_MATCH]
+    return p
+
+
+def product_summary(p: Params) -> str:
+    if p.product_group == "all":
+        return ", ".join(p.user_products) or "전체(월매출합계 사용)"
+    if p.user_products:
+        real = [x for x in p.products if x != C.NO_PRODUCT_MATCH]
+        return ", ".join(real) or "카테고리에 해당하는 선택 상품 없음"
+    return f"{C.PRODUCT_GROUPS[p.product_group]} {len(p.products)}개 상품" if p.products != [C.NO_PRODUCT_MATCH] else "해당 상품 없음"
 
 
 def params_summary(p: Params) -> dict:
@@ -112,7 +143,8 @@ def params_summary(p: Params) -> dict:
         "팀": ", ".join(p.teams) or "전체",
         "AM": ", ".join(a.split("|")[-1] + f"({a.split('|')[0]})" for a in p.ams) or "전체",
         "ACR유형": ", ".join(p.types),
-        "상품": ", ".join(p.products) or "전체(월매출합계 사용)",
+        "상품 카테고리": C.PRODUCT_GROUPS[p.product_group],
+        "상품": product_summary(p),
         "검색": p.search or "없음",
         "ACR 기준": R.MODES[p.mode],
         "보조필터": ", ".join(x for x, on in [
@@ -399,7 +431,8 @@ def acr_view(ds: Dataset, p: Params) -> dict:
     res["basis"] = {
         "기간 기준": "매출발생년월" if p.mode == "start" else "매출발생년월부터 계약기간(월) 동안 매월 반영(시작월 포함)",
         "확정 조건": "A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
-        "금액": "선택 상품의 대응 월매출(상품1~5)" if p.products else "월매출합계",
+        "금액": ("선택 상품·카테고리의 대응 월매출(상품1~5 슬롯 합)" if p.products else "월매출합계"),
+        "상품 카테고리": C.PRODUCT_GROUPS[p.product_group] + (" — 전용회선 + 전용회선외 = 상품별 월매출 합계(월매출합계와 다른 행은 데이터 품질에 표시)" if p.product_group != "all" else ""),
         "R 해석": "월매출합계 = 재계약 증감액(음수 유지). 재계약 후 월매출(변경매출)은 합산하지 않음",
         "누적": f"선택기간 시작월({R.ym_label(p.ym_from)})부터 누적",
         "Funnel 건수": "월별 반복 반영 횟수가 아닌 고유 Funnel 수",

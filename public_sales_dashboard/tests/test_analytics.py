@@ -182,3 +182,26 @@ def test_drill_matches_card(make_ds, params):
     assert sum(r["monthly"] for r in d["rows"]) == a["totals"]["ACR"]
     m4 = A.detail_view(ds, p, {"scope": "acr", "ym": 202604})
     assert m4["total"] == [m for m in a["monthly"] if m["ym"] == 202604][0]["funnels"]
+
+
+def test_product_groups(make_ds, params):
+    # 전용회선 = 국내전용+국제전용, 전용회선외 = 나머지. 슬롯 금액만 합산, 카테고리 합 = 상품 슬롯 합
+    ds = make_ds([
+        row(monthly=10, rev=202603, 상품1="국내전용", 월매출1=6, 상품2="프리밴", 월매출2=4),
+        row(monthly=3, rev=202603, 상품1="국제전용", 월매출1=3),
+        row(monthly=5, rev=202604, 상품1="VoIP", 월매출1=5),
+    ])
+    tot = {}
+    for g in ("all", "leased", "non_leased"):
+        p = A.resolve_product_group(ds, params(product_group=g))
+        tot[g] = A.acr_view(ds, p)["totals"]
+    assert tot["all"]["ACR"] == 18
+    assert tot["leased"]["ACR"] == 9 and tot["leased"]["funnels"] == 2
+    assert tot["non_leased"]["ACR"] == 9 and tot["non_leased"]["funnels"] == 2
+    assert tot["leased"]["ACR"] + tot["non_leased"]["ACR"] == tot["all"]["ACR"]
+    # 개별 상품 선택과 카테고리는 교집합
+    p = A.resolve_product_group(ds, params(product_group="leased", products=["국제전용", "VoIP"]))
+    assert p.products == ["국제전용"] and A.acr_view(ds, p)["totals"]["ACR"] == 3
+    p = A.resolve_product_group(ds, params(product_group="leased", products=["VoIP"]))
+    assert A.acr_view(ds, p) == {"empty": True}
+    assert "카테고리" in A.params_summary(p)["상품"]
