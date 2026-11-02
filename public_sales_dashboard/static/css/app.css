@@ -14,7 +14,7 @@
   --primary: #2563eb;
   --primary-weak: #e8f0fe;
   --series-a: #2a78d6;
-  --series-c: #1baf7a;
+  --series-c: #eda100;
   --series-r: #eb6834;
   --series-total: #1f2937;
   --neg: #c62828;
@@ -133,7 +133,7 @@ table.t tfoot td { font-weight: 700; background: var(--surface-2); }
 .lv2 { background: var(--warn-bg); color: var(--warn); }
 .lv3 { background: #eef0f4; color: var(--text-2); }
 .tag { display: inline-block; padding: 0 6px; margin: 1px 2px 1px 0; border-radius: 5px; font-size: 11.5px; background: #eef2ff; color: #3730a3; white-space: nowrap; }
-.tag.t-A { background: #e6f0fb; color: #1d5fae; } .tag.t-C { background: #e3f6ef; color: #0f7a54; } .tag.t-R { background: #fdeee6; color: #b4451a; }
+.tag.t-A { background: #e6f0fb; color: #1d5fae; } .tag.t-C { background: #fff3d1; color: #8a5a00; } .tag.t-R { background: #fdeee6; color: #b4451a; }
 .link { color: var(--primary); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .pager { display: flex; gap: 8px; align-items: center; justify-content: flex-end; margin-top: 8px; font-size: 12.5px; }
 .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }

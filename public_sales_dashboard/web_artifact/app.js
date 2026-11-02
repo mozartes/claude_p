@@ -8,7 +8,7 @@
   const css = (name, fb) => { try { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb; } catch (e) { return fb; } };
   const COLORS = {};
   function refreshColors() {
-    COLORS.A = css("--series-a", "#2a78d6"); COLORS.C = css("--series-c", "#1baf7a"); COLORS.R = css("--series-r", "#eb6834");
+    COLORS.A = css("--series-a", "#2a78d6"); COLORS.C = css("--series-c", "#eda100"); COLORS.R = css("--series-r", "#eb6834");
     COLORS.AC = "#6250d6"; COLORS.ACR = css("--series-total", "#1f2937");
   }
   refreshColors();

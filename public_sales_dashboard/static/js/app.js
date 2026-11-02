@@ -5,7 +5,7 @@
   const ROOT = document.getElementById("app");
   const API = ROOT.dataset.api; // 서버가 URL_PREFIX 를 반영해 전달
   const ADMIN_REQUIRED = ROOT.dataset.admin === "1";
-  const COLORS = { A: "#2a78d6", C: "#1baf7a", R: "#eb6834", AC: "#6250d6", ACR: "#1f2937" };
+  const COLORS = { A: "#2a78d6", C: "#eda100", R: "#eb6834", AC: "#6250d6", ACR: "#1f2937" };
   const SERIES_LABEL = { A: "A", C: "C", R: "R", AC: "A+C", ACR: "A+C+R" };
   const UNIT_WON = { "원": 1, "천원": 1e3, "백만원": 1e6, "억원": 1e8 };
   const PAGE_TITLES = {
