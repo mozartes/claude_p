@@ -879,8 +879,64 @@
     };
   }
 
+  // ================================================================ 화면: ACR 매출(Pre-sales)
+  const PS_BINS = [["30%이하", 0, 29.999], ["30%이상", 30, 39.999], ["40%이상", 40, 49.999], ["50%이상", 50, 59.999],
+    ["60%이상", 60, 69.999], ["70%이상", 70, 79.999], ["80%이상", 80, 89.999], ["90%이상", 90, 99.999], ["100%이상", 100, 100]];
+  const PS_LABELS = PS_BINS.map((b) => b[0]);
+  function psBin(v) { if (!nn(v)) return "미확인"; for (const [lb, lo, hi] of PS_BINS) if (v >= lo && v <= hi) return lb; return "미확인"; }
+  function presalesView(ds, p) {
+    const df = filterDf(ds, p);
+    if (!df.length) return { empty: true };
+    const sel = new Set(p.products);
+    const amtOf = (r) => (sel.size ? productAmount(r.products, sel)[0] : r.monthly);
+    const prog = df.filter((r) => isProg(r.status));
+    const months = ymRange(p.ym_from, p.ym_to);
+    const sum0 = (arr) => arr.filter(nn).reduce((a, b) => a + b, 0);
+    const out = {};
+    ["A", "C", "R"].forEach((t) => {
+      const gAll = prog.filter((r) => r.acr_type === t);
+      const g = gAll.filter((r) => inPeriod(r.rev_ym, p)).map((r) => ({ r, amt: amtOf(r), band: psBin(r.prob) }));
+      const bins = PS_LABELS.concat(["미확인"]).map((lb) => {
+        const b = g.filter((x) => x.band === lb);
+        const valid = b.filter((x) => nn(x.amt) && nn(x.r.prob));
+        return {
+          band: lb, count: b.length, presales: b.filter((x) => x.r.status === "Pre Sales").length, proposal: b.filter((x) => x.r.status === "제안완료").length,
+          monthly: fsum(b.map((x) => x.amt)), contract: fsum(b.map((x) => x.r.contract_amt)), prev: fsum(b.map((x) => x.r.prev_monthly)), new: fsum(b.map((x) => x.r.new_monthly)),
+          weighted: lb !== "미확인" ? (valid.length ? valid.reduce((a, x) => a + x.amt * x.r.prob / 100, 0) : 0) : null,
+        };
+      });
+      let cc = 0, cm = 0;
+      for (let i = bins.length - 2; i >= 0; i--) { cc += bins[i].count; cm += bins[i].monthly || 0; bins[i].cum_count = cc; bins[i].cum_monthly = cm; }
+      bins[bins.length - 1].cum_count = null; bins[bins.length - 1].cum_monthly = null;
+      const monthly = months.map((ym) => {
+        const gm = g.filter((x) => x.r.rev_ym === ym);
+        const by = {}; PS_LABELS.concat(["미확인"]).forEach((lb) => { by[lb] = sum0(gm.filter((x) => x.band === lb).map((x) => x.amt)); });
+        return { ym, label: ymLabel(ym), bands: by, total: sum0(gm.map((x) => x.amt)), count: gm.length };
+      });
+      out[t] = {
+        bins, monthly,
+        totals: { count: g.length, monthly: fsum(g.map((x) => x.amt)), contract: fsum(g.map((x) => x.r.contract_amt)), prev: fsum(g.map((x) => x.r.prev_monthly)),
+          new: fsum(g.map((x) => x.r.new_monthly)), weighted: bins.slice(0, -1).reduce((a, x) => a + (x.weighted || 0), 0) },
+        excluded: { rev_ym_missing: gAll.filter((r) => r.rev_ym === null).length, out_of_period: gAll.filter((r) => r.rev_ym !== null && !inPeriod(r.rev_ym, p)).length },
+      };
+    });
+    const summary = {}; Object.keys(out).forEach((t) => { summary[t] = out[t].totals; });
+    return {
+      bands: PS_LABELS, types: out, summary,
+      basis: {
+        "대상": "현재상황 Pre Sales·제안완료(진행 중), 유형별 A/C/R",
+        "기간": `매출발생년월 ${ymLabel(p.ym_from)}~${ymLabel(p.ym_to)} (매출발생년월 미입력·기간 밖 건은 제외 건수로 표시)`,
+        "금액": (p.products.length ? "선택 상품·카테고리의 대응 월매출(상품1~5)" : "월매출합계") + " = 수주 시 예상 ACR 월매출 증감액(R은 재계약 증감, 음수 유지)",
+        "가능성 구간": "수주(재계약)가능성의 명시적 % 값. 30%이하=0~29%, 30%이상=30~39%, … 90%이상=90~99%, 100%이상=100%. 값이 없거나 %가 아니면 미확인",
+        "누적": "‘해당 % 이상 누적’ = 그 구간 이상 모든 구간의 합(예: 70%이상 누적 = 70~100%)",
+        "가중": "월매출 × 가능성(%) — 입력 가능성 기반 참고치이며 통계적 예측이 아님",
+        "주의": "확정 ACR(누적매출)과 합산하지 않음. 진행 중 기회의 현재 입력값 기준",
+      },
+    };
+  }
+
   // ================================================================ 상세 목록(드릴다운)
-  const DRILL_KEYS = ["scope", "status", "acr_type", "bucket", "imminent", "code", "team", "am_key", "ym", "product", "customer", "bid_no", "prob_bin", "period", "change", "level"];
+  const DRILL_KEYS = ["scope", "status", "acr_type", "bucket", "imminent", "prob_band", "code", "team", "am_key", "ym", "product", "customer", "bid_no", "prob_bin", "period", "change", "level"];
   function drillRows(ds, p, drill) {
     const d = {};
     Object.entries(drill || {}).forEach(([k, v]) => { if (DRILL_KEYS.includes(k) && v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)) d[k] = v; });
@@ -917,6 +973,7 @@
     if (d.product) { rows = rows.filter((r) => r.product_names.includes(d.product)); desc.push(`상품=${d.product}`); }
     if (d.customer) { rows = rows.filter((r) => (r.customer === null ? "(고객사 미입력)" : r.customer) === d.customer); desc.push(`고객사(표시명)=${d.customer}`); }
     if (d.bid_no) { rows = rows.filter((r) => r.bid_no === d.bid_no); desc.push(`입찰공고번호=${d.bid_no}`); }
+    if (d.prob_band) { rows = rows.filter((r) => psBin(r.prob) === d.prob_band); desc.push(`가능성 구간=${d.prob_band}`); }
     if (d.prob_bin) { rows = rows.filter((r) => probBin(r.prob) === d.prob_bin); desc.push(`가능성=${d.prob_bin}`); }
     if (d.period === "win_ym" || d.period === "rev_ym") { rows = rows.filter((r) => inPeriod(r[d.period], p)); desc.push((d.period === "win_ym" ? "수주년월" : "매출발생년월") + " 기간 내"); }
     if (d.change) {
@@ -1024,7 +1081,7 @@
   function setDataset(ds) { state.ds = ds; }
   function loadParsed(parsed, fileName, at, extra) { state.ds = buildDataset(parsed, fileName, at, extra); return state.ds; }
 
-  const VIEWS = { overview: overviewView, funnel: funnelView, renewal: renewalView, acr: acrView, team: teamView, insight: insightView, quality: qualityView };
+  const VIEWS = { overview: overviewView, funnel: funnelView, renewal: renewalView, acr: acrView, presales: presalesView, team: teamView, insight: insightView, quality: qualityView };
   function envelope(view, p, data) {
     const d = state.ds;
     return { ok: true, view, dataset: { empty: d.empty, file_name: d.meta.file_name, uploaded_at: d.meta.uploaded_at, rows: d.meta.row_count || 0,

@@ -9,7 +9,7 @@
   const SERIES_LABEL = { A: "A", C: "C", R: "R", AC: "A+C", ACR: "A+C+R" };
   const UNIT_WON = { "원": 1, "천원": 1e3, "백만원": 1e6, "억원": 1e8 };
   const PAGE_TITLES = {
-    overview: "종합 현황", funnel: "수주·Funnel 관리", renewal: "재계약·해지 관리", acr: "ACR 매출",
+    overview: "종합 현황", funnel: "수주·Funnel 관리", renewal: "재계약·해지 관리", acr: "ACR 매출", presales: "ACR 매출(Pre-sales)",
     team: "팀·AM 관리", insight: "고객·상품·입찰 분석", priority: "우선 확인할 Funnel", detail: "상세 목록", data: "데이터 관리",
   };
 
@@ -464,6 +464,67 @@
     }));
   }
 
+  // ------------------------------------------------------------ 페이지: ACR 매출(Pre-sales)
+  async function pagePresales() {
+    const j = await api("/view/presales", { filters: S.f });
+    setHeader(j);
+    const d = j.data;
+    if (d.empty) { $("view").innerHTML = emptyState(); return; }
+    const tab = ["A", "C", "R"].includes(S.ui.psTab) ? S.ui.psTab : "A";
+    const T = d.types[tab], tt = T.totals, isR = tab === "R";
+    const per = `${S.f.ym_from}~${S.f.ym_to}`;
+    const dObj = (extra) => Object.assign({ scope: "in_progress", acr_type: [tab], period: "rev_ym" }, extra || {});
+    const drill = (extra) => esc(JSON.stringify(dObj(extra)));
+    const sm = d.summary;
+    let h = `<div class="tabs" role="tablist">${["A", "C", "R"].map((k) => `<button data-pstab="${k}" class="${k === tab ? "on" : ""}" type="button" role="tab">${k} 매출 <span class="muted">${cnt(sm[k].count)}건 · ${amt(sm[k].monthly)}</span></button>`).join("")}</div>
+    <div class="grid kpis">
+      ${kpiCard(`${tab}. 진행 중 건수`, cnt(tt.count) + "건", `Pre Sales·제안완료 · 매출발생년월 ${esc(per)}`, tab.toLowerCase(), dObj())}
+      ${kpiCard(`${tab}. 예상 월매출 합계`, amt(tt.monthly), isR ? "재계약 시 월매출 증감(음수=감액)" : "수주 시 예상 ACR 월매출 증감액", tab.toLowerCase(), dObj())}
+      ${isR ? kpiCard("R. 기존 → 변경 월매출", `${amt(tt.prev)}`, `변경 ${amt(tt.new)}`, "r", dObj())
+            : kpiCard(`${tab}. 계약기간매출`, amt(tt.contract), "진행 중 Funnel의 계약금액(원본)", tab.toLowerCase(), dObj())}
+      ${kpiCard(`${tab}. 가중 추정(참고)`, amt(tt.weighted), "월매출 × 입력 가능성(%) · 미확인 제외", "", dObj())}
+    </div>
+    ${T.excluded.rev_ym_missing || T.excluded.out_of_period ? `<div class="notice warn">조회기간 기준에서 제외된 진행 중 ${tab} 건: 매출발생년월 미입력 ${T.excluded.rev_ym_missing}건, 조회기간 밖 ${T.excluded.out_of_period}건</div>` : ""}
+    <div class="grid cols-2" style="margin-top:14px">
+      <div class="card"><div class="card-head"><h3>${tab} 수주${isR ? "(재계약)" : ""} 가능성 구간별 예상 월매출</h3><span class="muted">막대 클릭 → 해당 구간 Funnel</span></div>
+        <p class="desc">구간 금액(막대) · 단위 ${esc(unitName())} · 0 기준선 아래는 감액</p>
+        <div class="chart-box"><canvas id="psChart"></canvas></div></div>
+      <div class="card"><h3>구간별 건수</h3><p class="desc">상태별(Pre Sales / 제안완료) 건수</p><div class="chart-box"><canvas id="psCntChart"></canvas></div></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>${tab} 가능성 구간표</h3>
+      <p class="desc">30%이하 = 0~29%, 30%이상 = 30~39% … 90%이상 = 90~99%, 100%이상 = 100%. ‘해당 % 이상 누적’은 그 구간부터 100%까지의 합입니다. 행 클릭 → Funnel 목록</p>
+      <div class="table-wrap"><table class="t"><thead><tr><th>가능성 구간</th><th class="num">건수</th><th class="num">Pre Sales</th><th class="num">제안완료</th><th class="num">예상 월매출</th>
+        ${isR ? '<th class="num">기존 월매출</th><th class="num">변경 월매출</th>' : '<th class="num">계약기간매출</th>'}<th class="num">가중 추정</th><th class="num">해당 % 이상 누적 건수</th><th class="num">해당 % 이상 누적 월매출</th></tr></thead>
+      <tbody>${T.bins.map((b) => `<tr class="clickable" data-drill='${drill({ prob_band: b.band })}'><td><b>${esc(b.band)}</b></td><td class="num">${cnt(b.count)}</td><td class="num">${cnt(b.presales)}</td><td class="num">${cnt(b.proposal)}</td>
+        <td class="num">${amt(b.monthly)}</td>${isR ? `<td class="num">${amt(b.prev)}</td><td class="num">${amt(b.new)}</td>` : `<td class="num">${amt(b.contract)}</td>`}
+        <td class="num">${b.weighted == null ? '<span class="muted">산출 불가</span>' : amt(b.weighted)}</td>
+        <td class="num">${b.cum_count == null ? '<span class="muted">-</span>' : cnt(b.cum_count)}</td><td class="num">${b.cum_monthly == null ? '<span class="muted">-</span>' : amt(b.cum_monthly)}</td></tr>`).join("")}</tbody>
+      <tfoot><tr><td>합계</td><td class="num">${cnt(tt.count)}</td><td class="num">${cnt(T.bins.reduce((a, b) => a + b.presales, 0))}</td><td class="num">${cnt(T.bins.reduce((a, b) => a + b.proposal, 0))}</td><td class="num">${amt(tt.monthly)}</td>
+        ${isR ? `<td class="num">${amt(tt.prev)}</td><td class="num">${amt(tt.new)}</td>` : `<td class="num">${amt(tt.contract)}</td>`}<td class="num">${amt(tt.weighted)}</td><td></td><td></td></tr></tfoot></table></div></div>
+    <details class="card" style="margin-top:14px"><summary><b>${tab} 월별(매출발생년월) × 가능성 구간</b> <span class="muted">(펼치기)</span></summary>
+      <div class="table-wrap" style="margin-top:8px;max-height:520px"><table class="t"><thead><tr><th>년월</th><th class="num">건수</th>${d.bands.concat(["미확인"]).map((b) => `<th class="num">${esc(b)}</th>`).join("")}<th class="num">합계</th></tr></thead>
+      <tbody>${T.monthly.filter((m) => m.count).map((m) => `<tr><td>${m.label}</td><td class="num">${cnt(m.count)}</td>${d.bands.concat(["미확인"]).map((b) => `<td class="num">${m.bands[b] ? amt(m.bands[b]) : '<span class="muted">-</span>'}</td>`).join("")}<td class="num"><b>${amt(m.total)}</b></td></tr>`).join("") || '<tr><td colspan="13" class="muted">해당 없음</td></tr>'}</tbody></table></div></details>
+    <div class="card" style="margin-top:14px"><h3>유형별 요약</h3><div class="table-wrap"><table class="t"><thead><tr><th>유형</th><th class="num">진행 중 건수</th><th class="num">예상 월매출</th><th class="num">계약기간매출</th><th class="num">기존 월매출</th><th class="num">변경 월매출</th><th class="num">가중 추정</th></tr></thead>
+      <tbody>${["A", "C", "R"].map((k) => `<tr class="clickable" data-pstab="${k}"><td>${typeTag(k)}</td><td class="num">${cnt(sm[k].count)}</td><td class="num">${amt(sm[k].monthly)}</td><td class="num">${amt(sm[k].contract)}</td><td class="num">${k === "R" ? amt(sm[k].prev) : '<span class="muted">-</span>'}</td><td class="num">${k === "R" ? amt(sm[k].new) : '<span class="muted">-</span>'}</td><td class="num">${amt(sm[k].weighted)}</td></tr>`).join("")}</tbody></table></div>
+      <p class="desc" style="margin-top:6px">진행 중 기회의 현재 입력값입니다. 확정 ACR(누적매출)과 합산하지 않습니다.</p></div>
+    ${basisBlock(d.basis)}`;
+    $("view").innerHTML = h;
+    document.querySelectorAll("[data-pstab]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); S.ui.psTab = b.dataset.pstab; store.set("ui", S.ui); render(); }));
+    const labels = T.bins.map((b) => b.band);
+    chart("psChart", { type: "bar",
+      data: { labels, datasets: [{ label: `${tab} 예상 월매출`, data: T.bins.map((b) => conv(b.monthly || 0)), backgroundColor: COLORS[tab], borderRadius: 3, maxBarThickness: 34 }] },
+      options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: tooltipAmt } } },
+        scales: { y: { title: { display: true, text: `월매출 (${unitName()})` }, grid: zeroGrid }, x: { grid: { display: false } } },
+        onClick: (e, els) => { if (els.length) openDetail({ scope: "in_progress", acr_type: [tab], period: "rev_ym", prob_band: labels[els[0].index] }); } } });
+    chart("psCntChart", { type: "bar",
+      data: { labels, datasets: [
+        { label: "Pre Sales", data: T.bins.map((b) => b.presales), backgroundColor: COLORS[tab], borderRadius: 2, maxBarThickness: 34, stack: "s" },
+        { label: "제안완료", data: T.bins.map((b) => b.proposal), backgroundColor: COLORS.ACR, borderRadius: 2, maxBarThickness: 34, stack: "s" }] },
+      options: { maintainAspectRatio: false, plugins: { legend: { position: "bottom" } },
+        scales: { y: { stacked: true, title: { display: true, text: "건수" }, grid: zeroGrid, ticks: { precision: 0 } }, x: { stacked: true, grid: { display: false } } },
+        onClick: (e, els) => { if (els.length) openDetail({ scope: "in_progress", acr_type: [tab], period: "rev_ym", prob_band: labels[els[0].index] }); } } });
+  }
+
   // ------------------------------------------------------------ 페이지: 팀·AM
   async function pageTeam() {
     const f = Object.assign({}, S.f, { level: S.f.level === "am" ? "am" : "team" });
@@ -704,8 +765,8 @@
   function closeModal() { $("modal").classList.remove("open"); $("modalBg").classList.remove("open"); }
 
   // ------------------------------------------------------------ 라우팅
-  const PAGES = { overview: pageOverview, funnel: pageFunnel, renewal: pageRenewal, acr: pageAcr, team: pageTeam, insight: pageInsight, priority: pagePriority, detail: () => pageDetail(false), data: pageData };
-  const BASIS_VIEW = { overview: "overview", funnel: "funnel", renewal: "renewal", acr: "acr", team: "team", insight: "insight" };
+  const PAGES = { overview: pageOverview, funnel: pageFunnel, renewal: pageRenewal, acr: pageAcr, presales: pagePresales, team: pageTeam, insight: pageInsight, priority: pagePriority, detail: () => pageDetail(false), data: pageData };
+  const BASIS_VIEW = { overview: "overview", funnel: "funnel", renewal: "renewal", acr: "acr", presales: "presales", team: "team", insight: "insight" };
   function go(page) {
     S.page = page;
     document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("active", b.dataset.page === page));

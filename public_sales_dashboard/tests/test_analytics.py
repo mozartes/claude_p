@@ -205,3 +205,30 @@ def test_product_groups(make_ds, params):
     p = A.resolve_product_group(ds, params(product_group="leased", products=["VoIP"]))
     assert A.acr_view(ds, p) == {"empty": True}
     assert "카테고리" in A.params_summary(p)["상품"]
+
+
+def test_presales_bands(make_ds, params):
+    ds = make_ds([
+        row(fid="P0", status="Pre Sales", prob="10%(하하)", monthly=1, rev=202612),
+        row(fid="P30", status="Pre Sales", prob="30%(하상)", monthly=2, rev=202612),
+        row(fid="P50", status="제안완료", prob="50%(중중)", monthly=4, rev=202701),
+        row(fid="P100", status="Pre Sales", prob="100%(수의계약예정)", monthly=8, rev=202612),
+        row(fid="PX", status="Pre Sales", prob=None, monthly=16, rev=202612),
+        row(fid="POUT", status="Pre Sales", prob="50%(중중)", monthly=32, rev=202901),   # 기간 밖
+        row(fid="W", status="Win", prob="100%(수주완료)", monthly=64, rev=202612),         # 진행 중 아님
+        row(fid="R1", type="Ret.", status="Pre Sales", prob="70%(상하)", prev=10, new=9, monthly=-1, rev=202612),
+    ])
+    p = params(ym_from="2026-01", ym_to="2027-12")
+    v = A.presales_view(ds, p)
+    a = {b["band"]: b for b in v["types"]["A"]["bins"]}
+    assert a["30%이하"]["count"] == 1 and a["30%이상"]["count"] == 1 and a["50%이상"]["proposal"] == 1
+    assert a["100%이상"]["monthly"] == 8 and a["미확인"]["count"] == 1 and a["미확인"]["weighted"] is None
+    assert a["50%이상"]["cum_count"] == 2 and a["50%이상"]["cum_monthly"] == 12   # 50~100%
+    assert a["30%이하"]["cum_count"] == 4                                          # 미확인 제외 전체
+    t = v["types"]["A"]["totals"]
+    assert t["count"] == 5 and t["monthly"] == 31 and t["weighted"] == 0.1 + 0.6 + 2 + 8
+    assert v["types"]["A"]["excluded"]["out_of_period"] == 1
+    r = {b["band"]: b for b in v["types"]["R"]["bins"]}
+    assert r["70%이상"]["monthly"] == -1 and r["70%이상"]["prev"] == 10
+    d = A.detail_view(ds, p, {"scope": "in_progress", "acr_type": ["A"], "prob_band": "30%이하", "period": "rev_ym"})
+    assert d["total"] == 1 and d["rows"][0]["funnel_id"] == "P0"

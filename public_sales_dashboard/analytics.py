@@ -853,9 +853,94 @@ def insight_view(ds: Dataset, p: Params) -> dict:
     }
 
 
+# ================================================================ 화면: ACR 매출(Pre-sales)
+
+PS_BINS = [("30%이하", 0, 29.999), ("30%이상", 30, 39.999), ("40%이상", 40, 49.999), ("50%이상", 50, 59.999),
+           ("60%이상", 60, 69.999), ("70%이상", 70, 79.999), ("80%이상", 80, 89.999), ("90%이상", 90, 99.999),
+           ("100%이상", 100, 100)]
+PS_LABELS = [b[0] for b in PS_BINS]
+
+
+def ps_bin(v) -> str:
+    if v is None or pd.isna(v):
+        return "미확인"
+    for lb, lo, hi in PS_BINS:
+        if lo <= v <= hi:
+            return lb
+    return "미확인"
+
+
+def _ps_amount(r: pd.Series, sel: set[str]) -> float | None:
+    if sel:
+        a, _ = R.product_amount(r["products"], sel)
+        return a
+    v = r["monthly"]
+    return None if pd.isna(v) else float(v)
+
+
+def presales_view(ds: Dataset, p: Params) -> dict:
+    """진행 중(Pre Sales·제안완료) Funnel의 예상 ACR 월매출을 유형·수주(재계약) 가능성 구간별로 집계."""
+    df = filter_df(ds, p)
+    if df.empty:
+        return {"empty": True}
+    sel = set(p.products)
+    prog = df[df["status"].isin(C.IN_PROGRESS)]
+    months = R.ym_range(p.ym_from, p.ym_to)
+    out = {}
+    for t in ("A", "C", "R"):
+        g_all = prog[prog["acr_type"] == t]
+        g = g_all[in_period(g_all["rev_ym"], p)].copy()
+        g["amt"] = [_ps_amount(r, sel) for _, r in g.iterrows()]
+        g["band"] = g["prob"].apply(ps_bin)
+        bins = []
+        for lb in PS_LABELS + ["미확인"]:
+            b = g[g["band"] == lb]
+            valid = b[b["amt"].notna() & b["prob"].notna()]
+            bins.append({
+                "band": lb, "count": int(len(b)),
+                "presales": int((b["status"] == "Pre Sales").sum()), "proposal": int((b["status"] == "제안완료").sum()),
+                "monthly": fsum(b["amt"]), "contract": fsum(b["contract_amt"]),
+                "prev": fsum(b["prev_monthly"]), "new": fsum(b["new_monthly"]),
+                "weighted": (float((valid["amt"] * valid["prob"] / 100).sum()) if len(valid) else 0.0) if lb != "미확인" else None,
+            })
+        cc, cm = 0, 0.0
+        for rec in reversed(bins[:-1]):  # 100%이상부터 아래로 누적(해당 % 이상 합계)
+            cc += rec["count"]
+            cm += rec["monthly"] or 0.0
+            rec["cum_count"], rec["cum_monthly"] = cc, cm
+        bins[-1]["cum_count"], bins[-1]["cum_monthly"] = None, None
+        monthly = []
+        for ym in months:
+            gm = g[g["rev_ym"] == ym]
+            by = {lb: float(gm.loc[gm["band"] == lb, "amt"].sum()) for lb in PS_LABELS + ["미확인"]}
+            monthly.append({"ym": ym, "label": R.ym_label(ym), "bands": by, "total": float(gm["amt"].sum()),
+                            "count": int(len(gm))})
+        out[t] = {
+            "bins": bins, "monthly": monthly,
+            "totals": {"count": int(len(g)), "monthly": fsum(g["amt"]), "contract": fsum(g["contract_amt"]),
+                       "prev": fsum(g["prev_monthly"]), "new": fsum(g["new_monthly"]),
+                       "weighted": float(sum(rec["weighted"] or 0.0 for rec in bins[:-1]))},
+            "excluded": {"rev_ym_missing": int(g_all["rev_ym"].isna().sum()),
+                         "out_of_period": int((g_all["rev_ym"].notna() & ~in_period(g_all["rev_ym"], p)).sum())},
+        }
+    summ = {t: out[t]["totals"] for t in out}
+    return {
+        "bands": PS_LABELS, "types": out, "summary": summ,
+        "basis": {
+            "대상": "현재상황 Pre Sales·제안완료(진행 중), 유형별 A/C/R",
+            "기간": f"매출발생년월 {R.ym_label(p.ym_from)}~{R.ym_label(p.ym_to)} (매출발생년월 미입력·기간 밖 건은 제외 건수로 표시)",
+            "금액": ("선택 상품·카테고리의 대응 월매출(상품1~5)" if p.products else "월매출합계") + " = 수주 시 예상 ACR 월매출 증감액(R은 재계약 증감, 음수 유지)",
+            "가능성 구간": "수주(재계약)가능성의 명시적 % 값. 30%이하=0~29%, 30%이상=30~39%, … 90%이상=90~99%, 100%이상=100%. 값이 없거나 %가 아니면 미확인",
+            "누적": "‘해당 % 이상 누적’ = 그 구간 이상 모든 구간의 합(예: 70%이상 누적 = 70~100%)",
+            "가중": "월매출 × 가능성(%) — 입력 가능성 기반 참고치이며 통계적 예측이 아님",
+            "주의": "확정 ACR(누적매출)과 합산하지 않음. 진행 중 기회의 현재 입력값 기준",
+        },
+    }
+
+
 # ================================================================ 상세 목록(드릴다운)
 
-DRILL_KEYS = {"scope", "status", "acr_type", "bucket", "imminent", "code", "team", "am_key", "ym", "product",
+DRILL_KEYS = {"scope", "status", "acr_type", "bucket", "imminent", "prob_band", "code", "team", "am_key", "ym", "product",
               "customer", "bid_no", "prob_bin", "period", "change", "level"}
 
 
@@ -929,6 +1014,9 @@ def drill_rows(ds: Dataset, p: Params, drill: dict | None) -> tuple[pd.DataFrame
     if drill.get("bid_no"):
         m &= df["bid_no"] == drill["bid_no"]
         desc.append(f"입찰공고번호={drill['bid_no']}")
+    if drill.get("prob_band"):
+        m &= df["prob"].apply(ps_bin) == drill["prob_band"]
+        desc.append(f"가능성 구간={drill['prob_band']}")
     if drill.get("prob_bin"):
         m &= df["prob"].apply(prob_bin) == drill["prob_bin"]
         desc.append(f"가능성={drill['prob_bin']}")
