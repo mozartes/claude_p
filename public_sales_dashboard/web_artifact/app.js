@@ -524,7 +524,7 @@
     h += `<div class="tabs" role="tablist">${["A", "C", "R"].map((k) => `<button data-pstab="${k}" class="${k === tab ? "on" : ""}" type="button" role="tab">${k} 매출 <span class="muted">${cnt(sm[k].count)}건 · ${amt(sm[k].monthly)}</span></button>`).join("")}</div>
     <div class="grid kpis">
       ${kpiCard(`${tab}. 진행 중 건수`, cnt(tt.count) + "건", `Pre Sales·제안완료 · 매출발생년월 ${esc(per)}`, tab.toLowerCase(), dObj())}
-      ${kpiCard(`${tab}. 예상 월매출 합계`, amt(tt.monthly), isR ? "재계약 시 월매출 증감(음수=감액)" : "수주 시 예상 ACR 월매출 증감액", tab.toLowerCase(), dObj())}
+      ${kpiCard(`${tab}. 예상매출(~${String(S.f.ym_to).slice(2, 4)}년)`, amt(tt.monthly), "", tab.toLowerCase(), dObj())}
       ${isR ? kpiCard("R. 기존 → 변경 월매출", `${amt(tt.prev)}`, `변경 ${amt(tt.new)}`, "r", dObj())
             : kpiCard(`${tab}. 계약기간매출`, amt(tt.contract), "진행 중 Funnel의 계약금액(원본)", tab.toLowerCase(), dObj())}
       ${kpiCard(`${tab}. 가중 추정(참고)`, amt(tt.weighted), "월매출 × 입력 가능성(%) · 미확인 제외", "", dObj())}
