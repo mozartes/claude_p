@@ -805,7 +805,7 @@
     return {
       level: key === "am_key" ? "am" : "team", rows,
       basis: {
-        "확정 A/C 월매출 증감액": `${MODES[p.mode]}, 매출발생년월 ${ymLabel(p.ym_from)}~${ymLabel(p.ym_to)}`,
+        "A/C 누적매출": `확정 A/C 월매출 증감액 합계 · ${MODES[p.mode]}, 매출발생년월 ${ymLabel(p.ym_from)}~${ymLabel(p.ym_to)}`,
         "Win·재계약완료·해지확정": `수주년월 ${ymLabel(p.ym_from)}~${ymLabel(p.ym_to)}`,
         "진행 중·임박·경과·미갱신": `현재 진행 중 전체, 기준일 ${p.base_date}, 임박=기준월~+${p.th.imminent_months}개월, 미갱신 ${p.th.stale_days}일 초과`,
         "최근 갱신": "최근영업활동내역 저장일시 기준(실제 고객 접촉일·활동 횟수 아님)",
