@@ -15,6 +15,7 @@
   --primary-weak: #e8f0fe;
   --series-a: #2a78d6;
   --series-c: #eda100;
+  --pb-1: #9cc3ec; --pb-2: #6aa3e0; --pb-3: #3a7fd0; --pb-4: #1f5fae; --pb-5: #0d3a75;
   --series-r: #eb6834;
   --series-total: #1f2937;
   --neg: #c62828;
@@ -196,3 +197,7 @@ dl.basis dd { margin: 0; }
   .kpi .value { font-size: 18px; }
   dl.basis { grid-template-columns: 1fr; }
 }
+
+.seg-light { display: inline-flex; gap: 2px; background: #eef0f4; border-radius: 8px; padding: 2px; }
+.seg-light button { border: 0; background: transparent; color: var(--text-2); padding: 3px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+.seg-light button.on { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: var(--shadow); }

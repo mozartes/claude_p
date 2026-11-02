@@ -6,6 +6,7 @@
   const API = ROOT.dataset.api; // 서버가 URL_PREFIX 를 반영해 전달
   const ADMIN_REQUIRED = ROOT.dataset.admin === "1";
   const COLORS = { A: "#2a78d6", C: "#eda100", R: "#eb6834", AC: "#6250d6", ACR: "#1f2937" };
+  const css = (name, fb) => { try { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb; } catch (e) { return fb; } };
   const SERIES_LABEL = { A: "A", C: "C", R: "R", AC: "A+C", ACR: "A+C+R" };
   const UNIT_WON = { "원": 1, "천원": 1e3, "백만원": 1e6, "억원": 1e8 };
   const PAGE_TITLES = {
@@ -476,7 +477,26 @@
     const dObj = (extra) => Object.assign({ scope: "in_progress", acr_type: [tab], period: "rev_ym" }, extra || {});
     const drill = (extra) => esc(JSON.stringify(dObj(extra)));
     const sm = d.summary;
-    let h = `<div class="tabs" role="tablist">${["A", "C", "R"].map((k) => `<button data-pstab="${k}" class="${k === tab ? "on" : ""}" type="button" role="tab">${k} 매출 <span class="muted">${cnt(sm[k].count)}건 · ${amt(sm[k].monthly)}</span></button>`).join("")}</div>
+    // 월별 ACR 매출 증감액(Pre-sales) — 가능성 5개 묶음(겹치지 않음) 막대 + 합계 선
+    const PSG = [["30%이하", ["30%이하"], "--pb-1"], ["30%이상", ["30%이상", "40%이상"], "--pb-2"], ["50%이상", ["50%이상", "60%이상"], "--pb-3"],
+      ["70%이상", ["70%이상", "80%이상"], "--pb-4"], ["90%이상", ["90%이상", "100%이상"], "--pb-5"]];
+    const pct_ = ["ALL", "A", "C", "R"].includes(S.ui.psChartType) ? S.ui.psChartType : "ALL";
+    const cTypes = pct_ === "ALL" ? ["A", "C", "R"] : [pct_];
+    const psSer = Array.isArray(S.ui.psSeries) ? S.ui.psSeries : PSG.map((g) => g[0]).concat(["합계"]);
+    const mons = d.types.A.monthly.map((m) => ({ ym: m.ym, label: m.label }));
+    const gsum = (i, bands) => cTypes.reduce((a, t) => a + bands.reduce((x, b) => x + (d.types[t].monthly[i].bands[b] || 0), 0), 0);
+    const gData = PSG.map(([lb, bands]) => mons.map((m, i) => gsum(i, bands)));
+    const totData = mons.map((m, i) => gData.reduce((a, g) => a + g[i], 0));
+    const unk = mons.reduce((a, m, i) => a + gsum(i, ["미확인"]), 0);
+    let h = `<div class="card"><div class="card-head"><h3>월별 ACR 매출 증감액 (Pre-sales)</h3>
+        <div class="legend" id="psSerSel">${PSG.map(([lb, , tok]) => `<label><input type="checkbox" value="${lb}" ${psSer.includes(lb) ? "checked" : ""}><i style="background:${css(tok, "#3a7fd0")}"></i>${lb}</label>`).join("")}
+          <label><input type="checkbox" value="합계" ${psSer.includes("합계") ? "checked" : ""}><i style="background:${COLORS.ACR}"></i>합계</label></div></div>
+      <div class="toolbar" style="margin:4px 0 6px"><span class="seg-light" id="psTypeSel">${[["ALL", "A+C+R"], ["A", "A"], ["C", "C"], ["R", "R"]].map(([k, l]) => `<button type="button" data-v="${k}" class="${k === pct_ ? "on" : ""}">${l}</button>`).join("")}</span>
+        <span class="muted">진행 중(Pre Sales·제안완료) · 매출발생년월 기준 · 막대=가능성 구간, 선=합계 · 단위 ${esc(unitName())} · 클릭 → 해당 월·구간 Funnel</span></div>
+      <p class="desc">30%이하=0~29%, 30%이상=30~49%, 50%이상=50~69%, 70%이상=70~89%, 90%이상=90~100%.${unk ? ` 가능성 미확인 ${fmtNum(conv(unk)).replace(/<[^>]+>/g, "")}은 차트에서 제외.` : ""}</p>
+      <div class="chart-box tall"><canvas id="psMonthChart"></canvas></div></div>
+    <div style="height:14px"></div>`;
+    h += `<div class="tabs" role="tablist">${["A", "C", "R"].map((k) => `<button data-pstab="${k}" class="${k === tab ? "on" : ""}" type="button" role="tab">${k} 매출 <span class="muted">${cnt(sm[k].count)}건 · ${amt(sm[k].monthly)}</span></button>`).join("")}</div>
     <div class="grid kpis">
       ${kpiCard(`${tab}. 진행 중 건수`, cnt(tt.count) + "건", `Pre Sales·제안완료 · 매출발생년월 ${esc(per)}`, tab.toLowerCase(), dObj())}
       ${kpiCard(`${tab}. 예상 월매출 합계`, amt(tt.monthly), isR ? "재계약 시 월매출 증감(음수=감액)" : "수주 시 예상 ACR 월매출 증감액", tab.toLowerCase(), dObj())}
@@ -510,6 +530,23 @@
     ${basisBlock(d.basis)}`;
     $("view").innerHTML = h;
     document.querySelectorAll("[data-pstab]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); S.ui.psTab = b.dataset.pstab; store.set("ui", S.ui); render(); }));
+    const visG = PSG.map((g, i) => [g, i]).filter(([g]) => psSer.includes(g[0]));
+    const mds = visG.map(([g, i]) => ({ type: "bar", label: g[0], bands: g[1], data: gData[i].map(conv), backgroundColor: css(g[2], "#3a7fd0"), borderRadius: 3, maxBarThickness: 14, order: 2 }));
+    if (psSer.includes("합계")) mds.push({ type: "line", label: "합계", bands: PSG.flatMap((g) => g[1]), data: totData.map(conv), borderColor: COLORS.ACR, backgroundColor: COLORS.ACR, borderWidth: 2, pointRadius: 3, tension: 0, order: 1 });
+    chart("psMonthChart", { data: { labels: mons.map((m) => m.label), datasets: mds },
+      options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+        plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: tooltipAmt } } },
+        scales: { y: { title: { display: true, text: `월별 금액 (${unitName()})` }, grid: zeroGrid }, x: { grid: { display: false } } },
+        onClick: (evt, els, c) => {
+          const pts = c.getElementsAtEventForMode(evt, "index", { intersect: false }, false);
+          if (!pts.length) return;
+          const near = c.getElementsAtEventForMode(evt, "nearest", { intersect: true }, false);
+          const bands = near.length ? c.data.datasets[near[0].datasetIndex].bands : PSG.flatMap((g) => g[1]);
+          openDetail({ scope: "in_progress", acr_type: cTypes, period: "rev_ym", rev_month: mons[pts[0].index].ym, prob_band: bands });
+        } } });
+    document.querySelectorAll("#psSerSel input").forEach((i) => i.addEventListener("change", () => {
+      S.ui.psSeries = Array.from(document.querySelectorAll("#psSerSel input:checked")).map((x) => x.value); store.set("ui", S.ui); render(); }));
+    document.querySelectorAll("#psTypeSel button").forEach((b) => b.addEventListener("click", () => { S.ui.psChartType = b.dataset.v; store.set("ui", S.ui); render(); }));
     const labels = T.bins.map((b) => b.band);
     chart("psChart", { type: "bar",
       data: { labels, datasets: [{ label: `${tab} 예상 월매출`, data: T.bins.map((b) => conv(b.monthly || 0)), backgroundColor: COLORS[tab], borderRadius: 3, maxBarThickness: 34 }] },
@@ -659,7 +696,7 @@
   function openDetail(drill) {
     Object.keys(drill).forEach((k) => drill[k] === undefined && delete drill[k]);
     S.detail = { drill, page: 1, sort: drill.scope === "checks" ? "level" : "row", desc: false, q: "", size: S.detail.size || 50 };
-    go("detail");
+    setTimeout(() => go("detail"), 0); // 차트 클릭 처리 중 차트가 제거되지 않도록 다음 틱에 이동
   }
 
   // ------------------------------------------------------------ 페이지: 데이터 관리

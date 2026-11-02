@@ -936,7 +936,7 @@
   }
 
   // ================================================================ 상세 목록(드릴다운)
-  const DRILL_KEYS = ["scope", "status", "acr_type", "bucket", "imminent", "prob_band", "code", "team", "am_key", "ym", "product", "customer", "bid_no", "prob_bin", "period", "change", "level"];
+  const DRILL_KEYS = ["scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "code", "team", "am_key", "ym", "product", "customer", "bid_no", "prob_bin", "period", "change", "level"];
   function drillRows(ds, p, drill) {
     const d = {};
     Object.entries(drill || {}).forEach(([k, v]) => { if (DRILL_KEYS.includes(k) && v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)) d[k] = v; });
@@ -973,7 +973,8 @@
     if (d.product) { rows = rows.filter((r) => r.product_names.includes(d.product)); desc.push(`상품=${d.product}`); }
     if (d.customer) { rows = rows.filter((r) => (r.customer === null ? "(고객사 미입력)" : r.customer) === d.customer); desc.push(`고객사(표시명)=${d.customer}`); }
     if (d.bid_no) { rows = rows.filter((r) => r.bid_no === d.bid_no); desc.push(`입찰공고번호=${d.bid_no}`); }
-    if (d.prob_band) { rows = rows.filter((r) => psBin(r.prob) === d.prob_band); desc.push(`가능성 구간=${d.prob_band}`); }
+    if (d.prob_band) { const bs = listOf(d.prob_band); rows = rows.filter((r) => bs.includes(psBin(r.prob))); desc.push("가능성 구간=" + bs.join("/")); }
+    if (d.rev_month) { const rm = Number(d.rev_month); rows = rows.filter((r) => r.rev_ym === rm); desc.push(`매출발생년월=${ymLabel(rm)}`); }
     if (d.prob_bin) { rows = rows.filter((r) => probBin(r.prob) === d.prob_bin); desc.push(`가능성=${d.prob_bin}`); }
     if (d.period === "win_ym" || d.period === "rev_ym") { rows = rows.filter((r) => inPeriod(r[d.period], p)); desc.push((d.period === "win_ym" ? "수주년월" : "매출발생년월") + " 기간 내"); }
     if (d.change) {

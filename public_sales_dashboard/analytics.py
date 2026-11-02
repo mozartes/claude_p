@@ -940,7 +940,7 @@ def presales_view(ds: Dataset, p: Params) -> dict:
 
 # ================================================================ 상세 목록(드릴다운)
 
-DRILL_KEYS = {"scope", "status", "acr_type", "bucket", "imminent", "prob_band", "code", "team", "am_key", "ym", "product",
+DRILL_KEYS = {"scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "code", "team", "am_key", "ym", "product",
               "customer", "bid_no", "prob_bin", "period", "change", "level"}
 
 
@@ -1015,8 +1015,13 @@ def drill_rows(ds: Dataset, p: Params, drill: dict | None) -> tuple[pd.DataFrame
         m &= df["bid_no"] == drill["bid_no"]
         desc.append(f"입찰공고번호={drill['bid_no']}")
     if drill.get("prob_band"):
-        m &= df["prob"].apply(ps_bin) == drill["prob_band"]
-        desc.append(f"가능성 구간={drill['prob_band']}")
+        bands = _list(drill["prob_band"])
+        m &= df["prob"].apply(ps_bin).isin(bands)
+        desc.append("가능성 구간=" + "/".join(bands))
+    if drill.get("rev_month"):
+        rm = int(drill["rev_month"])
+        m &= (df["rev_ym"] == rm).fillna(False).astype(bool)
+        desc.append(f"매출발생년월={R.ym_label(rm)}")
     if drill.get("prob_bin"):
         m &= df["prob"].apply(prob_bin) == drill["prob_bin"]
         desc.append(f"가능성={drill['prob_bin']}")
