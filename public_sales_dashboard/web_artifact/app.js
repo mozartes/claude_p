@@ -70,8 +70,10 @@
     async put(v) { try { const db = await this.open(); await new Promise((res, rej) => { const tx = db.transaction("files", "readwrite"); tx.objectStore("files").put(v, "current"); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); return true; } catch (e) { return false; } },
     async del() { try { const db = await this.open(); await new Promise((res) => { const tx = db.transaction("files", "readwrite"); tx.objectStore("files").delete("current"); tx.oncomplete = res; tx.onerror = res; }); return true; } catch (e) { return false; } },
   };
-  function loadSample() {
-    PSD.loadParsed(window.PSD_SAMPLE.build(PSD.parseParams({}).base_date), "예시 데이터(가상)", "페이지 열람 시 생성", { sample: true });
+  // 기준 파일 내장 데이터(base_data.js): 대시보드 계산에 쓰는 열만 포함
+  function loadBase() {
+    const b = window.PSD_BASE;
+    PSD.loadParsed({ sheet: b.sheet, headerRow: b.headerRow, headers: b.headers, rows: b.rows }, b.meta.file_name, "페이지에 내장", { base: true, excluded_columns: b.meta.excluded_columns });
   }
   let downloadsP = null;
   function getDownloads() {
@@ -85,7 +87,7 @@
     return {
       base_date: d.base_date, ym_from: d.ym_from, ym_to: d.ym_to, level: "all", teams: [], ams: [],
       types: ["A", "C", "R"], products: [], product_group: "all", search: "", mode: "start",
-      excl_midlarge: false, excl_rmr: false, confirmed_only: false, th: Object.assign({}, d.th),
+      excl_midlarge: false, excl_rmr: false, confirmed_only: false, th: Object.assign({}, d.th), _dv: d.version,
     };
   }
   function renderFilterInputs() {
@@ -175,11 +177,18 @@
     const ds = j ? j.dataset : (S.meta ? S.meta.dataset : null);
     const chip = $("dataChip");
     if (!ds || ds.empty) { chip.className = "chip warn"; chip.textContent = "원본 데이터 없음"; }
-    else if (ds.sample) { chip.className = "chip warn"; chip.textContent = "예시 데이터 표시 중(팀·AM 실제, 금액·건수 가상) · 데이터 관리에서 엑셀 선택"; }
+    else if (ds.base) { chip.className = "chip gray"; chip.textContent = `기준 파일 내장 데이터 · ${Number(ds.rows || 0).toLocaleString()}건` + (ds.agg_excluded_rows ? ` · 집계 제외 ${ds.agg_excluded_rows}건` : ""); }
     else {
       chip.className = "chip gray";
       chip.textContent = `원본: ${ds.file_name || "-"} · ${ds.uploaded_at || "-"} · ${Number(ds.rows || ds.row_count || 0).toLocaleString()}건`
         + (ds.agg_excluded_rows ? ` · 집계 제외 ${ds.agg_excluded_rows}건` : "");
+    }
+    const wc = $("warnChip");
+    if (wc) {
+      const ws = (ds && ds.warnings) || [];
+      wc.hidden = !ws.length;
+      wc.textContent = ws.length ? `원본 확인 필요 ${ws.length}건` : "";
+      wc.title = ws.join("\n");
     }
     const u = $("unitChip");
     u.className = S.ui.srcUnit === "unknown" ? "chip warn" : "chip ok";
@@ -291,10 +300,12 @@
     const sampleNote = j.dataset.sample ? '<div class="notice warn sample-banner"><span><b>예시 데이터</b> — 팀·AM은 실제 조직, 고객·금액·건수·일정은 가상 값입니다. 해당 AM의 실제 실적이 아닙니다.</span><span class="link" data-goto="data">실제 엑셀 선택</span></div>' : "";
     const ml = S.f.mode === "term" ? "계약기간 반영 추정" : "매출개시월 기준";
     const acDrill = { scope: "acr", acr_type: ["A", "C"] };
+    // 누적매출 = 조회기간(매출발생년월 기준) 확정 ACR 월매출 증감액의 합계
+    const accBasis = `확정 ACR · ${ml} · ${S.f.ym_from}~${S.f.ym_to} 합계`;
     let h = sampleNote + `<div class="grid kpis">
-      ${kpiCard(`확정 A+C 월매출 증감액 (${ml})`, amt(a.AC), `A ${amt(a.A)} · C ${amt(a.C)} · Funnel ${cnt(a.funnels_A + a.funnels_C)}건`, "a", acDrill)}
-      ${kpiCard(`확정 R 월매출 증감액 (${ml})`, amt(a.R), `재계약완료 Funnel ${cnt(a.funnels_R)}건 (음수=감액)`, "r", { scope: "acr", acr_type: ["R"] })}
-      ${kpiCard(`확정 A+C+R 월매출 증감액 (${ml})`, amt(a.ACR), `고유 Funnel ${cnt(a.funnels)}건`, "", { scope: "acr" })}
+      ${kpiCard("A+C 누적매출", amt(a.AC), `A ${amt(a.A)} · C ${amt(a.C)} · Funnel ${cnt(a.funnels_A + a.funnels_C)}건<br>${esc(accBasis)}`, "a", acDrill)}
+      ${kpiCard("R 누적매출", amt(a.R), `재계약완료 Funnel ${cnt(a.funnels_R)}건 (음수=감액)<br>${esc(accBasis)}`, "r", { scope: "acr", acr_type: ["R"] })}
+      ${kpiCard("A+C+R 누적매출", amt(a.ACR), `고유 Funnel ${cnt(a.funnels)}건<br>${esc(accBasis)}`, "", { scope: "acr" })}
       ${kpiCard("진행 중 A/C Funnel", cnt(k.prog_ac_count) + "건", `계약기간매출 ${amt(k.prog_ac_amount.total)}${k.prog_ac_amount.neg_count ? ` (음수 ${k.prog_ac_amount.neg_count}건 ${amt(k.prog_ac_amount.negative)})` : ""}`, "", { scope: "in_progress", acr_type: ["A", "C"] })}
       ${kpiCard("진행 중 재계약(R)", cnt(k.prog_r_count) + "건", `기존 월매출 ${amt(k.prog_r_prev)}`, "", { scope: "in_progress", acr_type: ["R"] })}
       ${kpiCard("해지확정", cnt(k.churn_count) + "건", "수주년월 기간 내 · 확정 ACR 합계 제외", "neg", { status: ["해지확정"], period: "win_ym" })}
@@ -521,7 +532,7 @@
     const tabs = [["customer", "고객사"], ["product", "상품"], ["bid", "공공입찰"], ["reason", "사유 분석"]];
     let body = "";
     if (tab === "customer") {
-      body = `<div class="notice warn">고객사 <b>표시명 기준</b> 집계입니다. 마스킹된 이름이 같아도 같은 고객으로 단정하지 않으며, 고객 코드가 없어 고유·신규 고객 수와 유지율은 산출하지 않습니다.</div>
+      body = `${d.customer_warning ? `<div class="notice neg"><b>원본 확인 필요</b> — ${esc(d.customer_warning)}</div>` : ""}<div class="notice warn">고객사 <b>표시명 기준</b> 집계입니다. 마스킹된 이름이 같아도 같은 고객으로 단정하지 않으며, 고객 코드가 없어 고유·신규 고객 수와 유지율은 산출하지 않습니다.</div>
         <div class="toolbar"><input type="text" id="custQ" placeholder="고객사 표시명 검색"><span class="muted">표시명 ${cnt(d.customer_count_display)}개 (상위 200 표시, Funnel 수 순)</span></div>
         <div class="table-wrap" style="max-height:600px"><table class="t" id="custTable"><thead><tr><th>고객사(표시명)</th><th>팀</th><th class="num">Funnel</th><th class="num">진행 중</th><th class="num">확정 ACR(매출개시월, 월매출합계)</th><th class="num">해지확정</th></tr></thead>
         <tbody>${d.customers.map((c) => `<tr class="clickable" data-drill='${esc(JSON.stringify({ customer: c.customer }))}' data-name="${esc(c.customer)}"><td>${esc(c.customer)}</td><td>${esc(c.teams)}</td><td class="num">${cnt(c.funnels)}</td><td class="num">${cnt(c.in_progress)}</td><td class="num">${amt(c.acr)}</td><td class="num">${cnt(c.churn)}</td></tr>`).join("")}</tbody></table></div>`;
@@ -638,22 +649,22 @@
       <div class="toolbar" style="margin-top:10px">
         <span class="muted">${stored ? `이 브라우저 보관본: ${esc(stored.name)} · ${esc(stored.at)}` : "이 브라우저에 보관된 파일 없음"}</span>
         ${stored ? '<button class="btn small" id="delLocal" type="button">보관본 삭제</button>' : ""}
-        <button class="btn small" id="useSample" type="button">예시 데이터로 보기</button>
+        <button class="btn small" id="useBase" type="button">기준 파일(내장)로 되돌리기</button>
       </div>
       <p class="desc">보관본은 이 기기·이 브라우저에만 저장되며 다른 사람에게 보이지 않습니다. 공용 PC에서는 보관하지 마세요.</p></div>`;
     if (d.empty) h += `<div class="notice warn" style="margin-top:14px">현재 적용된 데이터가 없습니다. ${esc((d.meta && d.meta.reason) || "")}</div>`;
     else {
-      if (d.meta.sample) h += '<div class="notice warn" style="margin-top:14px">아래는 <b>예시 데이터</b>의 품질 현황입니다. 팀·AM은 실제 조직이지만 고객·금액·건수는 가상 값으로, 해당 AM의 실제 실적이 아닙니다.</div>';
+      if (d.meta.base) h += `<div class="notice info" style="margin-top:14px">아래는 페이지에 내장된 <b>기준 파일</b>의 품질 현황입니다. 계산에 쓰지 않는 ${(d.meta.excluded_columns || []).length}개 열(최근영업활동내용 등)은 내장하지 않았습니다.</div>`;
       h += qualityHtml(d);
     }
     $("view").innerHTML = h;
     $("upBtn").addEventListener("click", doUpload);
     if ($("delLocal")) $("delLocal").addEventListener("click", async () => { await IDB.del(); toast("이 브라우저 보관본을 삭제했습니다. 화면의 데이터는 새로 고치기 전까지 유지됩니다.", "ok"); go("data"); });
-    $("useSample").addEventListener("click", async () => { loadSample(); await loadMeta(true); toast("예시 데이터(가상)로 전환했습니다.", "info"); go("overview"); });
+    $("useBase").addEventListener("click", async () => { loadBase(); await loadMeta(true); toast("기준 파일(내장) 데이터로 전환했습니다.", "info"); go("overview"); });
   }
   function qualityHtml(d) {
     const q = d.quality, s = d.summary, m = d.meta;
-    return `<div class="grid kpis" style="margin-top:14px">
+    return `${(q.warnings || []).map((w) => `<div class="notice neg" style="margin-top:14px"><b>원본 확인 필요</b> — ${esc(w)}</div>`).join("")}<div class="grid kpis" style="margin-top:14px">
       ${kpiCard("원본 건수", cnt(s.source_rows) + "건", `시트 ${esc(m.sheet)} · 헤더 ${m.header_row}행 · ${m.column_count}열`, "", { scope: "all" })}
       ${kpiCard("대상 본부 건수", cnt(s.in_scope_rows) + "건", `본부 = ${esc(m.target_hq)}`, "", { scope: "all" })}
       ${kpiCard("집계 제외(중복·번호 없음)", cnt(s.agg_excluded_rows) + "건", `중복 그룹 ${q.dup_group_count}개`, s.agg_excluded_rows ? "neg" : "", { scope: "quality" })}
@@ -712,7 +723,7 @@
       h += `<h3>적용 필터</h3><dl class="basis">${Object.entries(a).map(([k, val]) => `<dt>${esc(k)}</dt><dd>${esc(typeof val === "object" ? Object.entries(val).map(([x, y]) => `${x}=${y}`).join(", ") : val)}</dd>`).join("")}</dl>`;
       h += `<h3>금액 단위</h3><p>${S.ui.srcUnit === "unknown" ? '<span class="chip warn">원본 단위·확인 필요</span> 원본 숫자를 변환 없이 표시합니다.' : `원본 ${esc(S.ui.srcUnit)}${unitLocked() ? "(서버 설정 확정)" : ""} → 표시 ${esc(S.ui.dispUnit)}`} 계산 중 반올림 없음, 표시할 때만 소수 ${S.ui.dec}자리.</p>`;
       if (!d.empty) {
-        h += `<h3>데이터 품질 · 제외</h3><dl class="basis"><dt>집계 제외</dt><dd>${cnt(d.summary.agg_excluded_rows)}건 (중복 그룹 ${d.quality.dup_group_count}개)</dd><dt>품질 확인 행</dt><dd>${cnt(d.quality.rows_with_issues)}건</dd>
+        h += `<h3>데이터 품질 · 제외</h3><dl class="basis"><dt>집계 제외</dt><dd>${cnt(d.summary.agg_excluded_rows)}건 (중복 그룹 ${d.quality.dup_group_count}개)</dd><dt>품질 확인 행</dt><dd>${cnt(d.quality.rows_with_issues)}건</dd>${(d.quality.warnings || []).map((w) => `<dt class="neg">원본 확인 필요</dt><dd class="neg">${esc(w)}</dd>`).join("")}
           ${d.metrics.map((m) => `<dt>${esc(m.metric)}</dt><dd>확정 조건 ${m.confirmed_rows}건 중 포함 ${m.included}건${Object.keys(m.excluded).length ? " · 제외 " + Object.entries(m.excluded).map(([k, x]) => `${esc(k)} ${x}건`).join(", ") : ""}</dd>`).join("")}</dl>`;
       }
       if (v && v.data && v.data.basis) h += `<h3>계산 기준 (${esc(PAGE_TITLES[S.page])})</h3><dl class="basis">${Object.entries(v.data.basis).map(([k, x]) => `<dt>${esc(k)}</dt><dd>${esc(x)}</dd>`).join("")}</dl>`;
@@ -755,7 +766,10 @@
     S.meta = await api("/meta");
     const saved = store.get("filters", null);
     const def = defaultFilters();
+    // 기본 기간이 바뀌면(버전 불일치) 저장된 화면의 조회기간을 새 기본값으로 교체
+    if (saved && saved._dv !== S.meta.defaults.version) { delete saved.ym_from; delete saved.ym_to; }
     if (!keepFilters) S.f = saved ? Object.assign(def, saved, { th: Object.assign({}, def.th, saved.th || {}) }) : def;
+    S.f._dv = S.meta.defaults.version;
     // 사라진 팀·AM·상품 선택 정리
     S.f.teams = S.f.teams.filter((t) => S.meta.options.teams.includes(t));
     const amKeys = new Set(S.meta.options.ams.map((a) => a.key));
@@ -787,6 +801,7 @@
     $("u_src").addEventListener("change", () => { $("u_disp").disabled = $("u_src").value === "unknown"; });
     $("f_search").addEventListener("keydown", (e) => { if (e.key === "Enter") { readFilters(); render(); } });
     $("panelBtn").addEventListener("click", openPanel);
+    $("warnChip").addEventListener("click", () => go("data"));
     $("drawerClose").addEventListener("click", closePanel); $("drawerBg").addEventListener("click", closePanel);
     $("modalClose").addEventListener("click", closeModal); $("modalBg").addEventListener("click", closeModal);
     document.addEventListener("keydown", (e) => { if (e.key === "Escape") { closePanel(); closeModal(); } });
@@ -815,9 +830,9 @@
       let restored = false;
       if (stored && stored.buf) {
         try { PSD.loadParsed(PSD.readWorkbook(stored.buf), stored.name, stored.at + " (이 브라우저 보관본)"); restored = true; }
-        catch (e) { toast("이 브라우저 보관본을 읽지 못해 예시 데이터를 표시합니다.", "warn"); }
+        catch (e) { toast("이 브라우저 보관본을 읽지 못해 기준 파일(내장) 데이터를 표시합니다.", "warn"); }
       }
-      if (!restored) loadSample();
+      if (!restored) loadBase();
       await loadMeta(false);
     } catch (e) { errorState("초기 정보를 불러오지 못했습니다: " + e.message); return; }
     const h = (location.hash || "").replace("#", "");

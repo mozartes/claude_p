@@ -15,7 +15,7 @@ import pandas as pd
 
 import config as C
 import revenue as R
-from data_loader import ISSUE_LABELS, Dataset
+from data_loader import ISSUE_LABELS, Dataset, customer_fill_warning
 
 # ================================================================ 파라미터
 
@@ -79,8 +79,8 @@ def parse_params(d: dict | None) -> Params:
     except ValueError:
         base = default_base_date()
     y = base.year
-    ym_from = _ym_from_str(d.get("ym_from")) or y * 100 + 1
-    ym_to = _ym_from_str(d.get("ym_to")) or y * 100 + 12
+    ym_from = _ym_from_str(d.get("ym_from")) or _ym_from_str(C.DEFAULT_YM_FROM) or y * 100 + 1
+    ym_to = _ym_from_str(d.get("ym_to")) or _ym_from_str(C.DEFAULT_YM_TO) or y * 100 + 12
     if ym_from > ym_to:
         ym_from, ym_to = ym_to, ym_from
     if R.ym_diff(ym_from, ym_to) > 120:  # 과도한 범위 방지(10년)
@@ -837,6 +837,7 @@ def insight_view(ds: Dataset, p: Params) -> dict:
     }
     return {
         "customers": cust[:200], "customer_count_display": len(cust),
+        "customer_warning": customer_fill_warning(df),
         "products": prod, "product_diff_count": int(len(diff)),
         "bid_groups": groups, "bid_funnels": int(len(bids)),
         "bid_methods": method, "qualification": qual, "reasons": reasons,

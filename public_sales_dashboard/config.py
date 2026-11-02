@@ -158,3 +158,7 @@ IN_PROGRESS = {"Pre Sales", "제안완료"}
 ACR_CONFIRMED_STATUS = {"A": "Win", "C": "Win", "R": "재계약완료"}
 
 UNASSIGNED_ORG = "조직 미입력"
+
+# 기본 조회기간: 시작월 = 기준일 연도 1월(DEFAULT_YM_FROM 지정 시 그 값), 종료월 = DEFAULT_YM_TO(YYYY-MM)
+DEFAULT_YM_FROM = _env("DEFAULT_YM_FROM", "")
+DEFAULT_YM_TO = _env("DEFAULT_YM_TO", "2027-12")

@@ -476,6 +476,20 @@ def build_dataset(path: Path, original_name: str, uploaded_at: str) -> Dataset:
                    by_row={r["_row"]: r for r in raw_rows})
 
 
+def customer_fill_warning(df: pd.DataFrame) -> str | None:
+    """고객사 값이 거의 한 가지로만 입력된 경우(엑셀 채우기 오류 의심) 경고 문구. 원본은 수정하지 않는다."""
+    s = df["customer"].dropna()
+    if len(s) < 50:
+        return None
+    vc = s.value_counts()
+    top_n = int(vc.max())
+    top = sorted(vc[vc == top_n].index)[0]
+    if top_n / len(s) >= 0.9:
+        return (f"고객사 값 {len(s):,}건 중 {top_n:,}건이 '{top}' 하나로 입력되어 있습니다. "
+                "엑셀 채우기 오류가 의심되며 고객사별 분석은 신뢰할 수 없습니다(원본 수정 필요).")
+    return None
+
+
 def build_quality(df: pd.DataFrame, dup_headers: list[str]) -> dict:
     counts: dict[str, int] = {}
     for iss in df["issues"]:
@@ -501,6 +515,7 @@ def build_quality(df: pd.DataFrame, dup_headers: list[str]) -> dict:
         "unknown_types": unknown_types,
         "unknown_statuses": unknown_status,
         "duplicate_headers": dup_headers,
+        "warnings": [w for w in [customer_fill_warning(df)] if w],
     }
 
 

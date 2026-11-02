@@ -34,6 +34,8 @@
     LEASED_PRODUCTS: ["국내전용", "국제전용", "국외전용"],
     PRODUCT_GROUPS: { all: "상품전체(모든 상품)", leased: "전용회선(국내전용+국제전용)", non_leased: "전용회선외(나머지 상품)" },
     NO_PRODUCT_MATCH: "\u0000선택 상품 없음",
+    DEFAULT_YM_FROM: "",
+    DEFAULT_YM_TO: "2027-12",
   };
   const isProg = (s) => s === "Pre Sales" || s === "제안완료";
   const isNum = (v) => typeof v === "number" && Number.isFinite(v);
@@ -275,6 +277,15 @@
     const byIdx = {}; recs.forEach((r) => { byIdx[r.row] = r; });
     return { df: recs, rawRows, byRow, byIdx, headers: headers.filter(Boolean), meta, quality, empty: false };
   }
+  function customerFillWarning(df) {
+    const s = df.map((r) => r.customer).filter((v) => v !== null);
+    if (s.length < 50) return null;
+    const c = new Map(); s.forEach((v) => c.set(v, (c.get(v) || 0) + 1));
+    const topN = Math.max(...c.values());
+    const top = Array.from(c.entries()).filter(([, n]) => n === topN).map(([k]) => k).sort()[0];
+    if (topN / s.length >= 0.9) return `고객사 값 ${s.length.toLocaleString("en-US")}건 중 ${topN.toLocaleString("en-US")}건이 '${top}' 하나로 입력되어 있습니다. 엑셀 채우기 오류가 의심되며 고객사별 분석은 신뢰할 수 없습니다(원본 수정 필요).`;
+    return null;
+  }
   function buildQuality(df, dupHeaders) {
     const counts = {};
     df.forEach((r) => new Set(r.issues).forEach((c) => { counts[c] = (counts[c] || 0) + 1; }));
@@ -290,6 +301,7 @@
       unknown_types: Array.from(new Set(df.filter((r) => r.acr_type === null && r.acr_raw !== null).map((r) => r.acr_raw))).sort(),
       unknown_statuses: Array.from(new Set(df.filter((r) => r.status !== null && !CFG.KNOWN_STATUSES.includes(r.status)).map((r) => r.status))).sort(),
       duplicate_headers: dupHeaders,
+      warnings: [customerFillWarning(df)].filter(Boolean),
     };
   }
   function emptyDataset(reason) {
@@ -404,8 +416,8 @@
     const [by, bm, bd] = base.split("-").map(Number);
     if (mkDate(by, bm, bd) === null) base = todayIso();
     const y = +base.slice(0, 4);
-    let from = ymFromStr(d.ym_from) || y * 100 + 1;
-    let to = ymFromStr(d.ym_to) || y * 100 + 12;
+    let from = ymFromStr(d.ym_from) || ymFromStr(CFG.DEFAULT_YM_FROM) || y * 100 + 1;
+    let to = ymFromStr(d.ym_to) || ymFromStr(CFG.DEFAULT_YM_TO) || y * 100 + 12;
     if (from > to) [from, to] = [to, from];
     if (ymDiff(from, to) > 120) to = ymAdd(from, 120);
     const th = Object.assign({}, CFG.BUSINESS_DEFAULTS);
@@ -845,7 +857,7 @@
     const per = df.filter((r) => inPeriod(r.win_ym, p));
     const isAc = (r) => r.acr_type === "A" || r.acr_type === "C";
     return {
-      customers: cust.slice(0, 200), customer_count_display: cust.length, products: prod,
+      customers: cust.slice(0, 200), customer_count_display: cust.length, customer_warning: customerFillWarning(df), products: prod,
       product_diff_count: df.filter((r) => r.issues.includes("PRODUCT_SUM_DIFF")).length,
       bid_groups: groups, bid_funnels: bids.length, bid_methods: method, qualification: reasonTable(ac.map((r) => r.qualification)),
       reasons: {
@@ -1016,7 +1028,8 @@
   function envelope(view, p, data) {
     const d = state.ds;
     return { ok: true, view, dataset: { empty: d.empty, file_name: d.meta.file_name, uploaded_at: d.meta.uploaded_at, rows: d.meta.row_count || 0,
-      agg_excluded_rows: d.empty ? 0 : d.quality.agg_excluded_rows, reason: d.meta.reason, sample: !!d.meta.sample }, applied: paramsSummary(p), data };
+      agg_excluded_rows: d.empty ? 0 : d.quality.agg_excluded_rows, reason: d.meta.reason, sample: !!d.meta.sample, base: !!d.meta.base,
+      warnings: d.empty ? [] : (d.quality.warnings || []) }, applied: paramsSummary(p), data };
   }
   function meta() {
     const d = state.ds;
@@ -1031,7 +1044,7 @@
     return {
       ok: true, dataset: Object.assign({ empty: d.empty }, d.meta),
       options: { teams, ams, products, product_groups: CFG.PRODUCT_GROUPS, leased_products: CFG.LEASED_PRODUCTS, modes: MODES, types: CFG.ACR_TYPE_LABEL },
-      defaults: { base_date: p.base_date, ym_from: ymLabel(p.ym_from), ym_to: ymLabel(p.ym_to), th: Object.assign({}, CFG.BUSINESS_DEFAULTS) },
+      defaults: { version: `period:${CFG.DEFAULT_YM_FROM}~${CFG.DEFAULT_YM_TO}`, base_date: p.base_date, ym_from: ymLabel(p.ym_from), ym_to: ymLabel(p.ym_to), th: Object.assign({}, CFG.BUSINESS_DEFAULTS) },
       unit: { source_unit: CFG.SOURCE_UNIT, units: ["원", "천원", "백만원", "억원"] },
       rules: rulesTable(p), admin_required: false,
       settings: { URL_PREFIX: "(정적 페이지 — 해당 없음)", TARGET_HQ: CFG.TARGET_HQ, MAX_UPLOAD_MB: CFG.MAX_UPLOAD_MB },

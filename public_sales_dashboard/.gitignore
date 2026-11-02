@@ -11,3 +11,6 @@ data/*
 !data/.gitkeep
 *.xlsx
 !tests/fixtures/*.xlsx
+
+# 웹판 내장 기준 데이터(회사 데이터) — 저장소 제외, 아티팩트에만 게시
+web_artifact/base_data.js

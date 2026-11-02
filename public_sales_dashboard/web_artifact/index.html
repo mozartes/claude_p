@@ -122,6 +122,7 @@
       </div>
       <div class="top-actions">
         <span class="chip gray" id="dataChip">데이터 확인 중</span>
+        <span class="chip neg link" id="warnChip" data-goto-data="1" hidden></span>
         <span class="chip gray" id="unitChip">단위 확인 중</span>
         <button class="btn small" id="panelBtn" type="button">확인 패널</button>
       </div>
@@ -129,7 +130,7 @@
     <div class="applied" id="applied"></div>
     <div id="toast" class="notice info" role="status" aria-live="polite" hidden></div>
     <div id="view"><div class="state"><div class="spinner"></div>불러오는 중…</div></div>
-    <p class="privacy">엑셀 파일은 열람자 브라우저 안에서만 읽고 계산합니다. 서버로 전송·저장하지 않으며, 다른 열람자에게 보이지 않습니다. 첫 화면은 예시 데이터입니다(팀·AM은 실제 조직, 고객·금액·건수는 가상 값).</p>
+    <p class="privacy">엑셀 파일은 열람자 브라우저 안에서만 읽고 계산합니다. 서버로 전송·저장하지 않으며, 다른 열람자에게 보이지 않습니다. 첫 화면은 페이지에 내장된 기준 파일(계산에 쓰는 열만)이며, 직접 고른 엑셀은 이 브라우저에서만 쓰입니다.</p>
   </main>
 </div>
 
@@ -149,5 +150,5 @@
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="engine.js"></script>
-<script src="sample.js"></script>
+<script src="base_data.js"></script>
 <script src="app.js"></script>
