@@ -134,3 +134,17 @@ def test_ym_helpers():
     assert R.ym_add(202612, 1) == 202701 and R.ym_add(202601, -1) == 202512
     assert R.ym_range(202611, 202702) == [202611, 202612, 202701, 202702]
     assert R.ym_diff(202611, 202702) == 3
+
+
+def test_win_2611_rev_2612_term24_into_2027(make_ds):
+    # 26-11 수주, 26-12 매출개시, 24개월, 월 10 → 계약기간 반영: 26-12~28-11 매월 10
+    ds = make_ds([row(win=202611, rev=202612, term=24, monthly=10)])
+    s = acr(ds, "start", 202601, 202712)
+    assert s["totals"]["A"] == 10 and [m["ym"] for m in s["monthly"] if m["A"]] == [202612]
+    t = acr(ds, "term", 202601, 202712)
+    months = [m["ym"] for m in t["monthly"] if m["A"]]
+    assert months[0] == 202612 and months[-1] == 202712 and len(months) == 13
+    assert t["totals"]["A"] == 130
+    full = acr(ds, "term", 202601, 202812)
+    fm = [m["ym"] for m in full["monthly"] if m["A"]]
+    assert len(fm) == 24 and fm[-1] == 202811 and full["totals"]["A"] == 240
