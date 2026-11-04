@@ -232,3 +232,25 @@ def test_presales_bands(make_ds, params):
     assert r["70%이상"]["monthly"] == -1 and r["70%이상"]["prev"] == 10
     d = A.detail_view(ds, p, {"scope": "in_progress", "acr_type": ["A"], "prob_band": "30%이하", "period": "rev_ym"})
     assert d["total"] == 1 and d["rows"][0]["funnel_id"] == "P0"
+
+
+def test_total_view_contract_amount_by_win_month(make_ds, params):
+    ds = make_ds([
+        row(fid="A1", type="Acq.", status="Win", win=202611, rev=202612, term=24, monthly=10, contract=240),
+        row(fid="A2", type="Acq.", status="Pre Sales", win=202611, contract=999),                  # 진행 중 제외
+        row(fid="A3", type="Acq.", status="Win", win=202701, contract=50),                          # 다른 연도
+        row(fid="C1", type="Cul.", status="Win", win=202603, contract=120),
+        row(fid="C2", type="Cul.", status="Win", win=202603, contract=None),                        # 누락 → 제외 건수
+        row(fid="R1", type="Ret.", status="재계약완료", win=202605, prev=10, new=9, monthly=-1, term=12, contract=-12),
+        row(fid="R2", type="Ret.", status="해지확정", win=202605, contract=-30),                      # 해지 제외
+    ])
+    v = A.total_view(ds, params(base_date="2026-11-04"))
+    t = v["totals"]
+    assert v["year"] == 2026 and t["A"] == 240 and t["C"] == 120 and t["R"] == -12 and t["ACR"] == 348
+    assert t["funnels"] == 3 and v["excluded"] == {"계약기간매출(또는 상품 월매출·계약기간) 누락": 1}
+    mon = {m["ym"]: m for m in v["monthly"]}
+    assert mon[202611]["A"] == 240 and mon[202612]["A"] == 0 and mon[202612]["cum_ACR"] == 348
+    assert v["r_ref"]["new_total"] == 108 and v["r_ref"]["prev_total"] == 120 and v["r_ref"]["decrease_count"] == 1
+    assert A.total_view(ds, params(base_date="2026-11-04", total_year=2027))["totals"]["A"] == 50
+    d = A.detail_view(ds, params(base_date="2026-11-04"), {"scope": "total", "win_month": 202611})
+    assert d["total"] == 1 and d["rows"][0]["funnel_id"] == "A1"

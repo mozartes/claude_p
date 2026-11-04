@@ -436,6 +436,7 @@
       product_group: CFG.PRODUCT_GROUPS[d.product_group] ? d.product_group : "all",
       search: String(d.search || "").trim().slice(0, 100), mode: MODES[d.mode] ? d.mode : "start",
       excl_midlarge: !!d.excl_midlarge, excl_rmr: !!d.excl_rmr, confirmed_only: !!d.confirmed_only, th,
+      total_year: (() => { const ty = parseInt(String(d.total_year), 10); return String(ty) === String(d.total_year).trim() && ty >= 1990 && ty <= 2100 ? ty : y; })(),
     };
   }
   function resolveProductGroup(ds, p) {
@@ -935,8 +936,65 @@
     };
   }
 
+  // ================================================================ 화면: ACR 매출(총액)
+  function totalRows(df, p) {
+    const lo = p.total_year * 100 + 1, hi = p.total_year * 100 + 12;
+    const sel = new Set(p.products);
+    const conf = df.filter(isConfirmed);
+    const g = conf.filter((r) => nn(r.win_ym) && r.win_ym >= lo && r.win_ym <= hi).map((r) => {
+      let amt;
+      if (sel.size) { const a = productAmount(r.products, sel)[0]; amt = a === null || r.term === null ? null : a * r.term; }
+      else amt = r.contract_amt;
+      return { r, amt };
+    });
+    const excl = {};
+    const nMiss = g.filter((x) => x.amt === null).length;
+    if (nMiss) excl["계약기간매출(또는 상품 월매출·계약기간) 누락"] = nMiss;
+    const nWin = conf.filter((r) => r.win_ym === null).length;
+    if (nWin) excl["수주년월 누락"] = nWin;
+    return [g.filter((x) => x.amt !== null), excl];
+  }
+  function totalView(ds, p) {
+    const df = filterDf(ds, p);
+    if (!df.length) return { empty: true };
+    const [g, excl] = totalRows(df, p);
+    const y = p.total_year;
+    const sums = (x) => { let a = 0, c = 0, r = 0; x.forEach((e) => { if (e.r.acr_type === "A") a += e.amt; else if (e.r.acr_type === "C") c += e.amt; else if (e.r.acr_type === "R") r += e.amt; }); return { A: a, C: c, R: r, AC: a + c, ACR: a + c + r }; };
+    const totals = Object.assign(sums(g), { funnels: g.length });
+    ["A", "C", "R"].forEach((t) => { totals["funnels_" + t] = g.filter((e) => e.r.acr_type === t).length; });
+    let cum = 0;
+    const monthly = [];
+    for (let m = 1; m <= 12; m++) {
+      const ym = y * 100 + m; const gm = g.filter((e) => e.r.win_ym === ym); const s = sums(gm); cum += s.ACR;
+      monthly.push(Object.assign({ ym, label: ymLabel(ym) }, s, { funnels: gm.length, cum_ACR: cum }));
+    }
+    const org = (key, labels) => {
+      const rows = [];
+      groupBy(g, (e) => e.r[key]).forEach((x, k) => {
+        const rec = { key: k }; labels.forEach((l) => { rec[l] = x[0].r[l]; });
+        rows.push(Object.assign(rec, sums(x), { funnels: x.length, r_neg_count: x.filter((e) => e.r.acr_type === "R" && e.amt < 0).length }));
+      });
+      return rows.sort((a, b) => b.ACR - a.ACR);
+    };
+    const rr = g.filter((e) => e.r.acr_type === "R");
+    const rRef = { count: rr.length, new_total: rr.reduce((a, e) => a + e.r.new_monthly * e.r.term, 0), prev_total: rr.reduce((a, e) => a + e.r.prev_monthly * e.r.term, 0),
+      decrease_count: rr.filter((e) => e.amt < 0).length, same_count: rr.filter((e) => e.amt === 0).length, increase_count: rr.filter((e) => e.amt > 0).length };
+    let mismatch = 0;
+    if (!p.products.length) mismatch = g.filter((e) => { const r = e.r; if (!nn(r.monthly) || !nn(r.term) || !nn(r.contract_amt)) return false; const c = r.monthly * r.term; return Math.abs(r.contract_amt - c) > 1e-6 + 1e-9 * Math.abs(c); }).length;
+    return {
+      year: y, totals, monthly, by_team: org("team", ["team"]), by_am: org("am_key", ["team", "am"]), r_ref: rRef, excluded: excl, mismatch,
+      basis: {
+        "대상": "확정 건 — A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
+        "기간": `수주년월 ${y}-01 ~ ${y}-12 (사이드바 조회기간과 별개, 화면 상단에서 연도 선택)`,
+        "금액": (p.products.length ? "선택 상품 월매출 × 계약기간(월)" : "원본 계약기간매출(= 월매출합계 × 계약기간)") + " — 계약 전체 기간의 총액을 수주월에 1회 반영",
+        "R 해석": "R의 계약기간매출은 재계약 증감액 × 계약기간 → 감액은 음수, 동일 금액은 0. 재계약 후 계약총액(변경매출×계약기간)은 참고로만 표시하고 합계에 넣지 않음",
+        "주의": "수주 시점의 계약 총액 기준이며 월별 청구·회계 매출이 아님",
+      },
+    };
+  }
+
   // ================================================================ 상세 목록(드릴다운)
-  const DRILL_KEYS = ["scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "code", "team", "am_key", "ym", "product", "customer", "bid_no", "prob_bin", "period", "change", "level"];
+  const DRILL_KEYS = ["scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "win_month", "code", "team", "am_key", "ym", "product", "customer", "bid_no", "prob_bin", "period", "change", "level"];
   function drillRows(ds, p, drill) {
     const d = {};
     Object.entries(drill || {}).forEach(([k, v]) => { if (DRILL_KEYS.includes(k) && v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)) d[k] = v; });
@@ -947,7 +1005,11 @@
     const ck = computeChecks(df, p);
     const desc = [];
     let rows = df;
-    if (scope === "acr") {
+    if (scope === "total") {
+      const s = new Set(totalRows(df, p)[0].map((e) => e.r.row));
+      rows = rows.filter((r) => s.has(r.row));
+      desc.push(`총액 포함(확정·수주년월 ${p.total_year}년)`);
+    } else if (scope === "acr") {
       let [con] = contributions(df, p.mode, p.ym_from, p.ym_to, p.products);
       con = con.filter((x) => p.types.includes(x.acr_type));
       if (d.ym) { con = con.filter((x) => x.ym === Number(d.ym)); desc.push(`${ymLabel(Number(d.ym))} 반영`); }
@@ -974,6 +1036,7 @@
     if (d.customer) { rows = rows.filter((r) => (r.customer === null ? "(고객사 미입력)" : r.customer) === d.customer); desc.push(`고객사(표시명)=${d.customer}`); }
     if (d.bid_no) { rows = rows.filter((r) => r.bid_no === d.bid_no); desc.push(`입찰공고번호=${d.bid_no}`); }
     if (d.prob_band) { const bs = listOf(d.prob_band); rows = rows.filter((r) => bs.includes(psBin(r.prob))); desc.push("가능성 구간=" + bs.join("/")); }
+    if (d.win_month) { const wm = Number(d.win_month); rows = rows.filter((r) => r.win_ym === wm); desc.push(`수주년월=${ymLabel(wm)}`); }
     if (d.rev_month) { const rm = Number(d.rev_month); rows = rows.filter((r) => r.rev_ym === rm); desc.push(`매출발생년월=${ymLabel(rm)}`); }
     if (d.prob_bin) { rows = rows.filter((r) => probBin(r.prob) === d.prob_bin); desc.push(`가능성=${d.prob_bin}`); }
     if (d.period === "win_ym" || d.period === "rev_ym") { rows = rows.filter((r) => inPeriod(r[d.period], p)); desc.push((d.period === "win_ym" ? "수주년월" : "매출발생년월") + " 기간 내"); }
@@ -1082,7 +1145,7 @@
   function setDataset(ds) { state.ds = ds; }
   function loadParsed(parsed, fileName, at, extra) { state.ds = buildDataset(parsed, fileName, at, extra); return state.ds; }
 
-  const VIEWS = { overview: overviewView, funnel: funnelView, renewal: renewalView, acr: acrView, presales: presalesView, team: teamView, insight: insightView, quality: qualityView };
+  const VIEWS = { overview: overviewView, funnel: funnelView, renewal: renewalView, acr: acrView, presales: presalesView, total: totalView, team: teamView, insight: insightView, quality: qualityView };
   function envelope(view, p, data) {
     const d = state.ds;
     return { ok: true, view, dataset: { empty: d.empty, file_name: d.meta.file_name, uploaded_at: d.meta.uploaded_at, rows: d.meta.row_count || 0,
@@ -1091,18 +1154,19 @@
   }
   function meta() {
     const d = state.ds;
-    let teams = [], ams = [], products = [];
+    let teams = [], ams = [], products = [], years = [];
     if (!d.empty) {
       const sc = d.df.filter((r) => r.in_scope);
       teams = Array.from(new Set(sc.map((r) => r.team))).sort();
       ams = Array.from(new Set(sc.map((r) => r.am_key))).sort().map((k) => ({ key: k, team: k.split("|")[0], am: k.split("|").slice(1).join("|") }));
       products = Array.from(new Set(sc.flatMap((r) => r.product_names))).sort();
+      years = Array.from(new Set(sc.filter((r) => r.win_ym !== null).map((r) => Math.floor(r.win_ym / 100)))).sort((a, b) => a - b);
     }
     const p = parseParams({});
     return {
       ok: true, dataset: Object.assign({ empty: d.empty }, d.meta),
-      options: { teams, ams, products, product_groups: CFG.PRODUCT_GROUPS, leased_products: CFG.LEASED_PRODUCTS, modes: MODES, types: CFG.ACR_TYPE_LABEL },
-      defaults: { version: `period:${CFG.DEFAULT_YM_FROM}~${CFG.DEFAULT_YM_TO}`, base_date: p.base_date, ym_from: ymLabel(p.ym_from), ym_to: ymLabel(p.ym_to), th: Object.assign({}, CFG.BUSINESS_DEFAULTS) },
+      options: { teams, ams, products, years, product_groups: CFG.PRODUCT_GROUPS, leased_products: CFG.LEASED_PRODUCTS, modes: MODES, types: CFG.ACR_TYPE_LABEL },
+      defaults: { total_year: p.total_year, version: `period:${CFG.DEFAULT_YM_FROM}~${CFG.DEFAULT_YM_TO}`, base_date: p.base_date, ym_from: ymLabel(p.ym_from), ym_to: ymLabel(p.ym_to), th: Object.assign({}, CFG.BUSINESS_DEFAULTS) },
       unit: { source_unit: CFG.SOURCE_UNIT, units: ["원", "천원", "백만원", "억원"] },
       rules: rulesTable(p), admin_required: false,
       settings: { URL_PREFIX: "(정적 페이지 — 해당 없음)", TARGET_HQ: CFG.TARGET_HQ, MAX_UPLOAD_MB: CFG.MAX_UPLOAD_MB },

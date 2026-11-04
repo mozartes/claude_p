@@ -148,21 +148,22 @@ def create_app(store: DataStore | None = None, prefix: str | None = None) -> Fla
     @app.get("/api/meta")
     def api_meta():
         d = ds()
-        teams, ams, products = [], [], []
+        teams, ams, products, years = [], [], [], []
         if not d.empty:
             sc = d.df[d.df["in_scope"]]
             teams = sorted(sc["team"].unique().tolist())
             ams = [{"key": k, "team": k.split("|")[0], "am": k.split("|", 1)[1]}
                    for k in sorted(sc["am_key"].unique().tolist())]
             products = sorted({n for ns in sc["product_names"] for n in ns})
+            years = sorted({int(v) // 100 for v in sc["win_ym"].dropna()})
         p = A.parse_params({})
         return jsonify(A.clean({
             "ok": True,
             "dataset": {"empty": d.empty, **d.meta},
-            "options": {"teams": teams, "ams": ams, "products": products,
+            "options": {"teams": teams, "ams": ams, "products": products, "years": years,
                         "product_groups": C.PRODUCT_GROUPS, "leased_products": C.LEASED_PRODUCTS,
                         "modes": R.MODES, "types": C.ACR_TYPE_LABEL},
-            "defaults": {"version": f"period:{C.DEFAULT_YM_FROM}~{C.DEFAULT_YM_TO}",
+            "defaults": {"total_year": p.total_year, "version": f"period:{C.DEFAULT_YM_FROM}~{C.DEFAULT_YM_TO}",
                          "base_date": p.base_date.isoformat(), "ym_from": R.ym_label(p.ym_from),
                          "ym_to": R.ym_label(p.ym_to), "th": C.BUSINESS_DEFAULTS},
             "unit": {"source_unit": C.SOURCE_UNIT, "units": list(C.UNIT_FACTORS_TO_WON)},
@@ -174,7 +175,7 @@ def create_app(store: DataStore | None = None, prefix: str | None = None) -> Fla
 
     VIEWS = {
         "overview": A.overview_view, "funnel": A.funnel_view, "renewal": A.renewal_view,
-        "acr": A.acr_view, "presales": A.presales_view, "team": A.team_view, "insight": A.insight_view, "quality": A.quality_view,
+        "acr": A.acr_view, "presales": A.presales_view, "total": A.total_view, "team": A.team_view, "insight": A.insight_view, "quality": A.quality_view,
     }
 
     @app.route("/api/view/<name>", methods=["GET", "POST"])

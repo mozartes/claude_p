@@ -38,6 +38,7 @@ class Params:
     excl_rmr: bool = False
     confirmed_only: bool = False
     th: dict = field(default_factory=lambda: dict(C.BUSINESS_DEFAULTS))
+    total_year: int = 0
 
     @property
     def base_ym(self) -> int:
@@ -72,6 +73,14 @@ def _list(v) -> list[str]:
     return [str(x) for x in v if x not in (None, "")]
 
 
+def _year(v, default: int) -> int:
+    try:
+        y = int(str(v))
+        return y if 1990 <= y <= 2100 else default
+    except (TypeError, ValueError):
+        return default
+
+
 def parse_params(d: dict | None) -> Params:
     d = d or {}
     try:
@@ -104,7 +113,7 @@ def parse_params(d: dict | None) -> Params:
         search=str(d.get("search") or "").strip()[:100],
         mode=d.get("mode") if d.get("mode") in R.MODES else "start",
         excl_midlarge=bool(d.get("excl_midlarge")), excl_rmr=bool(d.get("excl_rmr")),
-        confirmed_only=bool(d.get("confirmed_only")), th=th,
+        confirmed_only=bool(d.get("confirmed_only")), th=th, total_year=_year(d.get("total_year"), base.year),
     )
 
 
@@ -938,9 +947,100 @@ def presales_view(ds: Dataset, p: Params) -> dict:
     }
 
 
+# ================================================================ 화면: ACR 매출(총액)
+
+
+def _total_amount(r: pd.Series, sel: set[str]) -> float | None:
+    """계약기간매출(=월매출합계×계약기간). 상품 선택 시 선택 상품 월매출 × 계약기간."""
+    if sel:
+        a, _ = R.product_amount(r["products"], sel)
+        if a is None or pd.isna(r["term"]):
+            return None
+        return float(a) * int(r["term"])
+    v = r["contract_amt"]
+    return None if pd.isna(v) else float(v)
+
+
+def total_rows(df: pd.DataFrame, p: Params) -> tuple[pd.DataFrame, dict]:
+    """확정(A·C=Win, R=재계약완료) & 수주년월이 집계연도 1~12월인 건. (포함 행[amt 포함], 제외 사유별 건수)"""
+    lo, hi = p.total_year * 100 + 1, p.total_year * 100 + 12
+    conf = df[R.is_confirmed(df)]
+    win = conf["win_ym"]
+    in_y = (win.notna() & (win >= lo) & (win <= hi)).fillna(False).astype(bool)
+    g = conf[in_y].copy()
+    sel = set(p.products)
+    g["amt"] = [_total_amount(r, sel) for _, r in g.iterrows()] if len(g) else []
+    g["amt"] = pd.to_numeric(g["amt"], errors="coerce").astype(float)
+    excl = {}
+    n_miss = int(g["amt"].isna().sum())
+    if n_miss:
+        excl["계약기간매출(또는 상품 월매출·계약기간) 누락"] = n_miss
+    n_win = int(conf["win_ym"].isna().sum())
+    if n_win:
+        excl["수주년월 누락"] = n_win
+    return g[g["amt"].notna()], excl
+
+
+def total_view(ds: Dataset, p: Params) -> dict:
+    df = filter_df(ds, p)
+    if df.empty:
+        return {"empty": True}
+    g, excl = total_rows(df, p)
+    y = p.total_year
+
+    def sums(x: pd.DataFrame) -> dict:
+        s = x.groupby("acr_type")["amt"].sum() if len(x) else pd.Series(dtype=float)
+        a, c, r = float(s.get("A", 0.0)), float(s.get("C", 0.0)), float(s.get("R", 0.0))
+        return {"A": a, "C": c, "R": r, "AC": a + c, "ACR": a + c + r}
+
+    totals = sums(g)
+    totals["funnels"] = int(len(g))
+    for t in ("A", "C", "R"):
+        totals["funnels_" + t] = int((g["acr_type"] == t).sum())
+    monthly, cum = [], 0.0
+    for m in range(1, 13):
+        ym = y * 100 + m
+        gm = g[g["win_ym"] == ym]
+        s = sums(gm)
+        cum += s["ACR"]
+        monthly.append({"ym": ym, "label": R.ym_label(ym), **s, "funnels": int(len(gm)), "cum_ACR": cum})
+
+    def org(key: str, labels: list[str]) -> list[dict]:
+        rows = []
+        for k, x in g.groupby(key):
+            rows.append({"key": k, **{l: x.iloc[0][l] for l in labels}, **sums(x), "funnels": int(len(x)),
+                         "r_neg_count": int(((x["acr_type"] == "R") & (x["amt"] < 0)).sum())})
+        rows.sort(key=lambda r: -r["ACR"])
+        return rows
+
+    rr = g[g["acr_type"] == "R"]
+    terms = rr["term"].astype(float)
+    r_ref = {"count": int(len(rr)),
+             "new_total": float((rr["new_monthly"] * terms).sum()) if len(rr) else 0.0,
+             "prev_total": float((rr["prev_monthly"] * terms).sum()) if len(rr) else 0.0,
+             "decrease_count": int((rr["amt"] < 0).sum()), "same_count": int((rr["amt"] == 0).sum()),
+             "increase_count": int((rr["amt"] > 0).sum())}
+    mismatch = 0
+    if not p.products and len(g):
+        calc = g["monthly"] * g["term"].astype(float)
+        diff = (g["contract_amt"] - calc).abs()
+        mismatch = int((calc.notna() & g["contract_amt"].notna() & (diff > 1e-6 + 1e-9 * calc.abs())).sum())
+    return {
+        "year": y, "totals": totals, "monthly": monthly, "by_team": org("team", ["team"]), "by_am": org("am_key", ["team", "am"]),
+        "r_ref": r_ref, "excluded": excl, "mismatch": mismatch,
+        "basis": {
+            "대상": "확정 건 — A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
+            "기간": f"수주년월 {y}-01 ~ {y}-12 (사이드바 조회기간과 별개, 화면 상단에서 연도 선택)",
+            "금액": ("선택 상품 월매출 × 계약기간(월)" if p.products else "원본 계약기간매출(= 월매출합계 × 계약기간)") + " — 계약 전체 기간의 총액을 수주월에 1회 반영",
+            "R 해석": "R의 계약기간매출은 재계약 증감액 × 계약기간 → 감액은 음수, 동일 금액은 0. 재계약 후 계약총액(변경매출×계약기간)은 참고로만 표시하고 합계에 넣지 않음",
+            "주의": "수주 시점의 계약 총액 기준이며 월별 청구·회계 매출이 아님",
+        },
+    }
+
+
 # ================================================================ 상세 목록(드릴다운)
 
-DRILL_KEYS = {"scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "code", "team", "am_key", "ym", "product",
+DRILL_KEYS = {"scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "win_month", "code", "team", "am_key", "ym", "product",
               "customer", "bid_no", "prob_bin", "period", "change", "level"}
 
 
@@ -956,7 +1056,11 @@ def drill_rows(ds: Dataset, p: Params, drill: dict | None) -> tuple[pd.DataFrame
     basis = R.acr_basis(df, p.mode, p.products)
     ck = compute_checks(df, p)
     m = pd.Series(True, index=df.index)
-    if scope == "acr":
+    if scope == "total":
+        tr, _ = total_rows(df, p)
+        m &= df.index.isin(tr.index)
+        desc.append(f"총액 포함(확정·수주년월 {p.total_year}년)")
+    elif scope == "acr":
         con, _ = R.contributions(df, p.mode, p.ym_from, p.ym_to, p.products)
         con = con[con["acr_type"].isin(p.types)]
         if drill.get("ym"):
@@ -1018,6 +1122,10 @@ def drill_rows(ds: Dataset, p: Params, drill: dict | None) -> tuple[pd.DataFrame
         bands = _list(drill["prob_band"])
         m &= df["prob"].apply(ps_bin).isin(bands)
         desc.append("가능성 구간=" + "/".join(bands))
+    if drill.get("win_month"):
+        wm = int(drill["win_month"])
+        m &= (df["win_ym"] == wm).fillna(False).astype(bool)
+        desc.append(f"수주년월={R.ym_label(wm)}")
     if drill.get("rev_month"):
         rm = int(drill["rev_month"])
         m &= (df["rev_ym"] == rm).fillna(False).astype(bool)
