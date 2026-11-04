@@ -10,7 +10,7 @@
   const SERIES_LABEL = { A: "A", C: "C", R: "R", AC: "A+C", ACR: "A+C+R" };
   const UNIT_WON = { "원": 1, "천원": 1e3, "백만원": 1e6, "억원": 1e8 };
   const PAGE_TITLES = {
-    overview: "종합 현황", funnel: "수주·Funnel 관리", renewal: "재계약·해지 관리", acr: "ACR 매출", presales: "ACR 매출(Pre-sales)", total: "ACR 매출(총액)",
+    overview: "종합 현황", funnel: "수주·Funnel 관리", renewal: "재계약·해지 관리", acr: "ACR 수주", presales: "ACR 수주(Pre-sales)", total: "ACR 수주(총액)",
     team: "팀·AM 관리", insight: "고객·상품·입찰 분석", priority: "우선 확인할 Funnel", detail: "상세 목록", data: "데이터 관리",
   };
 
@@ -407,7 +407,7 @@
     });
   }
 
-  // ------------------------------------------------------------ 페이지: ACR 매출
+  // ------------------------------------------------------------ 페이지: ACR 수주
   async function pageAcr() {
     const j = await api("/view/acr", { filters: S.f });
     setHeader(j);
@@ -465,7 +465,7 @@
     }));
   }
 
-  // ------------------------------------------------------------ 페이지: ACR 매출(Pre-sales)
+  // ------------------------------------------------------------ 페이지: ACR 수주(Pre-sales)
   async function pagePresales() {
     const j = await api("/view/presales", { filters: S.f });
     setHeader(j);
@@ -477,7 +477,7 @@
     const dObj = (extra) => Object.assign({ scope: "in_progress", acr_type: [tab], period: "rev_ym" }, extra || {});
     const drill = (extra) => esc(JSON.stringify(dObj(extra)));
     const sm = d.summary;
-    // 월별 ACR 매출 증감액(Pre-sales) — 가능성 5개 묶음(겹치지 않음) 막대 + 합계 선
+    // 월별 ACR 수주 증감액(Pre-sales) — 가능성 5개 묶음(겹치지 않음) 막대 + 합계 선
     const PSG = [["30%이하", ["30%이하"], "--pb-1"], ["30%이상", ["30%이상", "40%이상"], "--pb-2"], ["50%이상", ["50%이상", "60%이상"], "--pb-3"],
       ["70%이상", ["70%이상", "80%이상"], "--pb-4"], ["90%이상", ["90%이상", "100%이상"], "--pb-5"]];
     const pct_ = ["ALL", "A", "C", "R"].includes(S.ui.psChartType) ? S.ui.psChartType : "ALL";
@@ -488,7 +488,7 @@
     const gData = PSG.map(([lb, bands]) => mons.map((m, i) => gsum(i, bands)));
     const totData = mons.map((m, i) => gData.reduce((a, g) => a + g[i], 0));
     const unk = mons.reduce((a, m, i) => a + gsum(i, ["미확인"]), 0);
-    let h = `<div class="card"><div class="card-head"><h3>월별 ACR 매출 증감액 (Pre-sales)</h3>
+    let h = `<div class="card"><div class="card-head"><h3>월별 ACR 수주 증감액 (Pre-sales)</h3>
         <div class="legend" id="psSerSel">${PSG.map(([lb, , tok]) => `<label><input type="checkbox" value="${lb}" ${psSer.includes(lb) ? "checked" : ""}><i style="background:${css(tok, "#3a7fd0")}"></i>${lb}</label>`).join("")}
           <label><input type="checkbox" value="합계" ${psSer.includes("합계") ? "checked" : ""}><i style="background:${COLORS.ACR}"></i>합계</label></div></div>
       <div class="toolbar" style="margin:4px 0 6px"><span class="seg-light" id="psTypeSel">${[["ALL", "A+C+R"], ["A", "A"], ["C", "C"], ["R", "R"]].map(([k, l]) => `<button type="button" data-v="${k}" class="${k === pct_ ? "on" : ""}">${l}</button>`).join("")}</span>
@@ -562,7 +562,7 @@
         onClick: (e, els) => { if (els.length) openDetail({ scope: "in_progress", acr_type: [tab], period: "rev_ym", prob_band: labels[els[0].index] }); } } });
   }
 
-  // ------------------------------------------------------------ 페이지: ACR 매출(총액)
+  // ------------------------------------------------------------ 페이지: ACR 수주(총액)
   async function pageTotal() {
     const j = await api("/view/total", { filters: S.f });
     setHeader(j);
