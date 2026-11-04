@@ -755,11 +755,19 @@
     $("dExport").addEventListener("click", () => exportExcel(dt.drill, dt.q));
   }
   async function exportExcel(drill, q) {
-    const dl = await getDownloads();
-    if (!dl) { toast("이 화면에서는 파일 저장을 지원하지 않습니다. claude.ai에서 이 페이지를 열어 다시 시도하세요.", "warn"); return; }
+    const dl = window.PSD_STANDALONE ? null : await getDownloads();
     let out;
     try { out = PSD.exportWorkbook(PSD.getDataset(), PSD.parseParams(S.f), drill || {}, q || ""); }
     catch (e) { toast("Excel 파일을 만들지 못했습니다: " + e.message, "neg"); return; }
+    if (!dl) {
+      if (window.PSD_STANDALONE) { // 파일로 연 단독 실행판: 브라우저 기본 다운로드
+        const url = URL.createObjectURL(new Blob([out.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+        const a = document.createElement("a"); a.href = url; a.download = out.filename; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        toast(`Excel 저장: ${out.filename} (${out.rows}건)`, "ok");
+      } else toast("이 화면에서는 파일 저장을 지원하지 않습니다. claude.ai에서 이 페이지를 열어 다시 시도하세요.", "warn");
+      return;
+    }
     try {
       await dl.save({ filename: out.filename, data: new Blob([out.data]) });
       toast(`Excel 저장 완료: ${out.filename} (${out.rows}건)`, "ok");
@@ -792,7 +800,7 @@
       <div class="toolbar" style="margin-top:10px">
         <span class="muted">${stored ? `이 브라우저 보관본: ${esc(stored.name)} · ${esc(stored.at)}` : "이 브라우저에 보관된 파일 없음"}</span>
         ${stored ? '<button class="btn small" id="delLocal" type="button">보관본 삭제</button>' : ""}
-        <button class="btn small" id="useBase" type="button">기준 파일(내장)로 되돌리기</button>
+        ${window.PSD_BASE ? '<button class="btn small" id="useBase" type="button">기준 파일(내장)로 되돌리기</button>' : ""}
       </div>
       <p class="desc">보관본은 이 기기·이 브라우저에만 저장되며 다른 사람에게 보이지 않습니다. 공용 PC에서는 보관하지 마세요.</p></div>`;
     if (d.empty) h += `<div class="notice warn" style="margin-top:14px">현재 적용된 데이터가 없습니다. ${esc((d.meta && d.meta.reason) || "")}</div>`;
@@ -803,7 +811,7 @@
     $("view").innerHTML = h;
     $("upBtn").addEventListener("click", doUpload);
     if ($("delLocal")) $("delLocal").addEventListener("click", async () => { await IDB.del(); toast("이 브라우저 보관본을 삭제했습니다. 화면의 데이터는 새로 고치기 전까지 유지됩니다.", "ok"); go("data"); });
-    $("useBase").addEventListener("click", async () => { loadBase(); await loadMeta(true); toast("기준 파일(내장) 데이터로 전환했습니다.", "info"); go("overview"); });
+    if ($("useBase")) $("useBase").addEventListener("click", async () => { loadBase(); await loadMeta(true); toast("기준 파일(내장) 데이터로 전환했습니다.", "info"); go("overview"); });
   }
   function qualityHtml(d) {
     const q = d.quality, s = d.summary, m = d.meta;
@@ -975,11 +983,13 @@
         try { PSD.loadParsed(PSD.readWorkbook(stored.buf), stored.name, stored.at + " (이 브라우저 보관본)"); restored = true; }
         catch (e) { toast("이 브라우저 보관본을 읽지 못해 기준 파일(내장) 데이터를 표시합니다.", "warn"); }
       }
-      if (!restored) loadBase();
+      if (!restored && window.PSD_BASE) loadBase();
+      const pv = document.querySelector(".privacy");
+      if (pv && !window.PSD_BASE) pv.textContent = "엑셀 파일은 이 브라우저 안에서만 읽고 계산합니다. 어떤 서버로도 전송하지 않습니다. ‘데이터 관리’에서 유선Funnel조회 엑셀을 선택하세요.";
       await loadMeta(false);
     } catch (e) { errorState("초기 정보를 불러오지 못했습니다: " + e.message); return; }
     const h = (location.hash || "").replace("#", "");
-    go(PAGES[h] ? h : "overview");
+    go(PAGES[h] ? h : (PSD.getDataset().empty ? "data" : "overview"));
   }
   init();
 })();
