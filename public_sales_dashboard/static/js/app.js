@@ -372,7 +372,7 @@
     let h = `<div class="grid kpis">
       ${kpiCard("진행 중 재계약", cnt(pa.count) + "건", `기존 ${amt(pa.prev)} → 변경 ${amt(pa.new)} (증감 ${amt(pa.monthly)})`, "r", { scope: "in_progress", acr_type: ["R"] })}
       ${kpiCard("재계약완료 (기간 내)", cnt(d.done_count) + "건", `금액 관계 불일치 ${cnt(d.mismatch)}건`, "", { acr_type: ["R"], status: ["재계약완료"], period: "win_ym" })}
-      ${kpiCard("재계약 증감률 (완료)", pct(cr.rate), `포함 ${cr.included}건 · 제외 ${cr.excluded}건 (기존매출 양수 대상)`, cr.rate < 0 ? "neg" : "", { acr_type: ["R"], status: ["재계약완료"], period: "win_ym" })}
+      ${kpiCard("재계약 매출 증감률 (완료)", pct(cr.rate), `포함 ${cr.included}건 · 제외 ${cr.excluded}건 (기존매출 양수 대상)`, cr.rate < 0 ? "neg" : "", { acr_type: ["R"], status: ["재계약완료"], period: "win_ym" })}
       ${kpiCard("해지확정 (기간 내)", cnt(ch.count) + "건", `기존 월매출 ${amt(ch.prev)}`, "neg", { acr_type: ["R"], status: ["해지확정"], period: "win_ym" })}
     </div>
     <div class="grid cols-2" style="margin-top:14px">
