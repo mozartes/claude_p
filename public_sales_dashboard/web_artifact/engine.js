@@ -12,7 +12,7 @@
     MAX_UPLOAD_MB: 20,
     SHEET_NAME_PREFERRED: "유선Funnel조회",
     BUSINESS_DEFAULTS: { stale_days: 30, large_contract_amount: 1000, large_renewal_monthly: 30, imminent_months: 1, high_probability: 70,
-      stale_long_days: 90, long_stay_days: 365, renewal_low_prob: 50, min_sample: 10 },
+      stale_long_days: 90, long_stay_days: 365, renewal_low_prob: 30, min_sample: 10 },
     COL: {
       customer: "고객사", win_ym: "수주년월", monthly: "월매출합계", status: "현재상황", activity: "최근영업활동내용", team: "팀",
       module: "모듈", am: "AM", acr_type: "ACR유형", culti_detail: "Culti 상세", ret_detail: "Ret.상세", term: "계약기간(월)",
@@ -544,7 +544,7 @@
     ["LARGE_STALE", 1, "대형 사업·장기 미갱신", "진행상황·다음 활동 갱신", "진행 중 & 대형(A/C 계약기간매출 ≥ 기준, R 기존 월매출 ≥ 기준) & (미갱신 또는 갱신일 미입력)"],
     ["STALE_LONG", 1, "장기 미갱신(90일)", "AM 면담·진행상황 현행화", "진행 중 & 기준일 − 최근영업활동내역 저장일시 > 장기 미갱신 기준일수(기본 90일)"],
     ["PROB_DROP", 1, "가능성 하락", "하락 사유 확인·지원 필요 여부 판단", "진행 중 & 수주가능성 변경이력의 최근 가능성 < 직전 가능성"],
-    ["RENEWAL_LOWPROB", 1, "재계약 임박·저확률", "해지 방어 대응", "R 진행 중 & 기준월 ≤ 수주년월 ≤ 기준월+임박개월 & 수주(재계약)가능성 ≤ 기준%(기본 50%)"],
+    ["RENEWAL_LOWPROB", 1, "재계약 임박·저확률", "해지 방어 대응", "R 진행 중 & 기준월 ≤ 수주년월 ≤ 기준월+임박개월 & 수주(재계약)가능성 ≤ 기준%(기본 30%)"],
     ["PROPOSAL_IMMINENT", 2, "제안완료·예정월 임박", "평가·계약 일정 확인", "제안완료 & 기준월 ≤ 수주년월 ≤ 기준월+임박개월"],
     ["HIGH_PROB_PRESALES", 2, "높은 입력 가능성·Pre Sales", "단계 갱신 또는 가능성 재확인", "Pre Sales & 수주(재계약)가능성 ≥ 기준%"],
     ["LARGE_RENEWAL", 2, "기존 월매출 큰 진행 중 재계약", "재계약 대응계획 확인", "R 진행 중 & 기존매출 ≥ 대형 재계약 기준"],

@@ -86,7 +86,7 @@ BUSINESS_DEFAULTS = {
     # 장기 체류: 변경이력 최초 기록일이 N일 초과 경과한 진행 중 건
     "long_stay_days": _env_int("LONG_STAY_DAYS", 365),
     # 재계약 임박·저확률: 수주(재계약)가능성 ≤ % 인 임박 R
-    "renewal_low_prob": _env_float("RENEWAL_LOW_PROB", 50),
+    "renewal_low_prob": _env_float("RENEWAL_LOW_PROB", 30),
     # AM 성과 점검: 분모가 N건 미만이면 비율 대신 '표본 부족(건수)'
     "min_sample": _env_int("MIN_SAMPLE", 10),
 }
