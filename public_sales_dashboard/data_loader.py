@@ -135,6 +135,22 @@ def parse_date(v: Any) -> tuple[pd.Timestamp | None, bool]:
 
 
 _PROB_RE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*%")
+_HIST_RE = re.compile(r"(\d+(?:\.\d+)?)%\([^)]*\)\((\d{4})/(\d{1,2})/(\d{1,2})\)")
+
+
+def parse_history(v) -> list[tuple[float, pd.Timestamp]]:
+    """'60%(중상)(2026/02/23),100%(수주완료)(2026/02/23)' → [(60, 2026-02-23), (100, 2026-02-23)]. 형식이 다른 항목은 무시."""
+    s = clean_str(v)
+    if s is None:
+        return []
+    out = []
+    for p, y, m, d in _HIST_RE.findall(s):
+        try:
+            out.append((float(p), pd.Timestamp(int(y), int(m), int(d))))
+        except ValueError:
+            continue
+    return out
+
 
 
 def parse_prob(v: Any) -> float | None:
@@ -261,6 +277,33 @@ def read_workbook(path: Path) -> tuple[str, int, list[str], list[tuple]]:
 # ---------------------------------------------------------------- 정규화
 
 
+def history_fields(h: list[tuple[float, pd.Timestamp]]) -> dict:
+    """변경이력 요약: 최초 기록(가능성·일자), 100% 도달일, 최근·직전 가능성, 종결 전 최고 가능성."""
+    open_ps = [p for p, _ in h if p < 100]
+    return {
+        "hist_n": len(h),
+        "hist_first_p": h[0][0] if h else None,
+        "hist_first_d": h[0][1] if h else None,
+        "hist_100_d": next((d for p, d in h if p == 100), None),
+        "hist_last_p": h[-1][0] if h else None,
+        "hist_prev_p": h[-2][0] if len(h) >= 2 else None,
+        "hist_maxp_open": max(open_ps) if open_ps else None,
+    }
+
+
+def reg_type_of(rec: dict) -> str | None:
+    """확정 건(Win·재계약완료)의 등록 구분. 종결일 = 이력 100% 도달일, 없으면 확정일자.
+    사전: 최초 기록이 100% 미만이고 종결일보다 이전 / 사후·당일: 그 외 / 이력 없음: 이력·종결일을 알 수 없음."""
+    if rec["status"] not in ("Win", "재계약완료"):
+        return None
+    close_d = rec["hist_100_d"] if rec["hist_100_d"] is not None else rec["confirmed_at"]
+    if not rec["hist_n"] or close_d is None:
+        return "이력 없음"
+    if rec["hist_first_p"] < 100 and rec["hist_first_d"] < close_d:
+        return "사전"
+    return "사후·당일"
+
+
 def _norm_type(v: Any) -> str | None:
     s = clean_str(v)
     if s is None:
@@ -380,6 +423,7 @@ def build_dataset(path: Path, original_name: str, uploaded_at: str) -> Dataset:
             "possible_rev": num(C.COL["possible_rev"]),
             "prob_raw": clean_str(get(row, C.COL["prob"])),
             "prob": parse_prob(get(row, C.COL["prob"])),
+            **history_fields(parse_history(get(row, C.COL["prob_history"]))),
             "updated_at": upd,
             "confirmer": clean_str(get(row, C.COL["confirmer"])),
             "confirmed_at": conf_at,
@@ -401,6 +445,10 @@ def build_dataset(path: Path, original_name: str, uploaded_at: str) -> Dataset:
             "num_error_cols": sorted(set(num_err_cols)),
         }
         rec["am_key"] = f"{rec['team']}|{rec['am']}"
+        rec["reg_type"] = reg_type_of(rec)
+        cd = rec["hist_100_d"] if rec["hist_100_d"] is not None else rec["confirmed_at"]
+        rec["lead_days"] = (int((cd - rec["hist_first_d"]).days)
+                            if rec["reg_type"] == "사전" and cd is not None else None)
         if fid is None:
             issues.append("FUNNEL_BLANK")
         if acr is None:
@@ -451,6 +499,10 @@ def build_dataset(path: Path, original_name: str, uploaded_at: str) -> Dataset:
     for c in ("monthly", "contract_amt", "annual", "prev_monthly", "new_monthly", "possible_rev", "prob", "product_sum"):
         df[c] = pd.to_numeric(df[c], errors="coerce").astype(float)
     df["updated_at"] = pd.to_datetime(df["updated_at"])
+    for c in ("hist_first_d", "hist_100_d", "confirmed_at"):
+        df[c] = pd.to_datetime(df[c])
+    for c in ("hist_first_p", "hist_last_p", "hist_prev_p", "hist_maxp_open"):
+        df[c] = pd.to_numeric(df[c], errors="coerce").astype(float)
     df = df.set_index("row", drop=False)
     df.index.name = None
 

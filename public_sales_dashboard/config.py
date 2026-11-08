@@ -81,6 +81,14 @@ BUSINESS_DEFAULTS = {
     "imminent_months": _env_int("IMMINENT_MONTHS", 1),
     # 높은 입력 가능성: 수주(재계약)가능성 ≥ % (Pre Sales 확인 대상)
     "high_probability": _env_float("HIGH_PROBABILITY", 70),
+    # 장기 미갱신(강): 저장일시가 N일 초과 경과한 진행 중 건(높음 등급)
+    "stale_long_days": _env_int("STALE_LONG_DAYS", 90),
+    # 장기 체류: 변경이력 최초 기록일이 N일 초과 경과한 진행 중 건
+    "long_stay_days": _env_int("LONG_STAY_DAYS", 365),
+    # 재계약 임박·저확률: 수주(재계약)가능성 ≤ % 인 임박 R
+    "renewal_low_prob": _env_float("RENEWAL_LOW_PROB", 50),
+    # AM 성과 점검: 분모가 N건 미만이면 비율 대신 '표본 부족(건수)'
+    "min_sample": _env_int("MIN_SAMPLE", 10),
 }
 
 # ---------------------------------------------------------------- 원본 열 정의(헤더 이름으로 연결)
@@ -121,6 +129,7 @@ COL = {
     "bid_name": "입찰공고명",
     "expected_amt": "수주예상금액",
     "possible_rev": "수주가능매출",
+    "prob_history": "수주가능성 변경이력",
     "rmr_excl": "RMR제외",
     "midlarge_excl": "중대형퍼널제외",
 }

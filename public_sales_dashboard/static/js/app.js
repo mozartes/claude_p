@@ -11,7 +11,7 @@
   const UNIT_WON = { "원": 1, "천원": 1e3, "백만원": 1e6, "억원": 1e8 };
   const PAGE_TITLES = {
     overview: "종합 현황", funnel: "수주·Funnel 관리", renewal: "재계약·해지 관리", acr: "ACR 수주", presales: "ACR 수주(Pre-sales)", total: "ACR 수주(총액)",
-    team: "팀·AM 관리", insight: "고객·상품·입찰 분석", priority: "우선 확인할 Funnel", detail: "상세 목록", data: "데이터 관리",
+    team: "팀·AM 관리", perf: "AM 성과·활동 점검", insight: "고객·상품·입찰 분석", priority: "우선 확인할 Funnel", detail: "상세 목록", data: "데이터 관리",
   };
 
   const S = {
@@ -80,6 +80,7 @@
     $("f_excl_midlarge").checked = f.excl_midlarge; $("f_excl_rmr").checked = f.excl_rmr; $("f_confirmed_only").checked = f.confirmed_only;
     $("th_stale").value = f.th.stale_days; $("th_large").value = f.th.large_contract_amount; $("th_large_r").value = f.th.large_renewal_monthly;
     $("th_imm").value = f.th.imminent_months; $("th_prob").value = f.th.high_probability;
+    $("th_stale_long").value = f.th.stale_long_days; $("th_long_stay").value = f.th.long_stay_days; $("th_ren_low").value = f.th.renewal_low_prob; $("th_min").value = f.th.min_sample;
     $("u_src").value = S.ui.srcUnit; $("u_disp").value = S.ui.dispUnit; $("u_dec").value = String(S.ui.dec);
     $("u_disp").disabled = S.ui.srcUnit === "unknown";
     $("u_src").disabled = unitLocked();
@@ -135,7 +136,8 @@
     const num = (id, d) => { const v = parseFloat($(id).value); return Number.isFinite(v) && v >= 0 ? v : d; };
     const th0 = S.meta.defaults.th;
     f.th = { stale_days: num("th_stale", th0.stale_days), large_contract_amount: num("th_large", th0.large_contract_amount),
-      large_renewal_monthly: num("th_large_r", th0.large_renewal_monthly), imminent_months: num("th_imm", th0.imminent_months), high_probability: num("th_prob", th0.high_probability) };
+      large_renewal_monthly: num("th_large_r", th0.large_renewal_monthly), imminent_months: num("th_imm", th0.imminent_months), high_probability: num("th_prob", th0.high_probability),
+      stale_long_days: num("th_stale_long", th0.stale_long_days), long_stay_days: num("th_long_stay", th0.long_stay_days), renewal_low_prob: num("th_ren_low", th0.renewal_low_prob), min_sample: num("th_min", th0.min_sample) };
     S.ui.srcUnit = unitLocked() ? S.meta.unit.source_unit : $("u_src").value; S.ui.dispUnit = $("u_disp").value; S.ui.dec = parseInt($("u_dec").value, 10);
     store.set("filters", f); store.set("ui", S.ui);
     updateCounts();
@@ -295,10 +297,10 @@
         <div class="chart-box"><canvas id="ovChart"></canvas></div></div>
       <div class="card"><div class="card-head"><h3>팀·AM별 확인 과제</h3><span class="muted">집계 수준: ${S.f.level === "am" ? "AM" : "팀"}</span></div>
         <p class="desc">우선 확인 규칙에 해당하는 고유 Funnel 수(행 클릭 → 목록)</p>
-        <div class="table-wrap" style="max-height:300px"><table class="t"><thead><tr><th>${S.f.level === "am" ? "AM(팀)" : "팀"}</th><th class="num">확인 Funnel</th><th class="num">높음</th><th class="num">예정월 경과</th><th class="num">감액 예상</th><th class="num">장기 미갱신</th></tr></thead>
+        <div class="table-wrap" style="max-height:300px"><table class="t"><thead><tr><th>${S.f.level === "am" ? "AM(팀)" : "팀"}</th><th class="num">확인 Funnel</th><th class="num">높음</th><th class="num">예정월 경과</th><th class="num">감액 예상</th><th class="num">장기 미갱신(90일)</th></tr></thead>
         <tbody>${d.team_checks.map((t) => `<tr class="clickable" data-drill='${esc(JSON.stringify(S.f.level === "am" ? { scope: "checks", am_key: t.key } : { scope: "checks", team: t.key }))}'>
           <td>${esc(t.am ? `${t.am} (${t.team})` : t.team)}</td><td class="num">${cnt(t.funnels)}</td><td class="num">${cnt(t.level1)}</td>
-          <td class="num">${cnt(t.by_code.OVERDUE || 0)}</td><td class="num">${cnt(t.by_code.RENEWAL_DECREASE || 0)}</td><td class="num">${cnt(t.by_code.STALE || 0)}</td></tr>`).join("") || '<tr><td colspan="6" class="muted">해당 없음</td></tr>'}</tbody></table></div></div>
+          <td class="num">${cnt(t.by_code.OVERDUE || 0)}</td><td class="num">${cnt(t.by_code.RENEWAL_DECREASE || 0)}</td><td class="num">${cnt(t.by_code.STALE_LONG || 0)}</td></tr>`).join("") || '<tr><td colspan="6" class="muted">해당 없음</td></tr>'}</tbody></table></div></div>
     </div>
     <div class="grid cols-2" style="margin-top:14px">
       <div class="card"><div class="card-head"><h3>이번 달·다음 달 수주(재계약) 예정</h3><span class="link" data-drill='${esc(JSON.stringify({ scope: "in_progress", bucket: "이번 달" }))}'>이번 달 전체</span> <span class="link" data-drill='${esc(JSON.stringify({ scope: "in_progress", bucket: "다음 달" }))}'>다음 달 전체</span></div>
@@ -640,6 +642,79 @@
     $("view").innerHTML = h;
   }
 
+  // ------------------------------------------------------------ 페이지: AM 성과·활동 점검
+  async function pagePerf() {
+    const j = await api("/view/perf", { filters: S.f });
+    setHeader(j);
+    const d = j.data;
+    if (d.empty) { $("view").innerHTML = emptyState(); return; }
+    const t = d.total, y = d.year, isAm = d.level === "am", mn = d.min_sample;
+    const years = Array.from(new Set((S.meta.options.years || []).concat([y]))).sort((a, b) => a - b);
+    const nf = (v) => Number(v).toLocaleString("ko-KR");
+    // 건수 비율: 표본 기준 이상이면 비율(분자/분모), 미만이면 '표본 부족(분자/분모)'
+    const fr = (r) => (r.rate == null ? '<span class="muted">-</span>' : r.ok ? `<b>${pct(r.rate)}</b> <span class="muted">(${nf(r.num)}/${nf(r.den)})</span>` : `<span class="muted" title="분모 ${mn}건 미만">표본 부족 (${nf(r.num)}/${nf(r.den)})</span>`);
+    // 금액 비율: 표본 기준은 같은 대상의 건수로 판정
+    const fa = (r) => (r.rate == null ? '<span class="muted">-</span>' : r.ok ? `<b>${pct(r.rate)}</b>` : `<span class="muted" title="건수 ${mn}건 미만">표본 부족 (${pct(r.rate).replace(/<[^>]+>/g, "")})</span>`);
+    const orgD = (r) => (isAm ? { am_key: r.key } : { team: r.key });
+    const lk = (n, drill) => (n ? `<span class="link" data-drill='${esc(JSON.stringify(drill))}'>${nf(n)}</span>` : '<span class="muted">0</span>');
+    const dW = (o, extra) => Object.assign({ acr_type: ["A", "C"], status: ["Win"], win_year: y }, o, extra || {});
+    const dS = (o, st, extra) => Object.assign({ acr_type: ["A", "C"], status: [st], win_year: y }, o, extra || {});
+    const dR = (o, st) => Object.assign({ acr_type: ["R"], status: [st], win_year: y }, o);
+    const perfRow = (r, label, o) => `<tr><td>${label}</td>
+      <td class="num">${lk(r.AC.win, dW(o))} <span class="muted">(사전 ${lk(r.AC.win_pre, dW(o, { reg_type: "사전" }))} / 사후 ${lk(r.AC.win_post, dW(o, { reg_type: "사후·당일" }))})</span></td>
+      <td class="num">${lk(r.AC.lose, dS(o, "Lose"))}</td><td class="num">${lk(r.AC.drop, dS(o, "Drop"))}</td>
+      <td class="num">${fr(r.AC.simple)}</td><td class="num">${fr(r.AC.pre)}</td><td class="num">${fr(r.A.pre)}</td><td class="num">${fr(r.C.pre)}</td>
+      <td class="num">${lk(r.r_done, dR(o, "재계약완료"))}</td><td class="num">${lk(r.r_churn, dR(o, "해지확정"))}</td>
+      <td class="num">${fr(r.ret_cnt)}</td><td class="num">${fa(r.ret_amt)}</td><td class="num">${fa(r.chg_rate)}</td>
+      <td class="wrap">${esc(r.churn_top || "-")}</td><td class="num">${fr(r.new_share)}</td></tr>`;
+    const actRow = (r, label, o) => `<tr><td>${label}</td>
+      <td class="num">${lk(r.prog, Object.assign({ scope: "in_progress" }, o))}</td><td class="num">${fr(r.fresh30)}</td>
+      <td class="num">${lk(r.stale_long, Object.assign({ scope: "checks", code: "STALE_LONG" }, o))}</td>
+      <td class="num">${lk(r.long_stay, Object.assign({ scope: "checks", code: "LONG_STAY" }, o))}</td>
+      <td class="num">${fr(r.AC.reg)}</td><td class="num">${r.lead_median == null ? '<span class="muted">-</span>' : nf(r.lead_median) + "일"}</td>
+      <td class="num">${fr(r.overconf)} ${r.overconf.num ? lk(r.overconf.num, dS(o, "Lose", { lose_overconf: true })) + "건" : ""}</td></tr>`;
+    const orgLabel = (r) => esc(r.am ? `${r.am} (${r.team})` : r.team);
+    let h = `<div class="toolbar"><span class="muted">집계연도(성과)</span><span class="seg-light" id="pyearSel">${years.map((yy) => `<button type="button" data-v="${yy}" class="${yy === y ? "on" : ""}">${yy}년</button>`).join("")}</span>
+        <span class="muted">집계 수준: ${isAm ? "AM" : "팀"} (사이드바에서 변경) · 비율 옆 괄호는 분자/분모 · 분모 ${mn}건 미만은 ‘표본 부족’</span></div>
+    <div class="notice info">점검용 비교이며 AM 평가 점수가 아닙니다. ‘사전/사후 등록’은 수주가능성 변경이력의 첫 기록일로 판단한 <b>추정</b>입니다. 사업기회 소멸(Drop)은 수주율 분모에서 제외합니다.</div>
+    <div class="grid kpis">
+      ${kpiCard("단순 수주율 (A·C)", t.AC.simple.rate == null ? "-" : pct(t.AC.simple.rate), `Win ${nf(t.AC.win)} ÷ (Win+Lose ${nf(t.AC.win + t.AC.lose)})<br>A ${pct(t.A.simple.rate)} · C ${pct(t.C.simple.rate)} · Drop ${nf(t.AC.drop)}건 제외`, "", dW({}))}
+      ${kpiCard("Pre-sales 경유 수주율", t.AC.pre.rate == null ? "-" : pct(t.AC.pre.rate), `사전 Win ${nf(t.AC.win_pre)} ÷ (사전 Win+Lose ${nf(t.AC.pre.den)})<br>A ${pct(t.A.pre.rate)} · C ${pct(t.C.pre.rate)}`, "a", dW({}, { reg_type: "사전" }))}
+      ${kpiCard("사전 등록률", t.AC.reg.rate == null ? "-" : pct(t.AC.reg.rate), `사후·당일 등록 Win ${nf(t.AC.win_post)}건${t.AC.win_nohist ? ` · 이력 없음 ${nf(t.AC.win_nohist)}건` : ""}`, "warn", dW({}, { reg_type: "사후·당일" }))}
+      ${kpiCard("리텐션 성공률 (건수)", t.ret_cnt.rate == null ? "-" : pct(t.ret_cnt.rate), `재계약완료 ${nf(t.r_done)} · 해지 ${nf(t.r_churn)}`, "r", dR({}, "해지확정"))}
+      ${kpiCard("리텐션 성공률 (금액)", t.ret_amt.rate == null ? "-" : pct(t.ret_amt.rate), `기존 ${amt(t.ret_amt.den)} → 재계약 후 ${amt(t.ret_amt.num)}<br>해지 사유 1위: ${esc(t.churn_top || "-")}`, "r", dR({}, "재계약완료"))}
+      ${kpiCard("신규(A) 비중", t.new_share.rate == null ? "-" : pct(t.new_share.rate), `확정 A·C Win 건수 기준 · 월매출 기준 ${pct(t.new_share_amt.rate)}`, "a", Object.assign(dW({}), { acr_type: ["A"] }))}
+      ${kpiCard("30일 내 갱신률", t.fresh30.rate == null ? "-" : pct(t.fresh30.rate), `진행 중 ${nf(t.prog)}건 중 ${nf(t.fresh30.num)}건 · 활동 기록 최신성`, "", { scope: "in_progress" })}
+      ${kpiCard("장기 미갱신 · 장기 체류", `${nf(t.stale_long)} · ${nf(t.long_stay)}건`, `저장 ${S.f.th.stale_long_days || 90}일 초과 · 최초 기록 ${S.f.th.long_stay_days || 365}일 초과(진행 중)`, "neg", { scope: "checks", code: ["STALE_LONG", "LONG_STAY"] })}
+    </div>
+    <div class="grid cols-2" style="margin-top:14px">
+      <div class="card"><h3>${isAm ? "AM" : "팀"}별 수주율 비교</h3><p class="desc">단순 vs Pre-sales 경유 수주율 · 분모 ${mn}건 이상만 표시 · ${y}년 수주년월</p><div class="chart-box ${isAm ? "tall" : ""}"><canvas id="pfWinChart"></canvas></div></div>
+      <div class="card"><h3>${isAm ? "AM" : "팀"}별 리텐션 성공률</h3><p class="desc">건수 vs 금액 · 분모 ${mn}건 이상만 표시</p><div class="chart-box ${isAm ? "tall" : ""}"><canvas id="pfRetChart"></canvas></div></div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>성과: 수주율·리텐션 (${y}년 수주년월)</h3><p class="desc">숫자 클릭 → 해당 Funnel 목록</p>
+      <div class="table-wrap" style="max-height:620px"><table class="t"><thead><tr><th>${isAm ? "AM(팀)" : "팀"}</th><th class="num">Win (사전/사후)</th><th class="num">Lose</th><th class="num">Drop(분모 제외)</th>
+        <th class="num">단순 수주율</th><th class="num">경유 수주율</th><th class="num">A 경유</th><th class="num">C 경유</th><th class="num">재계약완료</th><th class="num">해지</th>
+        <th class="num">리텐션(건수)</th><th class="num">리텐션(금액)</th><th class="num">재계약 매출 증감률</th><th>해지 사유 1위</th><th class="num">신규(A) 비중</th></tr></thead>
+      <tbody>${d.rows.map((r) => perfRow(r, orgLabel(r), orgD(r))).join("")}</tbody>
+      <tfoot>${perfRow(t, "담당 합계", {})}</tfoot></table></div></div>
+    <div class="card" style="margin-top:14px"><h3>활동성</h3><p class="desc">진행 중·갱신·체류는 현재(기준일 ${esc(S.f.base_date || "")}) 기준, 사전 등록률·리드타임·정확도는 ${y}년 수주년월 기준</p>
+      <div class="table-wrap" style="max-height:620px"><table class="t"><thead><tr><th>${isAm ? "AM(팀)" : "팀"}</th><th class="num">진행 중</th><th class="num">30일 내 갱신률</th><th class="num">장기 미갱신(${S.f.th.stale_long_days || 90}일)</th><th class="num">장기 체류</th>
+        <th class="num">사전 등록률</th><th class="num">리드타임(중앙값)</th><th class="num">Lose 중 가능성 70%↑</th></tr></thead>
+      <tbody>${d.rows.map((r) => actRow(r, orgLabel(r), orgD(r))).join("")}</tbody>
+      <tfoot>${actRow(t, "담당 합계", {})}</tfoot></table></div></div>
+    ${basisBlock(d.basis)}`;
+    $("view").innerHTML = h;
+    const okRows = (f) => d.rows.filter(f);
+    const pctD = (r) => (r.ok && r.rate != null ? +(r.rate * 100).toFixed(1) : null);
+    const barChart = (id, rows, sets) => chart(id, { type: "bar",
+      data: { labels: rows.map((r) => (r.am ? `${r.am} (${r.team})` : r.team)), datasets: sets.map(([lb, fn, col]) => ({ label: lb, data: rows.map((r) => pctD(fn(r))), backgroundColor: col, borderRadius: 3, maxBarThickness: 22 })) },
+      options: { indexAxis: isAm ? "y" : "x", maintainAspectRatio: false, plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${(isAm ? c.parsed.x : c.parsed.y)}%` } } },
+        scales: isAm ? { x: { min: 0, max: 100, title: { display: true, text: "%" } }, y: { ticks: { autoSkip: false } } } : { y: { min: 0, max: 100, title: { display: true, text: "%" } }, x: { grid: { display: false } } } } });
+    barChart("pfWinChart", okRows((r) => r.AC.simple.ok || r.AC.pre.ok), [["단순 수주율", (r) => r.AC.simple, css("--pb-2", "#6aa3e0")], ["Pre-sales 경유 수주율", (r) => r.AC.pre, css("--pb-5", "#0d3a75")]]);
+    barChart("pfRetChart", okRows((r) => r.ret_cnt.ok), [["리텐션(건수)", (r) => r.ret_cnt, COLORS.R], ["리텐션(금액)", (r) => r.ret_amt, css("--muted", "#6b7280")]]);
+    document.querySelectorAll("#pyearSel button").forEach((b) => b.addEventListener("click", () => { S.f.total_year = Number(b.dataset.v); store.set("filters", S.f); render(); }));
+  }
+
   // ------------------------------------------------------------ 페이지: 고객·상품·입찰
   async function pageInsight() {
     const j = await api("/view/insight", { filters: S.f });
@@ -704,7 +779,7 @@
         ${sortH("level", "우선순위")}<th>확인 사유</th><th>권장 확인 행동</th>${sortH("team", "팀")}${sortH("am", "AM")}${sortH("customer", "고객사")}${sortH("funnel_id", "Funnel번호")}
         ${sortH("acr_type", "유형")}${sortH("status", "현재상황")}${sortH("win_ym", "수주년월")}${sortH("rev_ym", "매출발생년월")}<th class="num">계약기간</th>
         ${sortH("monthly", "월매출합계", 1)}${sortH("contract_amt", "계약기간매출", 1)}${sortH("prev_monthly", "기존매출", 1)}${sortH("new_monthly", "변경매출", 1)}<th class="num">사유 금액(기준)</th>
-        <th>수주 가능성</th><th>상품</th>${sortH("updated_at", "최근 갱신일")}<th>ACR 포함</th><th>데이터 품질</th></tr></thead>
+        <th>수주 가능성</th><th>상품</th>${sortH("updated_at", "최근 갱신일")}<th>최초 등록일</th><th>등록 구분</th><th>ACR 포함</th><th>데이터 품질</th></tr></thead>
       <tbody>${rows.map((r) => `<tr class="clickable" data-row="${r.row}">
         <td>${lvTag(r.level) || '<span class="muted">-</span>'}</td><td class="wrap">${(r.checks || []).map((x) => `<span class="tag">${esc(x)}</span>`).join("") || '<span class="muted">-</span>'}</td><td class="wrap">${(r.actions || []).map(esc).join("<br>")}</td>
         <td>${esc(r.team)}</td><td>${esc(r.am)}</td><td>${esc(r.customer)}</td><td>${esc(r.funnel_id)}</td><td>${typeTag(r.acr_type)}</td><td>${esc(r.status)}</td>
@@ -712,8 +787,9 @@
         <td class="num">${amt(r.monthly)}</td><td class="num">${amt(r.contract_amt)}</td><td class="num">${amt(r.prev_monthly)}</td><td class="num">${amt(r.new_monthly)}</td>
         <td class="num">${r.check_amount_basis && (r.checks || []).length ? `${amt(r.check_amount)}<br><span class="muted" style="font-size:11px">${esc(r.check_amount_basis)}</span>` : '<span class="muted">-</span>'}</td>
         <td>${esc(r.prob || "미확인")}</td><td class="wrap">${esc(r.products)}</td><td>${r.updated_at ? esc(r.updated_at) : '<span class="muted">갱신일 미입력</span>'}</td>
+        <td>${r.first_reg ? esc(r.first_reg) : '<span class="muted">이력 없음</span>'}</td><td>${r.reg_type ? `<span class="chip ${r.reg_type === "사전" ? "ok" : r.reg_type === "사후·당일" ? "warn" : "gray"}">${esc(r.reg_type)}</span>` : '<span class="muted">-</span>'}</td>
         <td>${r.acr_included ? '<span class="chip ok">포함</span>' : `<span class="chip gray">제외</span><br><span class="muted" style="font-size:11px">${esc(r.acr_excl_reason || "")}</span>`}</td>
-        <td class="wrap">${(r.issues || []).map((x) => `<span class="tag" style="background:#fff4e0;color:#7c3f00">${esc(x)}</span>`).join("") || '<span class="muted">-</span>'}${r.agg_excluded ? '<br><span class="neg">집계 제외</span>' : ""}</td></tr>`).join("") || '<tr><td colspan="22"><div class="state">해당 건 없음</div></td></tr>'}</tbody></table></div>
+        <td class="wrap">${(r.issues || []).map((x) => `<span class="tag" style="background:#fff4e0;color:#7c3f00">${esc(x)}</span>`).join("") || '<span class="muted">-</span>'}${r.agg_excluded ? '<br><span class="neg">집계 제외</span>' : ""}</td></tr>`).join("") || '<tr><td colspan="24"><div class="state">해당 건 없음</div></td></tr>'}</tbody></table></div>
       <div class="pager"><button class="btn small" id="pPrev" ${d.page <= 1 ? "disabled" : ""} type="button">이전</button><span>${d.page || 1} / ${d.pages || 1}</span><button class="btn small" id="pNext" ${(d.page || 1) >= (d.pages || 1) ? "disabled" : ""} type="button">다음</button>
         <select id="pSize">${[50, 100, 200].map((n) => `<option ${dt.size === n ? "selected" : ""}>${n}</option>`).join("")}</select></div></div>
       ${isPriority ? rulesBlock(meta) : ""}`;
@@ -846,8 +922,8 @@
   function closeModal() { $("modal").classList.remove("open"); $("modalBg").classList.remove("open"); }
 
   // ------------------------------------------------------------ 라우팅
-  const PAGES = { overview: pageOverview, funnel: pageFunnel, renewal: pageRenewal, acr: pageAcr, presales: pagePresales, total: pageTotal, team: pageTeam, insight: pageInsight, priority: pagePriority, detail: () => pageDetail(false), data: pageData };
-  const BASIS_VIEW = { overview: "overview", funnel: "funnel", renewal: "renewal", acr: "acr", presales: "presales", total: "total", team: "team", insight: "insight" };
+  const PAGES = { overview: pageOverview, funnel: pageFunnel, renewal: pageRenewal, acr: pageAcr, presales: pagePresales, total: pageTotal, team: pageTeam, perf: pagePerf, insight: pageInsight, priority: pagePriority, detail: () => pageDetail(false), data: pageData };
+  const BASIS_VIEW = { overview: "overview", funnel: "funnel", renewal: "renewal", acr: "acr", presales: "presales", total: "total", team: "team", perf: "perf", insight: "insight" };
   function go(page) {
     S.page = page;
     document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("active", b.dataset.page === page));

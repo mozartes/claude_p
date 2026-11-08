@@ -175,7 +175,7 @@ def create_app(store: DataStore | None = None, prefix: str | None = None) -> Fla
 
     VIEWS = {
         "overview": A.overview_view, "funnel": A.funnel_view, "renewal": A.renewal_view,
-        "acr": A.acr_view, "presales": A.presales_view, "total": A.total_view, "team": A.team_view, "insight": A.insight_view, "quality": A.quality_view,
+        "acr": A.acr_view, "presales": A.presales_view, "total": A.total_view, "perf": A.perf_view, "team": A.team_view, "insight": A.insight_view, "quality": A.quality_view,
     }
 
     @app.route("/api/view/<name>", methods=["GET", "POST"])
@@ -245,7 +245,7 @@ def create_app(store: DataStore | None = None, prefix: str | None = None) -> Fla
                 ("acr_type", "ACR유형"), ("status", "현재상황"), ("win_ym", "수주년월"), ("rev_ym", "매출발생년월"),
                 ("term", "계약기간(월)"), ("monthly", "월매출합계"), ("contract_amt", "계약기간매출"),
                 ("prev_monthly", "기존매출"), ("new_monthly", "변경매출"), ("prob", "수주(재계약)가능성"),
-                ("products", "상품(월매출)"), ("updated_at", "최근 갱신일"), ("strategy_reg", "재계약전략 등록여부"),
+                ("products", "상품(월매출)"), ("updated_at", "최근 갱신일"), ("first_reg", "최초 등록일(변경이력)"), ("reg_type", "등록 구분(추정)"), ("strategy_reg", "재계약전략 등록여부"),
                 ("acr_included", "ACR 포함"), ("acr_excl_reason", "ACR 제외 사유"), ("checks", "확인 사유"),
                 ("actions", "권장 확인 행동"), ("level", "우선순위 등급"), ("issues", "데이터 품질")]
         if unit_src != "unknown":  # 금액 열 이름에 단위 표기

@@ -100,7 +100,7 @@ def parse_params(d: dict | None) -> Params:
             try:
                 fv = float(v)
                 if math.isfinite(fv) and fv >= 0:
-                    th[k] = int(fv) if k in ("stale_days", "imminent_months") else fv
+                    th[k] = int(fv) if k in ("stale_days", "imminent_months", "stale_long_days", "long_stay_days", "min_sample") else fv
             except (TypeError, ValueError):
                 pass
     types = [t for t in _list(d.get("types")) if t in ("A", "C", "R")] or ["A", "C", "R"]
@@ -260,15 +260,23 @@ RULES = [
      "R 진행 중 & (변경매출 < 기존매출 또는 월매출합계 < 0)"),
     ("LARGE_STALE", 1, "대형 사업·장기 미갱신", "진행상황·다음 활동 갱신",
      "진행 중 & 대형(A/C 계약기간매출 ≥ 기준, R 기존 월매출 ≥ 기준) & (미갱신 또는 갱신일 미입력)"),
+    ("STALE_LONG", 1, "장기 미갱신(90일)", "AM 면담·진행상황 현행화",
+     "진행 중 & 기준일 − 최근영업활동내역 저장일시 > 장기 미갱신 기준일수(기본 90일)"),
+    ("PROB_DROP", 1, "가능성 하락", "하락 사유 확인·지원 필요 여부 판단",
+     "진행 중 & 수주가능성 변경이력의 최근 가능성 < 직전 가능성"),
+    ("RENEWAL_LOWPROB", 1, "재계약 임박·저확률", "해지 방어 대응",
+     "R 진행 중 & 기준월 ≤ 수주년월 ≤ 기준월+임박개월 & 수주(재계약)가능성 ≤ 기준%(기본 50%)"),
     ("PROPOSAL_IMMINENT", 2, "제안완료·예정월 임박", "평가·계약 일정 확인",
      "제안완료 & 기준월 ≤ 수주년월 ≤ 기준월+임박개월"),
     ("HIGH_PROB_PRESALES", 2, "높은 입력 가능성·Pre Sales", "단계 갱신 또는 가능성 재확인",
      "Pre Sales & 수주(재계약)가능성 ≥ 기준%"),
     ("LARGE_RENEWAL", 2, "기존 월매출 큰 진행 중 재계약", "재계약 대응계획 확인",
      "R 진행 중 & 기존매출 ≥ 대형 재계약 기준"),
-    ("STALE", 2, "장기 미갱신", "진행상황·다음 활동 갱신",
-     "진행 중 & 기준일 − 최근영업활동내역 저장일시 > 미갱신 기준일수"),
     ("UPDATE_MISSING", 2, "갱신일 미입력", "최근 활동 내역 등록", "진행 중 & 저장일시 없음"),
+    ("LONG_STAY", 2, "장기 체류", "Drop 여부 판단 또는 재추진 계획",
+     "진행 중 & 변경이력 최초 기록일로부터 장기 체류 기준일수(기본 365일) 초과"),
+    ("STALE", 3, "미갱신(30일)", "진행상황·다음 활동 갱신",
+     "진행 중 & 기준일 − 최근영업활동내역 저장일시 > 미갱신 기준일수(기본 30일)"),
     ("STRATEGY_MISSING", 3, "재계약전략 미등록", "대응계획 확인·전략 등록",
      "R 진행 중 & 재계약전략 등록여부 ≠ Y(N 또는 미입력)"),
     ("REV_BEFORE_WIN", 3, "매출발생년월이 수주년월보다 이전", "일정 입력 기준 확인",
@@ -310,6 +318,10 @@ def compute_checks(df: pd.DataFrame, p: Params) -> pd.DataFrame:
         "HIGH_PROB_PRESALES": (st == "Pre Sales") & (df["prob"] >= th["high_probability"]),
         "LARGE_RENEWAL": is_r & prog & (df["prev_monthly"] >= th["large_renewal_monthly"]),
         "STALE": prog & upd["stale"].fillna(False),
+        "STALE_LONG": prog & (upd["days"] > th["stale_long_days"]).fillna(False),
+        "PROB_DROP": prog & (df["hist_last_p"] < df["hist_prev_p"]).fillna(False),
+        "RENEWAL_LOWPROB": is_r & prog & win.notna() & (win >= base) & (win <= imm_hi) & (df["prob"] <= th["renewal_low_prob"]),
+        "LONG_STAY": prog & ((pd.Timestamp(p.base_date) - df["hist_first_d"]).dt.days > th["long_stay_days"]).fillna(False),
         "UPDATE_MISSING": prog & upd["missing"],
         "STRATEGY_MISSING": is_r & prog & (df["strategy_reg"].fillna("") != "Y"),
         "REV_BEFORE_WIN": ~st.isin(["Drop", "Lose"]) & rev.notna() & win.notna() & (rev < win),
@@ -426,6 +438,8 @@ def row_record(r: pd.Series, ck: dict | None = None, acr: dict | None = None) ->
         "level": _lvl((ck or {}).get("level")),
         "check_amount": (ck or {}).get("amount"),
         "check_amount_basis": (ck or {}).get("amount_basis"),
+        "first_reg": _v(r["hist_first_d"]),
+        "reg_type": r["reg_type"] if isinstance(r["reg_type"], str) else None,
     }
 
 
@@ -552,7 +566,8 @@ def rules_table(p: Params) -> list[dict]:
         {"code": "_TH", "level": None, "label": "적용 기준값", "action": "",
          "condition": f"미갱신 {th['stale_days']}일 초과 / 대형 A·C 계약기간매출 ≥ {th['large_contract_amount']:g} / "
                       f"대형 R 기존 월매출 ≥ {th['large_renewal_monthly']:g} / 임박 기준월+{th['imminent_months']}개월 / "
-                      f"높은 가능성 ≥ {th['high_probability']:g}% (금액은 원본 단위)"}]
+                      f"높은 가능성 ≥ {th['high_probability']:g}% / 장기 미갱신 {th['stale_long_days']}일 초과 / "
+                      f"장기 체류 {th['long_stay_days']}일 초과 / 재계약 저확률 ≤ {th['renewal_low_prob']:g}% (금액은 원본 단위)"}]
 
 
 # ================================================================ 화면: 수주·Funnel
@@ -606,8 +621,8 @@ def funnel_view(ds: Dataset, p: Params) -> dict:
         sched.append({"bucket": k, "count": int(len(g)), "amount": amount_split(g["contract_amt"])})
     # ③ 확인 필요(진행 중 A/C + Win 일정 특이)
     ck = checks_with_rows(ac, p)
-    fcodes = ["OVERDUE", "PROPOSAL_IMMINENT", "HIGH_PROB_PRESALES", "LARGE_STALE", "REV_BEFORE_WIN",
-              "WIN_NO_REV", "WIN_FUTURE_REV"]
+    fcodes = ["OVERDUE", "PROPOSAL_IMMINENT", "HIGH_PROB_PRESALES", "LARGE_STALE", "STALE_LONG", "PROB_DROP",
+              "LONG_STAY", "REV_BEFORE_WIN", "WIN_NO_REV", "WIN_FUTURE_REV"]
     code_counts = []
     for c in fcodes:
         n = int(ck["codes"].apply(lambda cs: c in cs).sum()) if not ck.empty else 0
@@ -705,8 +720,8 @@ def renewal_view(ds: Dataset, p: Params) -> dict:
                        "monthly": fsum(g["monthly"])})
     by_org.sort(key=lambda x: -x["count"])
     ck = checks_with_rows(rr, p)
-    rcodes = ["OVERDUE", "LARGE_RENEWAL", "RENEWAL_DECREASE", "STRATEGY_MISSING", "STALE", "LARGE_STALE",
-              "UPDATE_MISSING"]
+    rcodes = ["OVERDUE", "RENEWAL_LOWPROB", "LARGE_RENEWAL", "RENEWAL_DECREASE", "STALE_LONG", "PROB_DROP",
+              "LONG_STAY", "STRATEGY_MISSING", "STALE", "LARGE_STALE", "UPDATE_MISSING"]
     code_counts = [{"code": c, "label": RULE_MAP[c][2], "action": RULE_MAP[c][3],
                     "count": int(ck["codes"].apply(lambda cs: c in cs).sum()) if not ck.empty else 0} for c in rcodes]
     return {
@@ -1038,9 +1053,112 @@ def total_view(ds: Dataset, p: Params) -> dict:
     }
 
 
+# ================================================================ 화면: AM 성과·활동 점검
+
+
+def _rate(num, den, min_n: int) -> dict:
+    """비율 + 분자·분모. 분모가 min_n 미만이면 ok=False(화면은 '표본 부족(건수)')."""
+    num = float(num) if isinstance(num, float) else int(num)
+    den = float(den) if isinstance(den, float) else int(den)
+    return {"num": num, "den": den, "rate": (num / den) if den else None, "ok": bool(den) and den >= min_n}
+
+
+def _median(s: pd.Series):
+    s = pd.to_numeric(s, errors="coerce").dropna()
+    return float(s.median()) if len(s) else None
+
+
+def perf_metrics(g: pd.DataFrame, p: Params) -> dict:
+    """조직 단위(담당·팀·AM) 성과·활동 지표. 성과는 수주년월 집계연도, 활동은 현재 진행 중 전체."""
+    mn = int(p.th["min_sample"])
+    lo, hi = p.total_year * 100 + 1, p.total_year * 100 + 12
+    win = g["win_ym"]
+    gy = g[(win.notna() & (win >= lo) & (win <= hi)).fillna(False).astype(bool)]
+    out = {}
+    for key, types in (("AC", ("A", "C")), ("A", ("A",)), ("C", ("C",))):
+        x = gy[gy["acr_type"].isin(types)]
+        w = x[x["status"] == "Win"]
+        nl = int((x["status"] == "Lose").sum())
+        nd = int((x["status"] == "Drop").sum())
+        wpre = int((w["reg_type"] == "사전").sum())
+        wpost = int((w["reg_type"] == "사후·당일").sum())
+        out[key] = {"win": int(len(w)), "lose": nl, "drop": nd, "win_pre": wpre, "win_post": wpost,
+                    "win_nohist": int(len(w)) - wpre - wpost,
+                    "simple": _rate(len(w), len(w) + nl, mn), "pre": _rate(wpre, wpre + nl, mn),
+                    "reg": _rate(wpre, wpre + wpost, mn)}
+    w_ac = gy[gy["acr_type"].isin(["A", "C"]) & (gy["status"] == "Win")]
+    out["new_share"] = _rate(int((w_ac["acr_type"] == "A").sum()), int(len(w_ac)), mn)
+    am = fsum(w_ac.loc[w_ac["acr_type"] == "A", "monthly"]) or 0.0
+    tm = fsum(w_ac["monthly"]) or 0.0
+    out["new_share_amt"] = {"num": am, "den": tm, "rate": (am / tm) if tm else None, "ok": out["new_share"]["ok"]}
+    lose = gy[gy["acr_type"].isin(["A", "C"]) & (gy["status"] == "Lose")]
+    out["overconf"] = _rate(int((lose["hist_maxp_open"] >= 70).sum()), int(len(lose)), mn)
+    pre_w = w_ac[w_ac["reg_type"] == "사전"]
+    out["lead_median"] = _median(pre_w["lead_days"])
+    rr = gy[gy["acr_type"] == "R"]
+    done = rr[rr["status"] == "재계약완료"]
+    churn = rr[rr["status"] == "해지확정"]
+    out["ret_cnt"] = _rate(len(done), len(done) + len(churn), mn)
+    den_amt = float(done["prev_monthly"].fillna(0).sum() + churn["prev_monthly"].fillna(0).sum())
+    num_amt = float(done["new_monthly"].fillna(0).sum())
+    out["ret_amt"] = {"num": num_amt, "den": den_amt, "rate": (num_amt / den_amt) if den_amt else None,
+                      "ok": out["ret_cnt"]["ok"]}
+    valid = done[(done["prev_monthly"] > 0) & done["new_monthly"].notna()]
+    sp, sn = float(valid["prev_monthly"].sum()), float(valid["new_monthly"].sum())
+    out["chg_rate"] = {"num": sn - sp, "den": sp, "rate": ((sn - sp) / sp) if sp else None, "ok": len(valid) >= mn}
+    out["r_done"], out["r_churn"] = int(len(done)), int(len(churn))
+    out["r_decrease"] = int((done["monthly"] < 0).sum())
+    rt = churn["churn_reason"].dropna().value_counts()
+    if len(rt):  # 동수면 사유 이름순
+        topn = int(rt.max())
+        topk = sorted(rt[rt == topn].index)[0]
+        out["churn_top"] = f"{topk} ({topn}건)"
+    else:
+        out["churn_top"] = None
+    prog = g[g["status"].isin(C.IN_PROGRESS)]
+    upd = update_state(prog, p)
+    fresh = int(((upd["days"] <= 30) & ~upd["missing"] & ~upd["future"].fillna(False)).fillna(False).sum())
+    out["prog"] = int(len(prog))
+    out["fresh30"] = _rate(fresh, len(prog), mn)
+    out["stale_long"] = int((upd["days"] > p.th["stale_long_days"]).fillna(False).sum())
+    out["long_stay"] = int(((pd.Timestamp(p.base_date) - prog["hist_first_d"]).dt.days > p.th["long_stay_days"]).fillna(False).sum())
+    out["update_missing"] = int(upd["missing"].sum())
+    return out
+
+
+def perf_view(ds: Dataset, p: Params) -> dict:
+    df = filter_df(ds, p)
+    if df.empty:
+        return {"empty": True}
+    key = "am_key" if p.level == "am" else "team"
+    rows = []
+    for k, g in df.groupby(key):
+        rows.append({"key": k, "team": g["team"].iloc[0], "am": g["am"].iloc[0] if key == "am_key" else None,
+                     **perf_metrics(g, p)})
+    y = p.total_year
+    return {
+        "year": y, "level": "am" if key == "am_key" else "team", "total": perf_metrics(df, p), "rows": rows,
+        "min_sample": int(p.th["min_sample"]),
+        "basis": {
+            "기간": f"성과(수주율·리텐션·신규비중·리드타임·정확도)는 수주년월 {y}-01~{y}-12, 활동(갱신·미갱신·체류)은 현재 진행 중 전체(기준일 {p.base_date.isoformat()})",
+            "단순 수주율": "A·C의 Win ÷ (Win + Lose). 사업기회 소멸(Drop)은 분모에서 제외하고 건수만 참고 표시",
+            "Pre-sales 경유 수주율": "사전 등록 Win ÷ (사전 등록 Win + Lose). 사후·당일 등록 Win은 영업 과정이 기록되지 않아 제외",
+            "등록 구분(추정)": "수주가능성 변경이력의 첫 기록일을 등록일로 봄. 종결일 = 이력 100% 도달일(없으면 확정일자). 첫 기록이 100% 미만이고 종결일보다 이전이면 '사전', 아니면 '사후·당일'",
+            "사전 등록률": "Win 중 사전 등록 비율(이력 없는 Win 제외)",
+            "리텐션 성공률": "건수 = 재계약완료 ÷ (재계약완료 + 해지확정). 금액 = 재계약완료 변경 월매출 ÷ (재계약완료 + 해지확정의 기존 월매출)",
+            "재계약 매출 증감률": "(변경 합계 − 기존 합계) ÷ 기존 합계, 재계약완료 중 기존매출 양수 대상",
+            "신규 비중": "확정 A·C(Win) 중 A 비중(건수·월매출)",
+            "가능성 입력 정확도": "Lose 중 변경이력상 가능성 70% 이상이었던 비율(높을수록 과대 입력)",
+            "활동": f"30일 내 갱신률 = 진행 중 중 최근영업활동내역 저장 30일 이내 비율 / 장기 미갱신 {p.th['stale_long_days']}일 초과 / 장기 체류 = 최초 기록 {p.th['long_stay_days']}일 초과",
+            "표본 기준": f"분모 {int(p.th['min_sample'])}건 미만은 비율 대신 '표본 부족(건수)' 표시",
+            "주의": "목표·보유 고객 자료가 없어 성과 등급을 산출하지 않음. 점검용 비교이며 AM 평가 점수가 아님",
+        },
+    }
+
+
 # ================================================================ 상세 목록(드릴다운)
 
-DRILL_KEYS = {"scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "win_month", "code", "team", "am_key", "ym", "product",
+DRILL_KEYS = {"scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "win_month", "win_year", "reg_type", "lose_overconf", "code", "team", "am_key", "ym", "product",
               "customer", "bid_no", "prob_bin", "period", "change", "level"}
 
 
@@ -1122,6 +1240,18 @@ def drill_rows(ds: Dataset, p: Params, drill: dict | None) -> tuple[pd.DataFrame
         bands = _list(drill["prob_band"])
         m &= df["prob"].apply(ps_bin).isin(bands)
         desc.append("가능성 구간=" + "/".join(bands))
+    if drill.get("win_year"):
+        wy = int(drill["win_year"])
+        w = df["win_ym"]
+        m &= (w.notna() & (w >= wy * 100 + 1) & (w <= wy * 100 + 12)).fillna(False).astype(bool)
+        desc.append(f"수주년월 {wy}년")
+    if drill.get("reg_type"):
+        rt = drill["reg_type"]
+        m &= df["reg_type"] == rt
+        desc.append(f"등록 구분={rt}")
+    if drill.get("lose_overconf"):
+        m &= (df["hist_maxp_open"] >= 70).fillna(False)
+        desc.append("이력상 가능성 70% 이상")
     if drill.get("win_month"):
         wm = int(drill["win_month"])
         m &= (df["win_ym"] == wm).fillna(False).astype(bool)

@@ -254,3 +254,66 @@ def test_total_view_contract_amount_by_win_month(make_ds, params):
     assert A.total_view(ds, params(base_date="2026-11-04", total_year=2027))["totals"]["A"] == 50
     d = A.detail_view(ds, params(base_date="2026-11-04"), {"scope": "total", "win_month": 202611})
     assert d["total"] == 1 and d["rows"][0]["funnel_id"] == "A1"
+
+
+def _edge_hist_rows():
+    return [
+        row(fid="W_PRE", status="Win", win=202606, hist="30%(하상)(2026/03/01),60%(중상)(2026/04/10),100%(수주완료)(2026/06/02)"),
+        row(fid="W_SAME", status="Win", win=202606, hist="60%(중상)(2026/06/02),100%(수주완료)(2026/06/02)"),
+        row(fid="W_100", status="Win", win=202606, type="Cul.", hist="100%(수주완료)(2026/06/02)"),
+        row(fid="W_NOH", status="Win", win=202606, hist=None),
+        row(fid="L_HI", status="Lose", win=202606, hist="80%(상중)(2026/02/01),0%(수주실패)(2026/06/01)"),
+        row(fid="L_LO", status="Lose", win=202606, type="Cul.", hist="30%(하상)(2026/02/01),0%(수주실패)(2026/06/01)"),
+        row(fid="D1", status="Drop", win=202606, hist="10%(하하)(2026/01/01),0%(DROP)(2026/06/01)"),
+        row(fid="R_DONE_CONF", type="Ret.", status="재계약완료", win=202609, prev=10, new=9, monthly=-1,
+            hist="70%(상하)(2026/09/15)", conf="2026-10-26 14:54:31"),
+        row(fid="R_DONE_SAME", type="Ret.", status="재계약완료", win=202608, prev=5, new=5, monthly=0,
+            hist="50%(중중)(2026/08/26)", conf="2026-08-26 15:47:17"),
+        row(fid="R_CHURN", type="Ret.", status="해지확정", win=202607, prev=20, new=0, monthly=-20, 해지사유="예산"),
+        row(fid="P_DROP", status="Pre Sales", win=202612, upd="2026-10-30", hist="70%(상하)(2026/05/01),40%(중하)(2026/09/01)"),
+        row(fid="P_OLD", status="Pre Sales", win=202612, upd="2026-07-01", hist="30%(하상)(2024/05/01)"),
+        row(fid="P_EQ", status="Pre Sales", win=202612, upd="2026-08-10", hist="50%(중중)(2025/11/08)"),
+        row(fid="R_LOW", type="Ret.", status="Pre Sales", win=202611, prev=30, new=30, monthly=0, prob="30%(하상)",
+            upd="2026-11-01", hist="30%(하상)(2026/10/01)"),
+        row(fid="R_LOW_FAR", type="Ret.", status="Pre Sales", win=202702, prev=3, new=3, monthly=0, prob="10%(하하)",
+            upd="2026-11-01", hist="10%(하하)(2026/10/01)"),
+    ]
+
+
+def test_history_registration_types(make_ds):
+    ds = make_ds(_edge_hist_rows())
+    rt = dict(zip(ds.df["funnel_id"], ds.df["reg_type"]))
+    assert rt["W_PRE"] == "사전" and rt["W_SAME"] == "사후·당일" and rt["W_100"] == "사후·당일"
+    assert rt["W_NOH"] == "이력 없음"
+    assert rt["R_DONE_CONF"] == "사전"        # 100% 없음 → 확정일자(10/26) 기준, 9/15 등록
+    assert rt["R_DONE_SAME"] == "사후·당일"   # 등록일 = 확정일
+    assert ds.df.set_index("funnel_id").loc["W_PRE", "lead_days"] == 93
+
+
+def test_perf_rates_and_sample(make_ds, params):
+    ds = make_ds(_edge_hist_rows())
+    t = A.perf_view(ds, params(base_date="2026-11-08", total_year=2026))["total"]
+    ac = t["AC"]
+    assert (ac["win"], ac["lose"], ac["drop"]) == (4, 2, 1)
+    assert ac["simple"]["num"] == 4 and ac["simple"]["den"] == 6 and not ac["simple"]["ok"]   # 10건 미만
+    assert ac["pre"]["num"] == 1 and ac["pre"]["den"] == 3                                     # 사전 Win ÷ (사전 Win + Lose), Drop 제외
+    assert ac["reg"]["num"] == 1 and ac["reg"]["den"] == 3                                     # 이력 없는 Win 제외
+    assert t["overconf"]["num"] == 1 and t["overconf"]["den"] == 2
+    assert t["ret_cnt"]["num"] == 2 and t["ret_cnt"]["den"] == 3
+    assert t["ret_amt"]["rate"] == (9 + 5) / (10 + 5 + 20)
+    assert t["churn_top"] == "예산 (1건)"
+    t2 = A.perf_view(ds, params(base_date="2026-11-08", total_year=2026, th={"min_sample": 3}))["total"]
+    assert t2["AC"]["simple"]["ok"] and t2["AC"]["pre"]["ok"]
+
+
+def test_new_check_rules(make_ds, params):
+    ds = make_ds(_edge_hist_rows())
+    p = params(base_date="2026-11-08")
+    assert "PROB_DROP" in codes_of(ds, p, "P_DROP")
+    assert "LONG_STAY" in codes_of(ds, p, "P_OLD")
+    assert "LONG_STAY" not in codes_of(ds, p, "P_EQ")          # 정확히 365일 → 초과 아님
+    assert "STALE_LONG" in codes_of(ds, p, "P_OLD")            # 7/1 → 130일
+    assert "STALE_LONG" not in codes_of(ds, p, "P_EQ")          # 8/10 → 90일(초과 아님)
+    assert "RENEWAL_LOWPROB" in codes_of(ds, p, "R_LOW")
+    assert "RENEWAL_LOWPROB" not in codes_of(ds, p, "R_LOW_FAR")  # 예정월 임박 아님
+    assert A.RULE_MAP["STALE"][1] == 3 and A.RULE_MAP["STALE_LONG"][1] == 1

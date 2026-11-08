@@ -17,6 +17,7 @@
       <li><button data-page="presales">ACR 수주(Pre-sales)</button></li>
       <li><button data-page="total">ACR 수주(총액)</button></li>
       <li><button data-page="team">팀·AM 관리</button></li>
+      <li><button data-page="perf">AM 성과·활동 점검</button></li>
       <li><button data-page="insight">고객·상품·입찰</button></li>
       <li><button data-page="priority">우선 확인 Funnel</button></li>
       <li><button data-page="detail">상세 목록</button></li>
@@ -92,6 +93,10 @@
           <div class="side-row"><label for="th_large_r">대형 R</label><input type="number" id="th_large_r" min="0" title="기존 월매출 ≥ (백만원)"></div>
           <div class="side-row"><label for="th_imm">임박(개월)</label><input type="number" id="th_imm" min="0" max="12"></div>
           <div class="side-row"><label for="th_prob">높은 가능성%</label><input type="number" id="th_prob" min="0" max="100"></div>
+          <div class="side-row"><label for="th_stale_long">장기 미갱신(일)</label><input type="number" id="th_stale_long" min="0"></div>
+          <div class="side-row"><label for="th_long_stay">장기 체류(일)</label><input type="number" id="th_long_stay" min="0"></div>
+          <div class="side-row"><label for="th_ren_low">재계약 저확률%</label><input type="number" id="th_ren_low" min="0" max="100"></div>
+          <div class="side-row"><label for="th_min">표본 기준(건)</label><input type="number" id="th_min" min="1"></div>
           <div class="side-note">대형 A/C=계약기간매출, 대형 R=기존 월매출 기준(원본 단위 백만원). 임박 1 = 이번 달·다음 달.</div>
         </details>
         <details class="side-more">

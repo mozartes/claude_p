@@ -11,7 +11,8 @@
     TARGET_HQ: "공공고객담당",
     MAX_UPLOAD_MB: 20,
     SHEET_NAME_PREFERRED: "유선Funnel조회",
-    BUSINESS_DEFAULTS: { stale_days: 30, large_contract_amount: 1000, large_renewal_monthly: 30, imminent_months: 1, high_probability: 70 },
+    BUSINESS_DEFAULTS: { stale_days: 30, large_contract_amount: 1000, large_renewal_monthly: 30, imminent_months: 1, high_probability: 70,
+      stale_long_days: 90, long_stay_days: 365, renewal_low_prob: 50, min_sample: 10 },
     COL: {
       customer: "고객사", win_ym: "수주년월", monthly: "월매출합계", status: "현재상황", activity: "최근영업활동내용", team: "팀",
       module: "모듈", am: "AM", acr_type: "ACR유형", culti_detail: "Culti 상세", ret_detail: "Ret.상세", term: "계약기간(월)",
@@ -20,7 +21,7 @@
       confirmer: "확정자", confirmed_at: "확정일자", strategy_reg: "재계약전략 등록여부", bid_method: "입찰방식",
       qualification: "참가자격", winloss_reason: "승패사유", drop_reason: "Drop세부사유", churn_reason: "해지사유",
       churn_type: "해지유형", bid_no: "입찰공고번호", bid_name: "입찰공고명", expected_amt: "수주예상금액",
-      possible_rev: "수주가능매출", rmr_excl: "RMR제외", midlarge_excl: "중대형퍼널제외",
+      possible_rev: "수주가능매출", rmr_excl: "RMR제외", midlarge_excl: "중대형퍼널제외", prob_history: "수주가능성 변경이력",
     },
     PRODUCT_SLOTS: 5,
     REQUIRED_COLUMNS: ["고객사", "수주년월", "월매출합계", "현재상황", "팀", "AM", "ACR유형", "계약기간(월)", "매출발생년월",
@@ -121,6 +122,27 @@
     if (!m) return null;
     const p = Number(m[1]);
     return p >= 0 && p <= 100 ? p : null;
+  }
+  // 변경이력: '60%(중상)(2026/02/23),100%(수주완료)(2026/02/23)' → [[60, ms], [100, ms]]
+  const HIST_RE = /(\d+(?:\.\d+)?)%\([^)]*\)\((\d{4})\/(\d{1,2})\/(\d{1,2})\)/g;
+  function parseHistory(v) {
+    const s = cleanStr(v);
+    if (s === null) return [];
+    const out = []; let m; HIST_RE.lastIndex = 0;
+    while ((m = HIST_RE.exec(s)) !== null) { const t = mkDate(+m[2], +m[3], +m[4]); if (t !== null) out.push([Number(m[1]), t]); }
+    return out;
+  }
+  function historyFields(h) {
+    const open = h.filter((x) => x[0] < 100).map((x) => x[0]);
+    const h100 = h.find((x) => x[0] === 100);
+    return { hist_n: h.length, hist_first_p: h.length ? h[0][0] : null, hist_first_d: h.length ? h[0][1] : null, hist_100_d: h100 ? h100[1] : null,
+      hist_last_p: h.length ? h[h.length - 1][0] : null, hist_prev_p: h.length >= 2 ? h[h.length - 2][0] : null, hist_maxp_open: open.length ? Math.max(...open) : null };
+  }
+  function regTypeOf(r) {
+    if (r.status !== "Win" && r.status !== "재계약완료") return null;
+    const cd = r.hist_100_d !== null ? r.hist_100_d : r.confirmed_at;
+    if (!r.hist_n || cd === null) return "이력 없음";
+    return r.hist_first_p < 100 && r.hist_first_d < cd ? "사전" : "사후·당일";
   }
   function isoDate(t) {
     if (t === null || t === undefined) return null;
@@ -230,6 +252,7 @@
         status, win_ym: winYm, rev_ym: revYm, term, term_raw: rawDisplay(termRaw), monthly,
         contract_amt: num(C.contract_amt), annual: num(C.annual), prev_monthly: num(C.prev_monthly), new_monthly: num(C.new_monthly),
         possible_rev: num(C.possible_rev), prob_raw: cleanStr(get(row, C.prob)), prob: parseProb(get(row, C.prob)), updated_at: upd,
+        confirmed_at: parseDate(get(row, C.confirmed_at))[0],
         confirmer: cleanStr(get(row, C.confirmer)), strategy_reg: cleanStr(get(row, C.strategy_reg)),
         bid_method: cleanStr(get(row, C.bid_method)), qualification: cleanStr(get(row, C.qualification)),
         winloss_reason: cleanStr(get(row, C.winloss_reason)), drop_reason: cleanStr(get(row, C.drop_reason)),
@@ -240,6 +263,10 @@
         product_sum: hasP ? psum : null, num_error_cols: Array.from(new Set(numErr)).sort(),
       };
       r.am_key = `${r.team}|${r.am}`;
+      Object.assign(r, historyFields(parseHistory(get(row, C.prob_history))));
+      r.reg_type = regTypeOf(r);
+      const cd = r.hist_100_d !== null ? r.hist_100_d : r.confirmed_at;
+      r.lead_days = r.reg_type === "사전" && cd !== null ? Math.round((cd - r.hist_first_d) / 86400000) : null;
       if (fid === null) issues.push("FUNNEL_BLANK");
       if (acr === null) issues.push("TYPE_UNKNOWN");
       if (!CFG.KNOWN_STATUSES.includes(status)) issues.push("STATUS_UNKNOWN");
@@ -424,7 +451,7 @@
     Object.entries(d.th || {}).forEach(([k, v]) => {
       if (!(k in th)) return;
       const f = Number(v);
-      if (v !== null && v !== "" && Number.isFinite(f) && f >= 0) th[k] = k === "stale_days" || k === "imminent_months" ? Math.trunc(f) : f;
+      if (v !== null && v !== "" && Number.isFinite(f) && f >= 0) th[k] = ["stale_days", "imminent_months", "stale_long_days", "long_stay_days", "min_sample"].includes(k) ? Math.trunc(f) : f;
     });
     let types = listOf(d.types).filter((t) => ["A", "C", "R"].includes(t));
     if (!types.length) types = ["A", "C", "R"];
@@ -515,11 +542,15 @@
     ["WIN_NO_REV", 1, "Win·매출발생년월 누락", "개통·매출 개시 일정 확인", "Win & 매출발생년월 없음"],
     ["RENEWAL_DECREASE", 1, "재계약 감액 예상", "감액 사유·방어 방안 확인", "R 진행 중 & (변경매출 < 기존매출 또는 월매출합계 < 0)"],
     ["LARGE_STALE", 1, "대형 사업·장기 미갱신", "진행상황·다음 활동 갱신", "진행 중 & 대형(A/C 계약기간매출 ≥ 기준, R 기존 월매출 ≥ 기준) & (미갱신 또는 갱신일 미입력)"],
+    ["STALE_LONG", 1, "장기 미갱신(90일)", "AM 면담·진행상황 현행화", "진행 중 & 기준일 − 최근영업활동내역 저장일시 > 장기 미갱신 기준일수(기본 90일)"],
+    ["PROB_DROP", 1, "가능성 하락", "하락 사유 확인·지원 필요 여부 판단", "진행 중 & 수주가능성 변경이력의 최근 가능성 < 직전 가능성"],
+    ["RENEWAL_LOWPROB", 1, "재계약 임박·저확률", "해지 방어 대응", "R 진행 중 & 기준월 ≤ 수주년월 ≤ 기준월+임박개월 & 수주(재계약)가능성 ≤ 기준%(기본 50%)"],
     ["PROPOSAL_IMMINENT", 2, "제안완료·예정월 임박", "평가·계약 일정 확인", "제안완료 & 기준월 ≤ 수주년월 ≤ 기준월+임박개월"],
     ["HIGH_PROB_PRESALES", 2, "높은 입력 가능성·Pre Sales", "단계 갱신 또는 가능성 재확인", "Pre Sales & 수주(재계약)가능성 ≥ 기준%"],
     ["LARGE_RENEWAL", 2, "기존 월매출 큰 진행 중 재계약", "재계약 대응계획 확인", "R 진행 중 & 기존매출 ≥ 대형 재계약 기준"],
-    ["STALE", 2, "장기 미갱신", "진행상황·다음 활동 갱신", "진행 중 & 기준일 − 최근영업활동내역 저장일시 > 미갱신 기준일수"],
     ["UPDATE_MISSING", 2, "갱신일 미입력", "최근 활동 내역 등록", "진행 중 & 저장일시 없음"],
+    ["LONG_STAY", 2, "장기 체류", "Drop 여부 판단 또는 재추진 계획", "진행 중 & 변경이력 최초 기록일로부터 장기 체류 기준일수(기본 365일) 초과"],
+    ["STALE", 3, "미갱신(30일)", "진행상황·다음 활동 갱신", "진행 중 & 기준일 − 최근영업활동내역 저장일시 > 미갱신 기준일수(기본 30일)"],
     ["STRATEGY_MISSING", 3, "재계약전략 미등록", "대응계획 확인·전략 등록", "R 진행 중 & 재계약전략 등록여부 ≠ Y(N 또는 미입력)"],
     ["REV_BEFORE_WIN", 3, "매출발생년월이 수주년월보다 이전", "일정 입력 기준 확인", "Drop·Lose 제외 & 매출발생년월 < 수주년월 (자동 오류 확정 아님)"],
     ["WIN_FUTURE_REV", 3, "Win·매출개시 미래", "개통·매출 개시 예정 확인", "Win & 매출발생년월 > 기준월"],
@@ -544,6 +575,10 @@
       HIGH_PROB_PRESALES: r.status === "Pre Sales" && gte(r.prob, th.high_probability),
       LARGE_RENEWAL: isR && prog && gte(r.prev_monthly, th.large_renewal_monthly),
       STALE: prog && u.stale,
+      STALE_LONG: prog && !u.missing && u.days > th.stale_long_days,
+      PROB_DROP: prog && lt(r.hist_last_p, r.hist_prev_p),
+      RENEWAL_LOWPROB: isR && prog && nn(r.win_ym) && r.win_ym >= base && r.win_ym <= immHi && nn(r.prob) && r.prob <= th.renewal_low_prob,
+      LONG_STAY: prog && r.hist_first_d !== null && Math.round((p.base_ms - r.hist_first_d) / 86400000) > th.long_stay_days,
       UPDATE_MISSING: prog && u.missing,
       STRATEGY_MISSING: isR && prog && r.strategy_reg !== "Y",
       REV_BEFORE_WIN: r.status !== "Drop" && r.status !== "Lose" && lt(r.rev_ym, r.win_ym),
@@ -576,6 +611,7 @@
       issues: r.issues.filter((i) => i !== "OUT_OF_SCOPE_HQ").map((i) => ISSUE_LABELS[i] || i),
       check_codes: codes, checks: codes.map((c) => RULE_MAP[c][2]), actions: Array.from(new Set(codes.map((c) => RULE_MAP[c][3]))),
       level: ck ? ck.level : null, check_amount: ck ? ck.amount : null, check_amount_basis: ck ? ck.amount_basis : null,
+      first_reg: r.hist_first_d === null ? null : isoDate(r.hist_first_d), reg_type: r.reg_type,
     };
   }
   function sortBy(arr, keys) { // keys: [[fn, asc]] — null 은 항상 뒤, 안정 정렬
@@ -622,7 +658,7 @@
     const th = p.th;
     return RULES.map(([c, lv, lb, ac, cd]) => ({ code: c, level: lv, label: lb, action: ac, condition: cd })).concat([{
       code: "_TH", level: null, label: "적용 기준값", action: "",
-      condition: `미갱신 ${th.stale_days}일 초과 / 대형 A·C 계약기간매출 ≥ ${fmtG(th.large_contract_amount)} / 대형 R 기존 월매출 ≥ ${fmtG(th.large_renewal_monthly)} / 임박 기준월+${th.imminent_months}개월 / 높은 가능성 ≥ ${fmtG(th.high_probability)}% (금액은 원본 단위 백만원)`,
+      condition: `미갱신 ${th.stale_days}일 초과 / 대형 A·C 계약기간매출 ≥ ${fmtG(th.large_contract_amount)} / 대형 R 기존 월매출 ≥ ${fmtG(th.large_renewal_monthly)} / 임박 기준월+${th.imminent_months}개월 / 높은 가능성 ≥ ${fmtG(th.high_probability)}% / 장기 미갱신 ${th.stale_long_days}일 초과 / 장기 체류 ${th.long_stay_days}일 초과 / 재계약 저확률 ≤ ${fmtG(th.renewal_low_prob)}% (금액은 원본 단위 백만원)`,
     }]);
   }
 
@@ -693,7 +729,7 @@
     const progAc = ac.filter((r) => isProg(r.status));
     const sched = BUCKETS.map((k) => { const g = progAc.filter((r) => bucketOf(r.win_ym, p) === k); return { bucket: k, count: g.length, amount: amountSplit(g.map((r) => r.contract_amt)) }; });
     const ck = computeChecks(ac, p);
-    const fcodes = ["OVERDUE", "PROPOSAL_IMMINENT", "HIGH_PROB_PRESALES", "LARGE_STALE", "REV_BEFORE_WIN", "WIN_NO_REV", "WIN_FUTURE_REV"];
+    const fcodes = ["OVERDUE", "PROPOSAL_IMMINENT", "HIGH_PROB_PRESALES", "LARGE_STALE", "STALE_LONG", "PROB_DROP", "LONG_STAY", "REV_BEFORE_WIN", "WIN_NO_REV", "WIN_FUTURE_REV"];
     const codeCounts = fcodes.map((c) => ({ code: c, label: RULE_MAP[c][2], action: RULE_MAP[c][3], count: ac.filter((r) => ck.get(r.row).codes.includes(c)).length }));
     const bins = PROB_BINS.map((x) => x[0]).concat(["미확인"]).map((lb) => {
       const g = progAc.filter((r) => probBin(r.prob) === lb);
@@ -749,7 +785,7 @@
     groupBy(churn, (r) => r[key]).forEach((g, k) => byOrg.push(Object.assign({ key: k, team: g[0].team, am: key === "am_key" ? g[0].am : null, count: g.length }, sums(g))));
     byOrg.sort((a, b) => b.count - a.count);
     const ck = computeChecks(rr, p);
-    const rcodes = ["OVERDUE", "LARGE_RENEWAL", "RENEWAL_DECREASE", "STRATEGY_MISSING", "STALE", "LARGE_STALE", "UPDATE_MISSING"];
+    const rcodes = ["OVERDUE", "RENEWAL_LOWPROB", "LARGE_RENEWAL", "RENEWAL_DECREASE", "STALE_LONG", "PROB_DROP", "LONG_STAY", "STRATEGY_MISSING", "STALE", "LARGE_STALE", "UPDATE_MISSING"];
     return {
       schedule: sched, prog_amount: Object.assign({ count: prog.length }, sums(prog)), change,
       mismatch: done.filter((r) => r.issues.includes("R_AMOUNT_MISMATCH")).length,
@@ -993,8 +1029,75 @@
     };
   }
 
+  // ================================================================ 화면: AM 성과·활동 점검
+  function rate(num, den, mn) { return { num, den, rate: den ? num / den : null, ok: !!den && den >= mn }; }
+  function median(arr) { const v = arr.filter(nn).sort((a, b) => a - b); if (!v.length) return null; const m = Math.floor(v.length / 2); return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; }
+  function perfMetrics(g, p) {
+    const mn = p.th.min_sample, lo = p.total_year * 100 + 1, hi = p.total_year * 100 + 12;
+    const gy = g.filter((r) => nn(r.win_ym) && r.win_ym >= lo && r.win_ym <= hi);
+    const out = {};
+    [["AC", ["A", "C"]], ["A", ["A"]], ["C", ["C"]]].forEach(([key, types]) => {
+      const x = gy.filter((r) => types.includes(r.acr_type));
+      const w = x.filter((r) => r.status === "Win"); const nl = x.filter((r) => r.status === "Lose").length; const nd = x.filter((r) => r.status === "Drop").length;
+      const wpre = w.filter((r) => r.reg_type === "사전").length, wpost = w.filter((r) => r.reg_type === "사후·당일").length;
+      out[key] = { win: w.length, lose: nl, drop: nd, win_pre: wpre, win_post: wpost, win_nohist: w.length - wpre - wpost,
+        simple: rate(w.length, w.length + nl, mn), pre: rate(wpre, wpre + nl, mn), reg: rate(wpre, wpre + wpost, mn) };
+    });
+    const wac = gy.filter((r) => (r.acr_type === "A" || r.acr_type === "C") && r.status === "Win");
+    out.new_share = rate(wac.filter((r) => r.acr_type === "A").length, wac.length, mn);
+    const am = fsum(wac.filter((r) => r.acr_type === "A").map((r) => r.monthly)) || 0, tm = fsum(wac.map((r) => r.monthly)) || 0;
+    out.new_share_amt = { num: am, den: tm, rate: tm ? am / tm : null, ok: out.new_share.ok };
+    const lose = gy.filter((r) => (r.acr_type === "A" || r.acr_type === "C") && r.status === "Lose");
+    out.overconf = rate(lose.filter((r) => gte(r.hist_maxp_open, 70)).length, lose.length, mn);
+    out.lead_median = median(wac.filter((r) => r.reg_type === "사전").map((r) => r.lead_days));
+    const rr = gy.filter((r) => r.acr_type === "R"); const done = rr.filter((r) => r.status === "재계약완료"), churn = rr.filter((r) => r.status === "해지확정");
+    out.ret_cnt = rate(done.length, done.length + churn.length, mn);
+    const s0 = (arr) => arr.reduce((a, v) => a + (nn(v) ? v : 0), 0);
+    const denAmt = s0(done.map((r) => r.prev_monthly)) + s0(churn.map((r) => r.prev_monthly)), numAmt = s0(done.map((r) => r.new_monthly));
+    out.ret_amt = { num: numAmt, den: denAmt, rate: denAmt ? numAmt / denAmt : null, ok: out.ret_cnt.ok };
+    const valid = done.filter((r) => gte(r.prev_monthly, Number.MIN_VALUE) && r.prev_monthly > 0 && nn(r.new_monthly));
+    const sp = valid.reduce((a, r) => a + r.prev_monthly, 0), sn = valid.reduce((a, r) => a + r.new_monthly, 0);
+    out.chg_rate = { num: sn - sp, den: sp, rate: sp ? (sn - sp) / sp : null, ok: valid.length >= mn };
+    out.r_done = done.length; out.r_churn = churn.length; out.r_decrease = done.filter((r) => lt(r.monthly, 0)).length;
+    const rc = new Map(); churn.forEach((r) => { if (r.churn_reason !== null) rc.set(r.churn_reason, (rc.get(r.churn_reason) || 0) + 1); });
+    const top = Array.from(rc.entries()).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))[0];
+    out.churn_top = top ? `${top[0]} (${top[1]}건)` : null;
+    const prog = g.filter((r) => isProg(r.status)); const us = prog.map((r) => updState(r, p));
+    out.prog = prog.length;
+    out.fresh30 = rate(us.filter((u) => !u.missing && !u.future && u.days <= 30).length, prog.length, mn);
+    out.stale_long = us.filter((u) => !u.missing && u.days > p.th.stale_long_days).length;
+    out.long_stay = prog.filter((r) => r.hist_first_d !== null && Math.round((p.base_ms - r.hist_first_d) / 86400000) > p.th.long_stay_days).length;
+    out.update_missing = us.filter((u) => u.missing).length;
+    return out;
+  }
+  function perfView(ds, p) {
+    const df = filterDf(ds, p);
+    if (!df.length) return { empty: true };
+    const key = p.level === "am" ? "am_key" : "team";
+    const rows = [];
+    groupBy(df, (r) => r[key]).forEach((g, k) => rows.push(Object.assign({ key: k, team: g[0].team, am: key === "am_key" ? g[0].am : null }, perfMetrics(g, p))));
+    const y = p.total_year;
+    return {
+      year: y, level: key === "am_key" ? "am" : "team", total: perfMetrics(df, p), rows, min_sample: p.th.min_sample,
+      basis: {
+        "기간": `성과(수주율·리텐션·신규비중·리드타임·정확도)는 수주년월 ${y}-01~${y}-12, 활동(갱신·미갱신·체류)은 현재 진행 중 전체(기준일 ${p.base_date})`,
+        "단순 수주율": "A·C의 Win ÷ (Win + Lose). 사업기회 소멸(Drop)은 분모에서 제외하고 건수만 참고 표시",
+        "Pre-sales 경유 수주율": "사전 등록 Win ÷ (사전 등록 Win + Lose). 사후·당일 등록 Win은 영업 과정이 기록되지 않아 제외",
+        "등록 구분(추정)": "수주가능성 변경이력의 첫 기록일을 등록일로 봄. 종결일 = 이력 100% 도달일(없으면 확정일자). 첫 기록이 100% 미만이고 종결일보다 이전이면 '사전', 아니면 '사후·당일'",
+        "사전 등록률": "Win 중 사전 등록 비율(이력 없는 Win 제외)",
+        "리텐션 성공률": "건수 = 재계약완료 ÷ (재계약완료 + 해지확정). 금액 = 재계약완료 변경 월매출 ÷ (재계약완료 + 해지확정의 기존 월매출)",
+        "재계약 매출 증감률": "(변경 합계 − 기존 합계) ÷ 기존 합계, 재계약완료 중 기존매출 양수 대상",
+        "신규 비중": "확정 A·C(Win) 중 A 비중(건수·월매출)",
+        "가능성 입력 정확도": "Lose 중 변경이력상 가능성 70% 이상이었던 비율(높을수록 과대 입력)",
+        "활동": `30일 내 갱신률 = 진행 중 중 최근영업활동내역 저장 30일 이내 비율 / 장기 미갱신 ${p.th.stale_long_days}일 초과 / 장기 체류 = 최초 기록 ${p.th.long_stay_days}일 초과`,
+        "표본 기준": `분모 ${p.th.min_sample}건 미만은 비율 대신 '표본 부족(건수)' 표시`,
+        "주의": "목표·보유 고객 자료가 없어 성과 등급을 산출하지 않음. 점검용 비교이며 AM 평가 점수가 아님",
+      },
+    };
+  }
+
   // ================================================================ 상세 목록(드릴다운)
-  const DRILL_KEYS = ["scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "win_month", "code", "team", "am_key", "ym", "product", "customer", "bid_no", "prob_bin", "period", "change", "level"];
+  const DRILL_KEYS = ["scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "win_month", "win_year", "reg_type", "lose_overconf", "code", "team", "am_key", "ym", "product", "customer", "bid_no", "prob_bin", "period", "change", "level"];
   function drillRows(ds, p, drill) {
     const d = {};
     Object.entries(drill || {}).forEach(([k, v]) => { if (DRILL_KEYS.includes(k) && v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)) d[k] = v; });
@@ -1036,6 +1139,9 @@
     if (d.customer) { rows = rows.filter((r) => (r.customer === null ? "(고객사 미입력)" : r.customer) === d.customer); desc.push(`고객사(표시명)=${d.customer}`); }
     if (d.bid_no) { rows = rows.filter((r) => r.bid_no === d.bid_no); desc.push(`입찰공고번호=${d.bid_no}`); }
     if (d.prob_band) { const bs = listOf(d.prob_band); rows = rows.filter((r) => bs.includes(psBin(r.prob))); desc.push("가능성 구간=" + bs.join("/")); }
+    if (d.win_year) { const wy = Number(d.win_year); rows = rows.filter((r) => nn(r.win_ym) && r.win_ym >= wy * 100 + 1 && r.win_ym <= wy * 100 + 12); desc.push(`수주년월 ${wy}년`); }
+    if (d.reg_type) { rows = rows.filter((r) => r.reg_type === d.reg_type); desc.push(`등록 구분=${d.reg_type}`); }
+    if (d.lose_overconf) { rows = rows.filter((r) => gte(r.hist_maxp_open, 70)); desc.push("이력상 가능성 70% 이상"); }
     if (d.win_month) { const wm = Number(d.win_month); rows = rows.filter((r) => r.win_ym === wm); desc.push(`수주년월=${ymLabel(wm)}`); }
     if (d.rev_month) { const rm = Number(d.rev_month); rows = rows.filter((r) => r.rev_ym === rm); desc.push(`매출발생년월=${ymLabel(rm)}`); }
     if (d.prob_bin) { rows = rows.filter((r) => probBin(r.prob) === d.prob_bin); desc.push(`가능성=${d.prob_bin}`); }
@@ -1089,7 +1195,7 @@
     const cols = [["row", "원본행"], ["funnel_id", "Funnel번호"], ["customer", "고객사"], ["team", "팀"], ["am", "AM"], ["acr_type", "ACR유형"],
       ["status", "현재상황"], ["win_ym", "수주년월"], ["rev_ym", "매출발생년월"], ["term", "계약기간(월)"], ["monthly", `월매출합계(${u})`],
       ["contract_amt", `계약기간매출(${u})`], ["prev_monthly", `기존매출(${u})`], ["new_monthly", `변경매출(${u})`], ["prob", "수주(재계약)가능성"],
-      ["products", "상품(월매출)"], ["updated_at", "최근 갱신일"], ["strategy_reg", "재계약전략 등록여부"], ["acr_included", "ACR 포함"],
+      ["products", "상품(월매출)"], ["updated_at", "최근 갱신일"], ["first_reg", "최초 등록일(변경이력)"], ["reg_type", "등록 구분(추정)"], ["strategy_reg", "재계약전략 등록여부"], ["acr_included", "ACR 포함"],
       ["acr_excl_reason", "ACR 제외 사유"], ["checks", "확인 사유"], ["actions", "권장 확인 행동"], ["level", "우선순위 등급"], ["issues", "데이터 품질"]];
     const aoa = [cols.map((c) => c[1])].concat(rows.map((r) => cols.map(([k]) => {
       let v = r[k];
@@ -1145,7 +1251,7 @@
   function setDataset(ds) { state.ds = ds; }
   function loadParsed(parsed, fileName, at, extra) { state.ds = buildDataset(parsed, fileName, at, extra); return state.ds; }
 
-  const VIEWS = { overview: overviewView, funnel: funnelView, renewal: renewalView, acr: acrView, presales: presalesView, total: totalView, team: teamView, insight: insightView, quality: qualityView };
+  const VIEWS = { overview: overviewView, funnel: funnelView, renewal: renewalView, acr: acrView, presales: presalesView, total: totalView, perf: perfView, team: teamView, insight: insightView, quality: qualityView };
   function envelope(view, p, data) {
     const d = state.ds;
     return { ok: true, view, dataset: { empty: d.empty, file_name: d.meta.file_name, uploaded_at: d.meta.uploaded_at, rows: d.meta.row_count || 0,
