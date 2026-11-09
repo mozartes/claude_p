@@ -5,6 +5,8 @@
   const ROOT = document.getElementById("app");
   // 브라우저 계산판: 서버 API 대신 계산 엔진(engine.js)을 직접 호출한다. 엑셀은 이 브라우저 밖으로 나가지 않는다.
   const PSD = window.PSD;
+  // 별도 실행판(예: v2)은 저장 공간(필터·브라우저 보관본)을 분리해 기존 버전과 섞이지 않게 한다
+  const VARIANT = typeof window.PSD_VARIANT === "string" ? window.PSD_VARIANT : "";
   const css = (name, fb) => { try { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fb; } catch (e) { return fb; } };
   const COLORS = {};
   function refreshColors() {
@@ -30,8 +32,8 @@
   const $ = (id) => document.getElementById(id);
   const esc = (v) => String(v == null ? "" : v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const store = {
-    get(k, d) { try { const v = localStorage.getItem("psdw:" + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
-    set(k, v) { try { localStorage.setItem("psdw:" + k, JSON.stringify(v)); } catch (e) { /* 무시 */ } },
+    get(k, d) { try { const v = localStorage.getItem("psdw" + VARIANT + ":" + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem("psdw" + VARIANT + ":" + k, JSON.stringify(v)); } catch (e) { /* 무시 */ } },
   };
   function unitFactor() {
     if (S.ui.srcUnit === "unknown" || !UNIT_WON[S.ui.srcUnit]) return 1;
@@ -65,7 +67,7 @@
   }
   // ---------------- 이 브라우저 보관(IndexedDB): 열람자 본인 브라우저에만 저장, 실패해도 동작
   const IDB = {
-    open() { return new Promise((res, rej) => { try { const r = indexedDB.open("psd-dashboard", 1); r.onupgradeneeded = () => r.result.createObjectStore("files"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }); },
+    open() { return new Promise((res, rej) => { try { const r = indexedDB.open("psd-dashboard" + VARIANT, 1); r.onupgradeneeded = () => r.result.createObjectStore("files"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }); },
     async get() { try { const db = await this.open(); return await new Promise((res) => { const q = db.transaction("files").objectStore("files").get("current"); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); }); } catch (e) { return null; } },
     async put(v) { try { const db = await this.open(); await new Promise((res, rej) => { const tx = db.transaction("files", "readwrite"); tx.objectStore("files").put(v, "current"); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); return true; } catch (e) { return false; } },
     async del() { try { const db = await this.open(); await new Promise((res) => { const tx = db.transaction("files", "readwrite"); tx.objectStore("files").delete("current"); tx.oncomplete = res; tx.onerror = res; }); return true; } catch (e) { return false; } },

@@ -237,3 +237,15 @@ python tools/build_standalone.py --with-data # dist/공공영업대시보드_기
 
 - 데이터 없는 판을 권장(엑셀은 사내 메일로 따로 전달). 데이터 포함판은 파일 자체에 실제 Funnel·AM 실명이 들어 있으므로 사내 수신자에게만 보냄
 - `dist/`는 회사 데이터가 포함될 수 있어 Git 제외
+
+## 19. 별도 실행판 v2 (AM 성과·활동 점검 포함)
+
+운영 중인 대시보드는 그대로 두고, 신설 관리지표(수주율·리텐션·활동성, 우선 확인 규칙 4종)를 넣은 **v2를 별도 HTML로** 배포합니다.
+
+```powershell
+python tools/build_standalone.py --variant=v2             # dist/공공영업대시보드_v2_성과활동점검.html (데이터 없음)
+python tools/build_standalone.py --with-data --variant=v2 # dist/공공영업대시보드_v2_성과활동점검_기준데이터포함.html
+```
+
+- 제목·사이드바에 ‘v2’ 표시, 필터 설정·‘이 브라우저에 보관’ 데이터 저장 공간을 기존 버전과 분리(같은 PC에서 두 버전을 함께 써도 섞이지 않음)
+- 신설 지표 정의는 README 16장 이후 및 화면 ‘계산 기준’ 참조
