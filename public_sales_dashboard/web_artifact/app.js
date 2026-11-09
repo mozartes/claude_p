@@ -1016,6 +1016,8 @@
   function bind() {
     document.querySelectorAll("#nav button").forEach((b) => b.addEventListener("click", () => go(b.dataset.page)));
     $("applyBtn").addEventListener("click", () => { readFilters(); render(); });
+    // 기준일·기간·ACR 기준은 바꾸는 즉시 다시 계산('조회' 버튼 없이도 반영)
+    ["f_base", "f_from", "f_to", "f_mode"].forEach((id) => $(id).addEventListener("change", () => { readFilters(); render(); }));
     $("resetBtn").addEventListener("click", () => { S.f = defaultFilters(); $("amSearch").value = ""; $("prodSearch").value = ""; renderFilterInputs(); store.set("filters", S.f); render(); });
     document.querySelectorAll("#f_level button").forEach((b) => b.addEventListener("click", () => { S.f.level = b.dataset.v; document.querySelectorAll("#f_level button").forEach((x) => x.classList.toggle("on", x === b)); }));
     $("f_teams").addEventListener("change", () => { S.f.teams = selectedValues("f_teams"); S.f.ams = S.f.ams.filter((k) => !S.f.teams.length || S.f.teams.includes(k.split("|")[0])); renderAmList(); updateCounts(); });
