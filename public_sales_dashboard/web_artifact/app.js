@@ -703,9 +703,9 @@
     const orgLabel = (r) => esc(r.am ? `${r.am} (${r.team})` : r.team);
     let h = `<div class="toolbar"><span class="muted">집계연도(성과)</span><span class="seg-light" id="pyearSel">${years.map((yy) => `<button type="button" data-v="${yy}" class="${yy === y ? "on" : ""}">${yy}년</button>`).join("")}</span>
         <span class="muted">집계 수준: ${isAm ? "AM" : "팀"} (사이드바에서 변경) · 비율 옆 괄호는 분자/분모 · 분모 ${mn}건 미만은 ‘표본 부족’</span></div>
-    <div class="notice info">점검용 비교이며 AM 평가 점수가 아닙니다. ‘사전/사후 등록’은 수주가능성 변경이력의 첫 기록일로 판단한 <b>추정</b>입니다. 사업기회 소멸(Drop)은 수주율 분모에서 제외합니다.</div>
+    <div class="notice info">점검용 비교이며 AM 평가 점수가 아닙니다. ‘사전/사후 등록’은 수주가능성 변경이력의 첫 기록일로 판단한 <b>추정</b>입니다. 단순 수주율은 사업기회 소멸(Drop)을 분모에 포함하고, Pre-sales 경유 수주율은 제외합니다.</div>
     <div class="grid kpis">
-      ${kpiCard("단순 수주율 (A·C)", t.AC.simple.rate == null ? "-" : pct(t.AC.simple.rate), `Win ${nf(t.AC.win)} ÷ (Win+Lose ${nf(t.AC.win + t.AC.lose)})<br>A ${pct(t.A.simple.rate)} · C ${pct(t.C.simple.rate)} · Drop ${nf(t.AC.drop)}건 제외`, "", dW({}))}
+      ${kpiCard("단순 수주율 (A·C)", t.AC.simple.rate == null ? "-" : pct(t.AC.simple.rate), `Win ${nf(t.AC.win)} ÷ (Win+Lose+Drop ${nf(t.AC.win + t.AC.lose + t.AC.drop)})<br>A ${pct(t.A.simple.rate)} · C ${pct(t.C.simple.rate)}`, "", dW({}))}
       ${kpiCard("Pre-sales 경유 수주율", t.AC.pre.rate == null ? "-" : pct(t.AC.pre.rate), `사전 Win ${nf(t.AC.win_pre)} ÷ (사전 Win+Lose ${nf(t.AC.pre.den)})<br>A ${pct(t.A.pre.rate)} · C ${pct(t.C.pre.rate)}`, "a", dW({}, { reg_type: "사전" }))}
       ${kpiCard("사전 등록률", t.AC.reg.rate == null ? "-" : pct(t.AC.reg.rate), `사후·당일 등록 Win ${nf(t.AC.win_post)}건${t.AC.win_nohist ? ` · 이력 없음 ${nf(t.AC.win_nohist)}건` : ""}`, "warn", dW({}, { reg_type: "사후·당일" }))}
       ${kpiCard("리텐션 성공률 (건수)", t.ret_cnt.rate == null ? "-" : pct(t.ret_cnt.rate), `재계약완료 ${nf(t.r_done)} · 해지 ${nf(t.r_churn)}`, "r", dR({}, "해지확정"))}
@@ -719,7 +719,7 @@
       <div class="card"><h3>${isAm ? "AM" : "팀"}별 리텐션 성공률</h3><p class="desc">건수 vs 금액 · 분모 ${mn}건 이상만 표시</p><div class="chart-box ${isAm ? "tall" : ""}"><canvas id="pfRetChart"></canvas></div></div>
     </div>
     <div class="card" style="margin-top:14px"><h3>성과: 수주율·리텐션 (${y}년 수주년월)</h3><p class="desc">숫자 클릭 → 해당 Funnel 목록</p>
-      <div class="table-wrap" style="max-height:620px"><table class="t"><thead><tr><th>${isAm ? "AM(팀)" : "팀"}</th><th class="num">Win (사전/사후)</th><th class="num">Lose</th><th class="num">Drop(분모 제외)</th>
+      <div class="table-wrap" style="max-height:620px"><table class="t"><thead><tr><th>${isAm ? "AM(팀)" : "팀"}</th><th class="num">Win (사전/사후)</th><th class="num">Lose</th><th class="num">Drop</th>
         <th class="num">단순 수주율</th><th class="num">경유 수주율</th><th class="num">A 경유</th><th class="num">C 경유</th><th class="num">재계약완료</th><th class="num">해지</th>
         <th class="num">리텐션(건수)</th><th class="num">리텐션(금액)</th><th class="num">재계약 매출 증감률</th><th>해지 사유 1위</th><th class="num">신규(A) 비중</th></tr></thead>
       <tbody>${d.rows.map((r) => perfRow(r, orgLabel(r), orgD(r))).join("")}</tbody>

@@ -1041,7 +1041,7 @@
       const w = x.filter((r) => r.status === "Win"); const nl = x.filter((r) => r.status === "Lose").length; const nd = x.filter((r) => r.status === "Drop").length;
       const wpre = w.filter((r) => r.reg_type === "사전").length, wpost = w.filter((r) => r.reg_type === "사후·당일").length;
       out[key] = { win: w.length, lose: nl, drop: nd, win_pre: wpre, win_post: wpost, win_nohist: w.length - wpre - wpost,
-        simple: rate(w.length, w.length + nl, mn), pre: rate(wpre, wpre + nl, mn), reg: rate(wpre, wpre + wpost, mn) };
+        simple: rate(w.length, w.length + nl + nd, mn), pre: rate(wpre, wpre + nl, mn), reg: rate(wpre, wpre + wpost, mn) };
     });
     const wac = gy.filter((r) => (r.acr_type === "A" || r.acr_type === "C") && r.status === "Win");
     out.new_share = rate(wac.filter((r) => r.acr_type === "A").length, wac.length, mn);
@@ -1081,8 +1081,8 @@
       year: y, level: key === "am_key" ? "am" : "team", total: perfMetrics(df, p), rows, min_sample: p.th.min_sample,
       basis: {
         "기간": `성과(수주율·리텐션·신규비중·리드타임·정확도)는 수주년월 ${y}-01~${y}-12, 활동(갱신·미갱신·체류)은 현재 진행 중 전체(기준일 ${p.base_date})`,
-        "단순 수주율": "A·C의 Win ÷ (Win + Lose). 사업기회 소멸(Drop)은 분모에서 제외하고 건수만 참고 표시",
-        "Pre-sales 경유 수주율": "사전 등록 Win ÷ (사전 등록 Win + Lose). 사후·당일 등록 Win은 영업 과정이 기록되지 않아 제외",
+        "단순 수주율": "A·C의 Win ÷ (Win + Lose + Drop). 사업기회 소멸(Drop)도 분모에 포함",
+        "Pre-sales 경유 수주율": "사전 등록 Win ÷ (사전 등록 Win + Lose). 사후·당일 등록 Win과 사업기회 소멸(Drop)은 제외",
         "등록 구분(추정)": "수주가능성 변경이력의 첫 기록일을 등록일로 봄. 종결일 = 이력 100% 도달일(없으면 확정일자). 첫 기록이 100% 미만이고 종결일보다 이전이면 '사전', 아니면 '사후·당일'",
         "사전 등록률": "Win 중 사전 등록 비율(이력 없는 Win 제외)",
         "리텐션 성공률": "건수 = 재계약완료 ÷ (재계약완료 + 해지확정). 금액 = 재계약완료 변경 월매출 ÷ (재계약완료 + 해지확정의 기존 월매출)",

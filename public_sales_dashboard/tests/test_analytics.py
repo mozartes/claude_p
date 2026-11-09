@@ -295,7 +295,7 @@ def test_perf_rates_and_sample(make_ds, params):
     t = A.perf_view(ds, params(base_date="2026-11-08", total_year=2026))["total"]
     ac = t["AC"]
     assert (ac["win"], ac["lose"], ac["drop"]) == (4, 2, 1)
-    assert ac["simple"]["num"] == 4 and ac["simple"]["den"] == 6 and not ac["simple"]["ok"]   # 10건 미만
+    assert ac["simple"]["num"] == 4 and ac["simple"]["den"] == 7 and not ac["simple"]["ok"]   # Win÷(Win+Lose+Drop), 10건 미만
     assert ac["pre"]["num"] == 1 and ac["pre"]["den"] == 3                                     # 사전 Win ÷ (사전 Win + Lose), Drop 제외
     assert ac["reg"]["num"] == 1 and ac["reg"]["den"] == 3                                     # 이력 없는 Win 제외
     assert t["overconf"]["num"] == 1 and t["overconf"]["den"] == 2
