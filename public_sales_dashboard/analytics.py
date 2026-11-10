@@ -33,7 +33,7 @@ class Params:
     product_group: str = "all"
     user_products: list[str] = field(default_factory=list)
     search: str = ""
-    mode: str = "start"
+    mode: str = "term"
     excl_midlarge: bool = False
     excl_rmr: bool = False
     confirmed_only: bool = False
@@ -111,7 +111,7 @@ def parse_params(d: dict | None) -> Params:
         products=_list(d.get("products")), user_products=_list(d.get("products")),
         product_group=d.get("product_group") if d.get("product_group") in C.PRODUCT_GROUPS else "all",
         search=str(d.get("search") or "").strip()[:100],
-        mode=d.get("mode") if d.get("mode") in R.MODES else "start",
+        mode=d.get("mode") if d.get("mode") in R.MODES else "term",
         excl_midlarge=bool(d.get("excl_midlarge")), excl_rmr=bool(d.get("excl_rmr")),
         confirmed_only=bool(d.get("confirmed_only")), th=th, total_year=_year(d.get("total_year"), base.year),
     )
@@ -810,15 +810,18 @@ def insight_view(ds: Dataset, p: Params) -> dict:
     df = filter_df(ds, p)
     if df.empty:
         return {"empty": True}
-    acr_all = R.compute_acr(df, "start", p.ym_from, p.ym_to, None, p.types)
-    con_rows = set(acr_all["included_rows"])
+    # 확정 ACR 기여매출: 화면의 ACR 기준(p.mode)을 그대로 따름(계약기간 반영 시 매월 반영분 합계)
+    types = [t for t in (p.types or ["A", "C", "R"]) if t in ("A", "C", "R")] or ["A", "C", "R"]
+    con_all, _ = R.contributions(df, p.mode, p.ym_from, p.ym_to, None)
+    con_all = con_all[con_all["acr_type"].isin(types)]
+    row_amt = con_all.groupby("row")["amount"].sum() if len(con_all) else pd.Series(dtype=float)
     # 고객사 표시명 기준
     cust = []
     for name, g in df.groupby(df["customer"].fillna("(고객사 미입력)")):
-        inc = g[g.index.isin(con_rows)]
+        ra = row_amt[row_amt.index.isin(g.index)]
         cust.append({"customer": name, "funnels": int(len(g)),
                      "in_progress": int(g["status"].isin(C.IN_PROGRESS).sum()),
-                     "acr": float(inc["monthly"].sum()) if len(inc) else 0.0,
+                     "acr": float(ra.sum()) if len(ra) else 0.0,
                      "churn": int((g["status"] == "해지확정").sum()),
                      "teams": ", ".join(sorted(g["team"].unique()))})
     cust.sort(key=lambda x: (-x["funnels"], x["customer"]))
@@ -827,7 +830,7 @@ def insight_view(ds: Dataset, p: Params) -> dict:
     prod = []
     for nm in names:
         has = df[df["product_names"].apply(lambda ns: nm in ns)]
-        a = R.compute_acr(has, "start", p.ym_from, p.ym_to, [nm], p.types)
+        a = R.compute_acr(has, p.mode, p.ym_from, p.ym_to, [nm], p.types)
         pa = has[has["status"].isin(C.IN_PROGRESS) & has["acr_type"].isin(["A", "C"])]
         prod.append({"product": nm, "funnels": int(len(has)),
                      "acr_A": a["totals"]["A"], "acr_C": a["totals"]["C"], "acr_R": a["totals"]["R"],
@@ -867,7 +870,7 @@ def insight_view(ds: Dataset, p: Params) -> dict:
         "bid_methods": method, "qualification": qual, "reasons": reasons,
         "basis": {
             "고객": "고객사 표시명 기준(마스킹된 이름이 같아도 같은 고객으로 단정하지 않음). 고객 코드가 없어 고유·신규 고객 수와 유지율은 산출하지 않음",
-            "고객 ACR": f"매출개시월 기준 확정 ACR(월매출합계), 매출발생년월 {R.ym_label(p.ym_from)}~{R.ym_label(p.ym_to)}",
+            "고객 ACR": f"{R.MODES[p.mode]} 확정 ACR 기여매출, 매출발생년월 {R.ym_label(p.ym_from)}~{R.ym_label(p.ym_to)}",
             "상품 ACR": "선택 상품 슬롯(상품1~5)의 대응 월매출만 합산(Funnel 전체금액 반복 합산 없음)",
             "상품 계약기간매출": "선택 상품을 보유한 Funnel 전체금액, 고유 Funnel당 1회 반영",
             "R 변경매출": "상품별 배분 근거가 없어 배분하지 않음",

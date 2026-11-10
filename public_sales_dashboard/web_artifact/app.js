@@ -88,8 +88,8 @@
     const d = S.meta.defaults;
     return {
       base_date: d.base_date, ym_from: d.ym_from, ym_to: d.ym_to, level: "all", teams: [], ams: [],
-      types: ["A", "C", "R"], products: [], product_group: "all", search: "", mode: "start",
-      excl_midlarge: false, excl_rmr: false, confirmed_only: false, th: Object.assign({}, d.th), _dv: d.version,
+      types: ["A", "C", "R"], products: [], product_group: "all", search: "", mode: "term",
+      excl_midlarge: false, excl_rmr: false, confirmed_only: false, th: Object.assign({}, d.th), _dv: d.version, _mv: 2,
     };
   }
   function renderFilterInputs() {
@@ -997,6 +997,8 @@
     const def = defaultFilters();
     // 기본 기간이 바뀌면(버전 불일치) 저장된 화면의 조회기간을 새 기본값으로 교체
     if (saved && saved._dv !== S.meta.defaults.version) { delete saved.ym_from; delete saved.ym_to; }
+    // ACR 기준 기본값 변경(매출개시월 → 계약기간 반영): 이전에 저장된 기준은 한 번 초기화
+    if (saved && saved._mv !== 2) { saved.mode = "term"; saved._mv = 2; }
     if (!keepFilters) S.f = saved ? Object.assign(def, saved, { th: Object.assign({}, def.th, saved.th || {}) }) : def;
     S.f._dv = S.meta.defaults.version;
     // 사라진 팀·AM·상품 선택 정리

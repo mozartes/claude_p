@@ -461,7 +461,7 @@
       ym_from: from, ym_to: to, level: ["all", "team", "am"].includes(d.level) ? d.level : "all",
       teams: listOf(d.teams), ams: listOf(d.ams), types, products: listOf(d.products), user_products: listOf(d.products),
       product_group: CFG.PRODUCT_GROUPS[d.product_group] ? d.product_group : "all",
-      search: String(d.search || "").trim().slice(0, 100), mode: MODES[d.mode] ? d.mode : "start",
+      search: String(d.search || "").trim().slice(0, 100), mode: MODES[d.mode] ? d.mode : "term",
       excl_midlarge: !!d.excl_midlarge, excl_rmr: !!d.excl_rmr, confirmed_only: !!d.confirmed_only, th,
       total_year: (() => { const ty = parseInt(String(d.total_year), 10); return String(ty) === String(d.total_year).trim() && ty >= 1990 && ty <= 2100 ? ty : y; })(),
     };
@@ -856,20 +856,24 @@
   function insightView(ds, p) {
     const df = filterDf(ds, p);
     if (!df.length) return { empty: true };
-    const acrAll = computeAcr(df, "start", p.ym_from, p.ym_to, null, p.types);
-    const conRows = new Set(acrAll.included_rows);
+    // 확정 ACR 기여매출: 화면의 ACR 기준(p.mode)을 그대로 따름(계약기간 반영 시 매월 반영분 합계)
+    let types = (p.types || ["A", "C", "R"]).filter((t) => ["A", "C", "R"].includes(t));
+    if (!types.length) types = ["A", "C", "R"];
+    const rowAmt = new Map();
+    contributions(df, p.mode, p.ym_from, p.ym_to, null)[0].filter((x) => types.includes(x.acr_type))
+      .forEach((x) => rowAmt.set(x.row, (rowAmt.get(x.row) || 0) + x.amount));
     const cust = [];
     groupBy(df, (r) => r.customer === null ? "(고객사 미입력)" : r.customer).forEach((g, name) => {
-      const inc = g.filter((r) => conRows.has(r.row));
+      const ra = g.filter((r) => rowAmt.has(r.row)).map((r) => rowAmt.get(r.row));
       cust.push({ customer: name, funnels: g.length, in_progress: g.filter((r) => isProg(r.status)).length,
-        acr: inc.reduce((a, r) => a + r.monthly, 0), churn: g.filter((r) => r.status === "해지확정").length,
+        acr: ra.reduce((a, v) => a + v, 0), churn: g.filter((r) => r.status === "해지확정").length,
         teams: Array.from(new Set(g.map((r) => r.team))).sort().join(", ") });
     });
     cust.sort((a, b) => b.funnels - a.funnels || (a.customer < b.customer ? -1 : a.customer > b.customer ? 1 : 0));
     const names = Array.from(new Set(df.flatMap((r) => r.product_names))).sort();
     const prod = names.map((nm) => {
       const has = df.filter((r) => r.product_names.includes(nm));
-      const a = computeAcr(has, "start", p.ym_from, p.ym_to, [nm], p.types);
+      const a = computeAcr(has, p.mode, p.ym_from, p.ym_to, [nm], p.types);
       const pa = has.filter((r) => isProg(r.status) && (r.acr_type === "A" || r.acr_type === "C"));
       return { product: nm, funnels: has.length, acr_A: a.totals.A, acr_C: a.totals.C, acr_R: a.totals.R, acr_ACR: a.totals.ACR,
         acr_funnels: a.totals.funnels, prog_ac_count: pa.length, prog_ac_contract_amt: fsum(pa.map((r) => r.contract_amt)) };
@@ -906,7 +910,7 @@
       },
       basis: {
         "고객": "고객사 표시명 기준(마스킹된 이름이 같아도 같은 고객으로 단정하지 않음). 고객 코드가 없어 고유·신규 고객 수와 유지율은 산출하지 않음",
-        "고객 ACR": `매출개시월 기준 확정 ACR(월매출합계), 매출발생년월 ${ymLabel(p.ym_from)}~${ymLabel(p.ym_to)}`,
+        "고객 ACR": `${MODES[p.mode]} 확정 ACR 기여매출, 매출발생년월 ${ymLabel(p.ym_from)}~${ymLabel(p.ym_to)}`,
         "상품 ACR": "선택 상품 슬롯(상품1~5)의 대응 월매출만 합산(Funnel 전체금액 반복 합산 없음)",
         "상품 계약기간매출": "선택 상품을 보유한 Funnel 전체금액, 고유 Funnel당 1회 반영",
         "R 변경매출": "상품별 배분 근거가 없어 배분하지 않음",

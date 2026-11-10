@@ -317,3 +317,15 @@ def test_new_check_rules(make_ds, params):
     assert "RENEWAL_LOWPROB" in codes_of(ds, p, "R_LOW")
     assert "RENEWAL_LOWPROB" not in codes_of(ds, p, "R_LOW_FAR")  # 예정월 임박 아님
     assert A.RULE_MAP["STALE"][1] == 3 and A.RULE_MAP["STALE_LONG"][1] == 1
+
+
+def test_default_mode_term(make_ds):
+    """기본 ACR 기준 = 계약기간 반영: 1월 개시 건은 계약기간 동안 매월 이어서 반영"""
+    import analytics as A
+    ds = make_ds([row(monthly=68.49, rev=202601, term=24), row(monthly=1.21, rev=202602, term=24)])
+    p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12"})
+    assert p.mode == "term"
+    m = {x["ym"]: x["A"] for x in A.acr_view(ds, p)["monthly"]}
+    assert m[202601] == 68.49 and abs(m[202602] - 69.70) < 1e-9 and abs(m[202612] - 69.70) < 1e-9
+    prod = A.insight_view(ds, p)
+    assert abs(sum(c["acr"] for c in prod["customers"]) - (68.49 * 12 + 1.21 * 11)) < 1e-6

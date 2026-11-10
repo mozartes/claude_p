@@ -99,7 +99,7 @@ def test_upload_flow_and_failures_keep_data(client_factory, tmp_path):
 
 def test_empty_state(client_factory):
     c, _ = client_factory()
-    j = c.post("/api/view/overview", json={"filters": {}}).get_json()
+    j = c.post("/api/view/overview", json={"filters": {"mode": "start"}}).get_json()
     assert j["ok"] and j["data"]["empty"] and j["dataset"]["empty"]
     assert c.get("/api/meta").get_json()["dataset"]["empty"]
 
@@ -116,20 +116,20 @@ def test_prefix_routes(client_factory, tmp_path, prefix):
     assert c.get(prefix + "/static/vendor/chart.umd.min.js").status_code == 200
     assert c.get(prefix + "/static/css/app.css").status_code == 200
     assert c.get(prefix + "/api/meta").get_json()["ok"]
-    assert c.post(prefix + "/api/view/acr", json={"filters": {}}).get_json()["data"]["totals"]["ACR"] == 2
+    assert c.post(prefix + "/api/view/acr", json={"filters": {"mode": "start"}}).get_json()["data"]["totals"]["ACR"] == 2
     r = c.get(prefix + "/go-home")
     assert r.status_code == 302 and r.headers["Location"].endswith(prefix + "/")
     good = write_xlsx(tmp_path / "g2.xlsx", [row()])
     assert upload(c, prefix, good, "g2.xlsx").get_json()["ok"]
-    r = c.post(prefix + "/api/export", data={"filters": "{}", "q": json.dumps({"drill": {"scope": "acr"}})})
+    r = c.post(prefix + "/api/export", data={"filters": json.dumps({"mode": "start"}), "q": json.dumps({"drill": {"scope": "acr"}})})
     assert r.status_code == 200 and r.data[:2] == b"PK"
 
 
 def test_export_contents_match(client_factory):
     c, _ = client_factory(rows=[row(monthly=3, rev=202603), row(type="Cul.", monthly=4, rev=202604),
                                 row(status="Pre Sales", monthly=9, rev=202604)])
-    acr = c.post("/api/view/acr", json={"filters": {}}).get_json()["data"]["totals"]
-    r = c.post("/api/export", json={"filters": {}, "drill": {"scope": "acr"}})
+    acr = c.post("/api/view/acr", json={"filters": {"mode": "start"}}).get_json()["data"]["totals"]
+    r = c.post("/api/export", json={"filters": {"mode": "start"}, "drill": {"scope": "acr"}})
     wb = load_workbook(io.BytesIO(r.data))
     ws = wb["목록"]
     hdr = [x.value for x in ws[1]]
