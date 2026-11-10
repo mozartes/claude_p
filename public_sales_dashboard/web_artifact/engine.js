@@ -393,6 +393,16 @@
     arr.forEach((x) => { const k = keyFn(x); if (!m.has(k)) m.set(k, []); m.get(k).push(x); });
     return new Map(Array.from(m.entries()).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
   }
+  // 해지확정 감소액(월매출합계 = −기존매출)을 R과 같은 규칙으로 반영. R 합계와 별도
+  function churnContrib(df, mode, from, to, products) {
+    const sub = df.filter((r) => r.status === "해지확정").map((r) => Object.assign({}, r, { status: CFG.ACR_CONFIRMED_STATUS[r.acr_type] }));
+    if (!sub.length) return { amount: 0, funnels: 0, excluded: {} };
+    const [con, basis] = contributions(sub, mode, from, to, products);
+    const ex = {};
+    basis.forEach((b) => { if (b.excl_reason !== null) { const k = b.excl_reason === EXCL.NOT_CONFIRMED ? "ACR유형 미입력·비대상" : b.excl_reason; ex[k] = (ex[k] || 0) + 1; } });
+    const excluded = {}; Object.keys(ex).sort().forEach((k) => { excluded[k] = ex[k]; });
+    return { amount: con.reduce((a, x) => a + x.amount, 0), funnels: new Set(con.map((x) => x.row)).size, excluded };
+  }
   function computeAcr(df, mode, from, to, products, types) {
     mode = MODES[mode] ? mode : "start";
     types = (types || ["A", "C", "R"]).filter((t) => ["A", "C", "R"].includes(t));
@@ -689,6 +699,7 @@
       kpi: {
         acr: acr.totals, acr_mode_label: MODES[p.mode], prog_ac_count: progAc.length, prog_ac_amount: amountSplit(progAc.map((r) => r.contract_amt)),
         prog_r_count: progR.length, prog_r_prev: fsum(progR.map((r) => r.prev_monthly)), churn_count: churn.length,
+        churn_acr: churnContrib(df, p.mode, p.ym_from, p.ym_to, p.products),
         check_count: withCk.length, check_level1: withCk.filter((r) => ck.get(r.row).level === 1).length,
       },
       acr_monthly: acr.monthly, acr_excluded: acr.excluded,
@@ -701,6 +712,7 @@
         "진행 중": "현재상황 Pre Sales·제안완료 전체(기간 필터 미적용, 현재 상태 기준)",
         "진행 중 금액": "A/C 계약기간매출 / R 기존 월매출(원본값, 다른 열로 대체 안 함)",
         "해지확정": `수주년월 ${ymLabel(p.ym_from)}~${ymLabel(p.ym_to)} (해지월 아님)`,
+        "R+해지 기여매출": `R 기여매출 + 해지확정 감소액(월매출합계=−기존매출, R과 같은 ${MODES[p.mode]}, 매출발생년월 ${ymLabel(p.ym_from)}~${ymLabel(p.ym_to)})`,
         "수주 예정": `수주년월을 수주 예정월로 사용(업무 가정), 기준월 ${ymLabel(p.base_ym)}`,
         "확인 필요": "우선 확인 규칙 1개 이상 해당 고유 Funnel(기간 무관)",
       },

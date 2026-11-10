@@ -309,6 +309,8 @@
     let h = sampleNote + `<div class="grid kpis">
       ${kpiCard("A+C 기여매출", amt(a.AC), `A ${amt(a.A)} · C ${amt(a.C)} · Funnel ${cnt(a.funnels_A + a.funnels_C)}건<br>${esc(accBasis)}`, "a", acDrill)}
       ${kpiCard("R 기여매출", amt(a.R), `재계약완료 Funnel ${cnt(a.funnels_R)}건(감액건 포함)<br>${esc(accBasis)}`, "r", { scope: "acr", acr_type: ["R"] })}
+      ${(() => { const ch = k.churn_acr || { amount: 0, funnels: 0, excluded: {} }; const exn = Object.values(ch.excluded).reduce((x, y) => x + y, 0);
+        return kpiCard("R+해지 기여매출", amt(a.R + ch.amount), `R ${amt(a.R)} + 해지 ${amt(ch.amount)} (해지확정 ${cnt(ch.funnels)}건${exn ? ` · 계산 제외 ${cnt(exn)}건` : ""})<br>${esc(`${ml} · ${S.f.ym_from}~${S.f.ym_to} 합계 · A+C+R에 미포함`)}`, "neg", { status: ["해지확정"], period: "rev_ym" }); })()}
       ${kpiCard("A+C+R 기여매출", amt(a.ACR), `고유 Funnel ${cnt(a.funnels)}건<br>${esc(accBasis)}`, "", { scope: "acr" })}
       ${kpiCard("진행 중 A/C Funnel", cnt(k.prog_ac_count) + "건", `계약기간매출 ${amt(k.prog_ac_amount.total)}${k.prog_ac_amount.neg_count ? ` (음수 ${k.prog_ac_amount.neg_count}건 ${amt(k.prog_ac_amount.negative)})` : ""}`, "", { scope: "in_progress", acr_type: ["A", "C"] })}
       ${kpiCard("진행 중 재계약(R)", cnt(k.prog_r_count) + "건", `기존 월매출 ${amt(k.prog_r_prev)}`, "", { scope: "in_progress", acr_type: ["R"] })}

@@ -138,6 +138,21 @@ def contributions(df: pd.DataFrame, mode: str, ym_from: int, ym_to: int,
     return con, basis
 
 
+def churn_contrib(df: pd.DataFrame, mode: str, ym_from: int, ym_to: int,
+                  products: list[str] | None = None) -> dict:
+    """해지확정 감소액(월매출합계 = −기존매출)을 R과 같은 규칙(매출발생년월·계약기간·상품)으로 반영. R 합계와 별도."""
+    sub = df[df["status"] == "해지확정"].copy()
+    if sub.empty:
+        return {"amount": 0.0, "funnels": 0, "excluded": {}}
+    sub["status"] = sub["acr_type"].map(C.ACR_CONFIRMED_STATUS)  # 계산 규칙 재사용을 위한 임시 치환(원본 불변)
+    con, basis = contributions(sub, mode, ym_from, ym_to, products)
+    ex = basis.loc[basis["excl_reason"].notna(), "excl_reason"]
+    ex = ex.replace({EXCL_NOT_CONFIRMED: "ACR유형 미입력·비대상"})
+    return {"amount": float(con["amount"].sum()) if len(con) else 0.0,
+            "funnels": int(con["row"].nunique()) if len(con) else 0,
+            "excluded": {str(k): int(v) for k, v in ex.value_counts().sort_index().items()}}
+
+
 def _type_sums(g: pd.DataFrame) -> dict:
     s = g.groupby("acr_type")["amount"].sum() if len(g) else pd.Series(dtype=float)
     a, c, r = float(s.get("A", 0.0)), float(s.get("C", 0.0)), float(s.get("R", 0.0))

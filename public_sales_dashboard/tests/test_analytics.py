@@ -329,3 +329,16 @@ def test_default_mode_term(make_ds):
     assert m[202601] == 68.49 and abs(m[202602] - 69.70) < 1e-9 and abs(m[202612] - 69.70) < 1e-9
     prod = A.insight_view(ds, p)
     assert abs(sum(c["acr"] for c in prod["customers"]) - (68.49 * 12 + 1.21 * 11)) < 1e-6
+
+
+def test_r_plus_churn_separate(make_ds):
+    """R 기여매출은 재계약완료만, R+해지는 해지확정 감소액을 같은 규칙으로 더함"""
+    import analytics as A
+    ds = make_ds([row(type="Ret.", status="재계약완료", monthly=-2, rev=202603, term=12),
+                  row(type="Ret.", status="해지확정", monthly=-5, rev=202606, term=12),
+                  row(type="Ret.", status="해지확정", monthly=-1, rev=202606, term=None)])  # 계약기간 누락 → 제외
+    p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12"})
+    k = A.overview_view(ds, p)["kpi"]
+    assert k["acr"]["R"] == -2 * 10
+    assert k["churn_acr"]["amount"] == -5 * 7 and k["churn_acr"]["funnels"] == 1
+    assert sum(k["churn_acr"]["excluded"].values()) == 1
