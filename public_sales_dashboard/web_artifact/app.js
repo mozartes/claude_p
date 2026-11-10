@@ -320,7 +320,7 @@
         ${kpiCard("A+C. 매출", amt(tk.AC), `A ${amt(tk.A)} + C ${amt(tk.C)} · Funnel ${cnt(tk.funnels_A + tk.funnels_C)}건<br>${tb}`, "", tdk({ acr_type: ["A", "C"] }))}
         ${kpiCard("A. 매출", amt(tk.A), `Funnel ${cnt(tk.funnels_A)}건<br>${tb}`, "a", tdk({ acr_type: ["A"] }))}
         ${kpiCard("C. 매출", amt(tk.C), `Funnel ${cnt(tk.funnels_C)}건<br>${tb}`, "c", tdk({ acr_type: ["C"] }))}
-        ${kpiCard("R. 매출(리텐션)", amt(tk.R), `Funnel ${cnt(tk.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"})<br>${tb}`, "r", tdk({ acr_type: ["R"] }))}
+        ${kpiCard("R. 매출", amt(tk.R), `Funnel ${cnt(tk.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"})<br>${tb}`, "r", tdk({ acr_type: ["R"] }))}
       </div>`;
     }
     // 2줄: 기여매출 — 조회기간 매출발생 반영분(ACR 기준), R = 재계약 후 월매출(리텐션)
