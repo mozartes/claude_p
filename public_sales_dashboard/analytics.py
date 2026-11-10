@@ -793,7 +793,7 @@ def team_view(ds: Dataset, p: Params) -> dict:
     return {
         "level": "am" if key == "am_key" else "team", "rows": rows,
         "basis": {
-            "A/C 누적매출": f"확정 A/C 월매출 증감액 합계 · {R.MODES[p.mode]}, 매출발생년월 {R.ym_label(p.ym_from)}~{R.ym_label(p.ym_to)}",
+            "A/C 기여매출": f"확정 A/C 월매출 증감액 합계 · {R.MODES[p.mode]}, 매출발생년월 {R.ym_label(p.ym_from)}~{R.ym_label(p.ym_to)}",
             "Win·재계약완료·해지확정": f"수주년월 {R.ym_label(p.ym_from)}~{R.ym_label(p.ym_to)}",
             "진행 중·임박·경과·미갱신": f"현재 진행 중 전체, 기준일 {p.base_date.isoformat()}, 임박=기준월~+{p.th['imminent_months']}개월, 미갱신 {p.th['stale_days']}일 초과",
             "최근 갱신": "최근영업활동내역 저장일시 기준(실제 고객 접촉일·활동 횟수 아님)",

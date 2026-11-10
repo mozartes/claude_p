@@ -621,7 +621,7 @@
     const sum = (k) => d.rows.reduce((a, r) => a + (r[k] || 0), 0);
     let h = `<div class="notice info">집계 수준: <b>${isAm ? "AM" : "팀"}</b> (사이드바 ‘집계 수준’에서 AM 선택 시 AM별). 매출 순위와 확인 과제를 함께 보며, 목표·보유고객 자료가 없어 자동 성과등급은 만들지 않습니다.</div>
     <div class="card"><div class="table-wrap" style="max-height:640px"><table class="t"><thead><tr>
-      <th>${isAm ? "AM(팀)" : "팀"}</th><th class="num" title="조회기간 확정 A/C 월매출 증감액 합계">A/C 누적매출</th><th class="num">진행 중 A/C</th><th class="num" title="현재상황 Pre Sales·제안완료인 A/C의 계약기간매출 합계">Pre Sales/제안완료 계약기간 매출</th><th class="num">예정 임박</th><th class="num">예정월 경과</th>
+      <th>${isAm ? "AM(팀)" : "팀"}</th><th class="num" title="조회기간 확정 A/C 월매출 증감액 합계">A/C 기여매출</th><th class="num">진행 중 A/C</th><th class="num" title="현재상황 Pre Sales·제안완료인 A/C의 계약기간매출 합계">Pre Sales/제안완료 계약기간 매출</th><th class="num">예정 임박</th><th class="num">예정월 경과</th>
       <th class="num">Win 건수</th><th class="num">Win 계약기간매출</th><th class="num">진행 중 재계약</th><th class="num">재계약 기존 월매출</th><th class="num">재계약 감액(완료)</th><th class="num">감액 예상(진행)</th>
       <th class="num">해지확정</th><th class="num">장기 미갱신</th><th class="num">갱신일 미입력</th><th class="num">필수정보 누락·오류</th><th class="num">확인 Funnel(높음)</th></tr></thead>
       <tbody>${d.rows.map((r) => `<tr><td>${esc(isAm ? `${r.am} (${r.team})` : r.team)}</td>
