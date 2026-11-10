@@ -24,8 +24,9 @@ def test_confirmed_conditions(make_ds):
     ])
     r = acr(ds)
     t = r["totals"]
-    assert t["A"] == 10 and t["C"] == 5 and t["R"] == -2
-    assert t["AC"] == 15 and t["ACR"] == 13
+    # R = 재계약 후 월매출(변경매출, 리텐션) 98. A+C+R = A+C + R매출
+    assert t["A"] == 10 and t["C"] == 5 and t["R"] == 98
+    assert t["AC"] == 15 and t["ACR"] == 113
     assert t["funnels"] == 3
 
 
@@ -59,7 +60,7 @@ def test_prior_year_contract_in_period(make_ds):
 def test_r_negative_kept_and_new_monthly_separate(make_ds):
     ds = make_ds([row(type="Ret.", status="재계약완료", prev=100, new=90, monthly=-10, rev=202605)])
     r = acr(ds)
-    assert r["totals"]["R"] == -10
+    assert r["totals"]["R"] == 90  # R = 변경매출(리텐션)
     df = ds.df
     assert float(df.iloc[0]["new_monthly"]) == 90  # 재계약 후 월매출은 별도 지표
     assert r["by_team"][0]["r_neg_count"] == 1 and r["by_team"][0]["r_neg_amount"] == -10
@@ -72,19 +73,19 @@ def test_zero_and_negative_kept(make_ds):
 
 
 def test_example_calc(make_ds):
-    # A=10, C=5, R=-2 같은 월 시작, 계약 3개월
+    # A=10, C=5, R=-2(증감)·변경매출 8 같은 월 시작, 계약 3개월 → R매출 8
     ds = make_ds([
         row(type="Acq.", monthly=10, rev=202605, term=3),
         row(type="Cul.", monthly=5, rev=202605, term=3),
         row(type="Ret.", status="재계약완료", monthly=-2, prev=10, new=8, rev=202605, term=3),
     ])
     s = acr(ds)
-    assert s["totals"]["AC"] == 15 and s["totals"]["ACR"] == 13
+    assert s["totals"]["AC"] == 15 and s["totals"]["ACR"] == 23
     t = acr(ds, "term")
     m = {x["ym"]: x["ACR"] for x in t["monthly"]}
-    assert m[202605] == m[202606] == m[202607] == 13 and m[202608] == 0
-    assert t["totals"]["ACR"] == 39
-    assert sum(x["ACR"] for x in t["monthly"]) == pytest.approx(39)
+    assert m[202605] == m[202606] == m[202607] == 23 and m[202608] == 0
+    assert t["totals"]["ACR"] == 69
+    assert sum(x["ACR"] for x in t["monthly"]) == pytest.approx(69)
 
 
 def test_org_sums_equal_total(make_ds):

@@ -456,7 +456,8 @@ def acr_view(ds: Dataset, p: Params) -> dict:
         "확정 조건": "A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
         "금액": ("선택 상품·카테고리의 대응 월매출(상품1~5 슬롯 합)" if p.products else "월매출합계"),
         "상품 카테고리": C.PRODUCT_GROUPS[p.product_group] + (" — 전용회선 + 전용회선외 = 상품별 월매출 합계(월매출합계와 다른 행은 데이터 품질에 표시)" if p.product_group != "all" else ""),
-        "R 해석": "월매출합계 = 재계약 증감액(음수 유지). 재계약 후 월매출(변경매출)은 합산하지 않음",
+        "R 해석": ("상품 선택: R = 선택 상품 슬롯 금액(재계약 증감). 변경매출은 상품별 값이 없어 리텐션 매출 산출 불가" if p.products
+                   else "R = 재계약 후 월매출(변경매출, 리텐션 매출). A+C+R = A+C 기여매출 + R매출. 증감액은 R매출 − 기존매출"),
         "누적": f"선택기간 시작월({R.ym_label(p.ym_from)})부터 누적",
         "Funnel 건수": "월별 반복 반영 횟수가 아닌 고유 Funnel 수",
         "주의": "계약기간 반영값은 현재 입력 상태·일정 기반 추정이며 청구·회계 실적이 아님" if p.mode == "term"
@@ -758,6 +759,8 @@ def team_view(ds: Dataset, p: Params) -> dict:
     key = "am_key" if p.level == "am" else "team"
     acr = R.compute_acr(df, p.mode, p.ym_from, p.ym_to, p.products, ["A", "C"])
     acr_org = {r["key"]: r for r in (acr["by_am"] if key == "am_key" else acr["by_team"])}
+    acr_r = R.compute_acr(df, p.mode, p.ym_from, p.ym_to, p.products, ["R"])
+    acr_r_org = {r["key"]: r for r in (acr_r["by_am"] if key == "am_key" else acr_r["by_team"])}
     ck = compute_checks(df, p)
     upd = update_state(df, p)
     prog = df["status"].isin(C.IN_PROGRESS)
@@ -783,6 +786,8 @@ def team_view(ds: Dataset, p: Params) -> dict:
             "overdue": int((g["status"].isin(C.IN_PROGRESS) & g["win_ym"].notna() & (g["win_ym"] < p.base_ym)).sum()),
             "win_count": int(len(win)), "win_amount": fsum(win["contract_amt"]),
             "acr_ac": o.get("AC", 0.0), "acr_ac_funnels": o.get("funnels", 0),
+            "acr_r": acr_r_org.get(k, {}).get("R", 0.0),
+            "acr_acr": o.get("AC", 0.0) + acr_r_org.get(k, {}).get("R", 0.0),
             "prog_r_count": int(len(pr)), "prog_r_prev": fsum(pr["prev_monthly"]),
             "renewal_decrease_done": int((rdone["monthly"] < 0).sum()),
             "renewal_decrease_expected": int(cg["codes"].apply(lambda cs: "RENEWAL_DECREASE" in cs).sum()),
@@ -798,6 +803,8 @@ def team_view(ds: Dataset, p: Params) -> dict:
         "level": "am" if key == "am_key" else "team", "rows": rows,
         "basis": {
             "A/C 기여매출": f"확정 A/C 월매출 증감액 합계 · {R.MODES[p.mode]}, 매출발생년월 {R.ym_label(p.ym_from)}~{R.ym_label(p.ym_to)}",
+            "R매출(리텐션)": "재계약완료 건의 재계약 후 월매출(변경매출) 합계(상품 선택 시 상품 슬롯 증감), 같은 ACR 기준·기간",
+            "A+C+R 기여매출": "A/C 기여매출 + R매출(리텐션)",
             "Win·재계약완료·해지확정": f"수주년월 {R.ym_label(p.ym_from)}~{R.ym_label(p.ym_to)}",
             "진행 중·임박·경과·미갱신": f"현재 진행 중 전체, 기준일 {p.base_date.isoformat()}, 임박=기준월~+{p.th['imminent_months']}개월, 미갱신 {p.th['stale_days']}일 초과",
             "최근 갱신": "최근영업활동내역 저장일시 기준(실제 고객 접촉일·활동 횟수 아님)",

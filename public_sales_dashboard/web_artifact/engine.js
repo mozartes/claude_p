@@ -356,6 +356,9 @@
     df.forEach((r) => {
       let amount, hasProd;
       if (sel.size) [amount, hasProd] = productAmount(r.products, sel); else { amount = r.monthly; hasProd = true; }
+      // delta = 월매출 증감액. R 금액은 재계약 후 월매출(변경매출, 리텐션) — 상품 선택 시에는 슬롯 금액 유지
+      const delta = amount;
+      if (!sel.size && r.acr_type === "R") amount = r.new_monthly;
       const conf = isConfirmed(r);
       let reason = null;
       if (!conf) reason = EXCL.NOT_CONFIRMED;
@@ -363,7 +366,7 @@
       else if (r.rev_ym === null) reason = EXCL.REV_YM;
       else if (sel.size ? (hasProd && amount === null) : amount === null) reason = sel.size ? EXCL.PRODUCT_AMT : EXCL.MONTHLY;
       else if (mode === "term" && r.term === null) reason = EXCL.TERM;
-      out.set(r.row, { amount, has_product: hasProd, confirmed: conf, excl_reason: reason, included: reason === null && hasProd });
+      out.set(r.row, { amount, delta, has_product: hasProd, confirmed: conf, excl_reason: reason, included: reason === null && hasProd });
     });
     return out;
   }
@@ -373,7 +376,7 @@
     df.forEach((r) => {
       const b = basis.get(r.row);
       if (!b.included) return;
-      const base = { row: r.row, funnel_id: r.funnel_id, team: r.team, am_key: r.am_key, am: r.am, acr_type: r.acr_type, amount: b.amount };
+      const base = { row: r.row, funnel_id: r.funnel_id, team: r.team, am_key: r.am_key, am: r.am, acr_type: r.acr_type, amount: b.amount, delta: b.delta };
       if (mode === "term") {
         const end = ymAdd(r.rev_ym, r.term - 1);
         const lo = Math.max(r.rev_ym, from), hi = Math.min(end, to);
@@ -395,7 +398,7 @@
   }
   // 해지확정 감소액(월매출합계 = −기존매출)을 R과 같은 규칙으로 반영. R 합계와 별도
   function churnContrib(df, mode, from, to, products) {
-    const sub = df.filter((r) => r.status === "해지확정").map((r) => Object.assign({}, r, { status: CFG.ACR_CONFIRMED_STATUS[r.acr_type] }));
+    const sub = df.filter((r) => r.status === "해지확정").map((r) => Object.assign({}, r, { status: CFG.ACR_CONFIRMED_STATUS[r.acr_type], new_monthly: r.monthly }));
     if (!sub.length) return { amount: 0, funnels: 0, excluded: {} };
     const [con, basis] = contributions(sub, mode, from, to, products);
     const ex = {};
@@ -410,7 +413,7 @@
     if (!sub.length) return { amount: 0, prev_amount: 0, funnels: 0, excluded: {}, na: null };
     const out = {};
     [["amount", "new_monthly"], ["prev_amount", "prev_monthly"]].forEach(([key, col]) => {
-      const [con, basis] = contributions(sub.map((r) => Object.assign({}, r, { monthly: r[col] })), mode, from, to, null);
+      const [con, basis] = contributions(sub.map((r) => Object.assign({}, r, { monthly: r[col], new_monthly: r[col] })), mode, from, to, null);
       out[key] = con.reduce((a, x) => a + x.amount, 0);
       if (key === "amount") {
         out.funnels = new Set(con.map((x) => x.row)).size;
@@ -441,10 +444,10 @@
     const org = (key, labels) => {
       const rows = [];
       groupBy(con, (x) => x[key]).forEach((g, k) => {
-        const rneg = g.filter((x) => x.acr_type === "R" && x.amount < 0);
+        const rneg = g.filter((x) => x.acr_type === "R" && x.delta < 0);
         const rec = { key: k };
         labels.forEach((l) => { rec[l] = g[0][l]; });
-        rows.push(Object.assign(rec, typeSums(g), { funnels: uniq(g.map((x) => x.row)), r_neg_count: uniq(rneg.map((x) => x.row)), r_neg_amount: rneg.reduce((a, x) => a + x.amount, 0) }));
+        rows.push(Object.assign(rec, typeSums(g), { funnels: uniq(g.map((x) => x.row)), r_neg_count: uniq(rneg.map((x) => x.row)), r_neg_amount: rneg.reduce((a, x) => a + x.delta, 0) }));
       });
       return rows.sort((a, b) => b.ACR - a.ACR);
     };
@@ -665,7 +668,8 @@
       "확정 조건": "A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
       "금액": p.products.length ? "선택 상품·카테고리의 대응 월매출(상품1~5 슬롯 합)" : "월매출합계",
       "상품 카테고리": CFG.PRODUCT_GROUPS[p.product_group] + (p.product_group !== "all" ? " — 전용회선 + 전용회선외 = 상품별 월매출 합계(월매출합계와 다른 행은 데이터 품질에 표시)" : ""),
-      "R 해석": "월매출합계 = 재계약 증감액(음수 유지). 재계약 후 월매출(변경매출)은 합산하지 않음",
+      "R 해석": p.products.length ? "상품 선택: R = 선택 상품 슬롯 금액(재계약 증감). 변경매출은 상품별 값이 없어 리텐션 매출 산출 불가"
+          : "R = 재계약 후 월매출(변경매출, 리텐션 매출). A+C+R = A+C 기여매출 + R매출. 증감액은 R매출 − 기존매출",
       "누적": `선택기간 시작월(${ymLabel(p.ym_from)})부터 누적`,
       "Funnel 건수": "월별 반복 반영 횟수가 아닌 고유 Funnel 수",
       "주의": p.mode === "term" ? "계약기간 반영값은 현재 입력 상태·일정 기반 추정이며 청구·회계 실적이 아님" : "해당 월에 시작되는 월매출 증감 규모이며 반복 청구 매출·회계 실적이 아님",
@@ -845,6 +849,8 @@
     const key = p.level === "am" ? "am_key" : "team";
     const acr = computeAcr(df, p.mode, p.ym_from, p.ym_to, p.products, ["A", "C"]);
     const acrOrg = {}; (key === "am_key" ? acr.by_am : acr.by_team).forEach((r) => { acrOrg[r.key] = r; });
+    const acrR = computeAcr(df, p.mode, p.ym_from, p.ym_to, p.products, ["R"]);
+    const acrROrg = {}; (key === "am_key" ? acrR.by_am : acrR.by_team).forEach((r) => { acrROrg[r.key] = r; });
     const ck = computeChecks(df, p);
     const immHi = ymAdd(p.base_ym, p.th.imminent_months);
     const isAc = (r) => r.acr_type === "A" || r.acr_type === "C";
@@ -860,7 +866,7 @@
         imminent: g.filter((r) => isProg(r.status) && nn(r.win_ym) && r.win_ym >= p.base_ym && r.win_ym <= immHi).length,
         overdue: g.filter((r) => isProg(r.status) && lt(r.win_ym, p.base_ym)).length,
         win_count: win.length, win_amount: fsum(win.map((r) => r.contract_amt)),
-        acr_ac: o.AC || 0, acr_ac_funnels: o.funnels || 0, prog_r_count: pr.length, prog_r_prev: fsum(pr.map((r) => r.prev_monthly)),
+        acr_ac: o.AC || 0, acr_ac_funnels: o.funnels || 0, acr_r: (acrROrg[k] || {}).R || 0, acr_acr: (o.AC || 0) + ((acrROrg[k] || {}).R || 0), prog_r_count: pr.length, prog_r_prev: fsum(pr.map((r) => r.prev_monthly)),
         renewal_decrease_done: rdone.filter((r) => lt(r.monthly, 0)).length,
         renewal_decrease_expected: g.filter((r) => ck.get(r.row).codes.includes("RENEWAL_DECREASE")).length,
         churn: g.filter((r) => r.acr_type === "R" && r.status === "해지확정" && inPeriod(r.win_ym, p)).length,
@@ -876,6 +882,8 @@
       level: key === "am_key" ? "am" : "team", rows,
       basis: {
         "A/C 기여매출": `확정 A/C 월매출 증감액 합계 · ${MODES[p.mode]}, 매출발생년월 ${ymLabel(p.ym_from)}~${ymLabel(p.ym_to)}`,
+        "R매출(리텐션)": "재계약완료 건의 재계약 후 월매출(변경매출) 합계(상품 선택 시 상품 슬롯 증감), 같은 ACR 기준·기간",
+        "A+C+R 기여매출": "A/C 기여매출 + R매출(리텐션)",
         "Win·재계약완료·해지확정": `수주년월 ${ymLabel(p.ym_from)}~${ymLabel(p.ym_to)}`,
         "진행 중·임박·경과·미갱신": `현재 진행 중 전체, 기준일 ${p.base_date}, 임박=기준월~+${p.th.imminent_months}개월, 미갱신 ${p.th.stale_days}일 초과`,
         "최근 갱신": "최근영업활동내역 저장일시 기준(실제 고객 접촉일·활동 횟수 아님)",

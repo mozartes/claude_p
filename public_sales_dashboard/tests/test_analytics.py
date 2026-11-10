@@ -179,7 +179,8 @@ def test_drill_matches_card(make_ds, params):
     a = A.acr_view(ds, p)
     d = A.detail_view(ds, p, {"scope": "acr"})
     assert d["total"] == a["totals"]["funnels"]
-    assert sum(r["monthly"] for r in d["rows"]) == a["totals"]["ACR"]
+    # R 행은 변경매출(리텐션), A/C 행은 월매출합계
+    assert sum((r["new_monthly"] if r["acr_type"] == "R" else r["monthly"]) for r in d["rows"]) == a["totals"]["ACR"]
     m4 = A.detail_view(ds, p, {"scope": "acr", "ym": 202604})
     assert m4["total"] == [m for m in a["monthly"] if m["ym"] == 202604][0]["funnels"]
 
@@ -334,12 +335,12 @@ def test_default_mode_term(make_ds):
 def test_r_plus_churn_separate(make_ds):
     """R 기여매출은 재계약완료만, R+해지는 해지확정 감소액을 같은 규칙으로 더함"""
     import analytics as A
-    ds = make_ds([row(type="Ret.", status="재계약완료", monthly=-2, rev=202603, term=12),
+    ds = make_ds([row(type="Ret.", status="재계약완료", monthly=-2, prev=10, new=8, rev=202603, term=12),
                   row(type="Ret.", status="해지확정", monthly=-5, rev=202606, term=12),
                   row(type="Ret.", status="해지확정", monthly=-1, rev=202606, term=None)])  # 계약기간 누락 → 제외
     p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12"})
     k = A.overview_view(ds, p)["kpi"]
-    assert k["acr"]["R"] == -2 * 10
+    assert k["retention"]["amount"] - k["retention"]["prev_amount"] == -2 * 10  # R 증감 = (8 − 10) × 10개월
     assert k["churn_acr"]["amount"] == -5 * 7 and k["churn_acr"]["funnels"] == 1
     assert sum(k["churn_acr"]["excluded"].values()) == 1
 
@@ -351,6 +352,6 @@ def test_retention_revenue(make_ds):
                   row(type="Ret.", status="해지확정", monthly=-5, 기존매출=5, 변경매출=0, rev=202606, term=12)])
     p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12"})
     k = A.overview_view(ds, p)["kpi"]
-    assert k["acr"]["R"] == -20
+    assert k["acr"]["R"] == 80  # R = 변경매출 8 × 10개월
     assert k["retention"]["amount"] == 80 and k["retention"]["prev_amount"] == 100 and k["retention"]["funnels"] == 1
     assert A.overview_view(ds, A.parse_params({"ym_from": "2026-01", "ym_to": "2026-12", "products": ["국내전용"]}))["kpi"]["retention"]["amount"] is None

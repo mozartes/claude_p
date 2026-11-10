@@ -90,6 +90,13 @@ def acr_basis(df: pd.DataFrame, mode: str, products: list[str] | None = None) ->
         amount = df["monthly"]
         has_prod = pd.Series(True, index=df.index)
     out["amount"] = pd.to_numeric(amount, errors="coerce").astype(float)
+    # delta = 월매출 증감액(상품 선택 시 상품 슬롯 금액). R 감액 판정 등에 사용
+    out["delta"] = out["amount"]
+    if not sel:
+        # R 금액 = 재계약 후 월매출(변경매출, 리텐션). 2026-11 변경: A+C+R = A+C + R매출
+        # 상품 선택 시에는 변경매출을 상품별로 나눌 수 없어 상품 슬롯 금액(증감) 유지
+        is_r = df["acr_type"] == "R"
+        out.loc[is_r, "amount"] = pd.to_numeric(df.loc[is_r, "new_monthly"], errors="coerce").astype(float)
     out["has_product"] = has_prod
     confirmed = is_confirmed(df)
     reason = pd.Series(None, index=df.index, dtype=object)
@@ -113,7 +120,7 @@ def contributions(df: pd.DataFrame, mode: str, ym_from: int, ym_to: int,
                   products: list[str] | None = None) -> tuple[pd.DataFrame, pd.DataFrame]:
     """(월별 기여 행, 행별 basis). 기여 행: row·funnel_id·team·am_key·acr_type·ym·amount."""
     basis = acr_basis(df, mode, products)
-    cols = ["row", "funnel_id", "team", "am_key", "am", "acr_type", "ym", "amount"]
+    cols = ["row", "funnel_id", "team", "am_key", "am", "acr_type", "ym", "amount", "delta"]
     inc = df[basis["included"]]
     if inc.empty:
         return pd.DataFrame(columns=cols), basis
@@ -122,6 +129,7 @@ def contributions(df: pd.DataFrame, mode: str, ym_from: int, ym_to: int,
         "row": inc.index, "funnel_id": inc["funnel_id"].values, "team": inc["team"].values,
         "am_key": inc["am_key"].values, "am": inc["am"].values, "acr_type": inc["acr_type"].values,
         "amount": basis.loc[inc.index, "amount"].astype(float).values,
+        "delta": basis.loc[inc.index, "delta"].astype(float).values,
     })
     if mode == "term":
         # 시작월 포함 계약기간(월)만큼 반복, 종료 다음 달부터 제외(일할 없음)
@@ -145,6 +153,7 @@ def churn_contrib(df: pd.DataFrame, mode: str, ym_from: int, ym_to: int,
     if sub.empty:
         return {"amount": 0.0, "funnels": 0, "excluded": {}}
     sub["status"] = sub["acr_type"].map(C.ACR_CONFIRMED_STATUS)  # 계산 규칙 재사용을 위한 임시 치환(원본 불변)
+    sub["new_monthly"] = sub["monthly"]  # 해지는 감소액(월매출합계) 그대로 사용
     con, basis = contributions(sub, mode, ym_from, ym_to, products)
     ex = basis.loc[basis["excl_reason"].notna(), "excl_reason"]
     ex = ex.replace({EXCL_NOT_CONFIRMED: "ACR유형 미입력·비대상"})
@@ -165,7 +174,7 @@ def retention_contrib(df: pd.DataFrame, mode: str, ym_from: int, ym_to: int,
         return {"amount": 0.0, "prev_amount": 0.0, "funnels": 0, "excluded": {}, "na": None}
     out = {}
     for key, col in (("amount", "new_monthly"), ("prev_amount", "prev_monthly")):
-        con, basis = contributions(sub.assign(monthly=sub[col]), mode, ym_from, ym_to, None)
+        con, basis = contributions(sub.assign(monthly=sub[col], new_monthly=sub[col]), mode, ym_from, ym_to, None)
         out[key] = float(con["amount"].sum()) if len(con) else 0.0
         if key == "amount":
             out["funnels"] = int(con["row"].nunique()) if len(con) else 0
@@ -213,13 +222,13 @@ def compute_acr(df: pd.DataFrame, mode: str, ym_from: int, ym_to: int,
             return rows
         for k, g in con.groupby(key):
             sums = _type_sums(g)
-            rneg = g[(g["acr_type"] == "R") & (g["amount"] < 0)]
+            rneg = g[(g["acr_type"] == "R") & (g["delta"] < 0)]
             first = g.iloc[0]
             rows.append({
                 "key": k, **{c: first[c] for c in label_cols}, **sums,
                 "funnels": int(g["row"].nunique()),
                 "r_neg_count": int(rneg["row"].nunique()),
-                "r_neg_amount": float(rneg["amount"].sum()),
+                "r_neg_amount": float(rneg["delta"].sum()),
             })
         rows.sort(key=lambda x: -x["ACR"])
         return rows
