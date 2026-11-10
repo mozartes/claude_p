@@ -296,6 +296,21 @@
       ${kpiCard("해지확정", cnt(k.churn_count) + "건", "수주년월 기간 내 · 확정 ACR 합계 제외", "neg", { status: ["해지확정"], period: "win_ym" })}
       ${kpiCard("확인 필요 Funnel", cnt(k.check_count) + "건", `높음 등급 ${cnt(k.check_level1)}건 · 고유 Funnel`, "warn", { scope: "checks" })}
     </div>`;
+    {
+      const tk = d.total_kpi;
+      if (tk) {
+        const tdk = (extra) => Object.assign({ scope: "total" }, extra || {});
+        const tb = esc(`수주년월 ${tk.year}-01~${tk.year}-12 · 계약기간매출 합계`);
+        const exn = Object.values(tk.excluded || {}).reduce((x, y) => x + y, 0);
+        h += `<div class="card-head" style="margin-top:14px"><h3>ACR 수주(계약기간) · ${tk.year}년 수주</h3><span class="muted">확정 건의 계약 전체 기간 매출을 수주월에 합산 · R = 변경매출 × 계약기간${exn ? ` · 집계 제외 ${cnt(exn)}건` : ""} · 연도는 ACR 수주(계약기간) 화면에서 변경</span></div>
+        <div class="grid kpis">
+          ${kpiCard("A+C+R. 매출", amt(tk.ACR), `A+C ${amt(tk.AC)} + R ${amt(tk.R)} · Funnel ${cnt(tk.funnels)}건<br>${tb}`, "", tdk())}
+          ${kpiCard("A. 매출", amt(tk.A), `Funnel ${cnt(tk.funnels_A)}건<br>${tb}`, "a", tdk({ acr_type: ["A"] }))}
+          ${kpiCard("C. 매출", amt(tk.C), `Funnel ${cnt(tk.funnels_C)}건<br>${tb}`, "c", tdk({ acr_type: ["C"] }))}
+          ${kpiCard("R. 매출(리텐션)", amt(tk.R), `Funnel ${cnt(tk.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"})<br>${tb}`, "r", tdk({ acr_type: ["R"] }))}
+        </div>`;
+      }
+    }
     if (d.acr_excluded && Object.keys(d.acr_excluded).length) {
       h += `<div class="notice warn">확정 ACR 조건이지만 계산에서 제외된 건: ${Object.entries(d.acr_excluded).map(([r, n]) => `${esc(r)} ${n}건`).join(", ")} <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr_excluded" }))}'>목록 보기</span></div>`;
     }

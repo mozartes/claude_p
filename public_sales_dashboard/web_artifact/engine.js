@@ -731,6 +731,8 @@
       renewal_decrease: rowsOf(rDec, 10), renewal_decrease_count: rDec.length,
       churn: rowsOf(sortBy(churn, [[(r) => r.prev_monthly, false]]), 10),
       team_checks: teamChecks, priority: priorityRows(df, p, ck, 20),
+      // ACR 수주(계약기간) 화면과 같은 계산(수주년월 집계연도, 계약기간매출, R = 변경매출 × 계약기간)
+      total_kpi: (() => { const tv = totalView(ds, p); return Object.assign({ year: tv.year }, tv.totals, { excluded: tv.excluded }); })(),
       basis: {
         "ACR": `${MODES[p.mode]} · 매출발생년월 ${ymLabel(p.ym_from)}~${ymLabel(p.ym_to)}`,
         "진행 중": "현재상황 Pre Sales·제안완료 전체(기간 필터 미적용, 현재 상태 기준)",
