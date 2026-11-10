@@ -966,6 +966,12 @@
     total: "A+C. 매출", perf: "단순 수주율", data: "원본 건수" };
   function applyHero() {
     const v = $("view"); v.dataset.page = S.page;
+    // A/C/R 매출·기여매출 카드 이름도 유형 색 박스(A 파랑·C 노랑·R 주황)
+    v.querySelectorAll(".kpi").forEach((c) => {
+      const l = c.querySelector(".label"); if (!l || c.classList.contains("lbox")) return;
+      const m = l.textContent.trim().match(/^([ACR])\.? (기여)?매출$/);
+      if (m) c.classList.add("lbox", "lbox-" + m[1]);
+    });
     if (S.page === "overview" || !(S.page in HERO_LABEL)) return;
     const cards = Array.from(v.querySelectorAll(".kpi"));
     if (!cards.length || cards.some((c) => c.classList.contains("hero"))) return;

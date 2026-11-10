@@ -233,7 +233,8 @@ dl.basis dd { margin: 0; }
 #view[data-page="renewal"] .kpi.hero  { --hero-bg: #fff6e6; --hero-bd: #f2c27a; --hero-fg: #b45309; }
 #view[data-page="acr"] .kpi.hero      { --hero-bg: #ebf7ef; --hero-bd: #8fcca2; --hero-fg: #15803d; }
 #view[data-page="presales"] .kpi.hero { --hero-bg: #f4effc; --hero-bd: #c2acec; --hero-fg: #6d28d9; }
-#view[data-page="total"] .kpi.hero    { --hero-bg: #e8f6fd; --hero-bd: #86cbea; --hero-fg: #0369a1; }
+#view[data-page="total"] .kpi.hero    { --hero-bg: #f2eefc; --hero-bd: #bba9ea; --hero-fg: #5b3fb5; }
+#view[data-page="overview"] .kpi.hero { --hero-bg: #eef0fe; --hero-bd: #a5b4fc; --hero-fg: #4338ca; }
 #view[data-page="perf"] .kpi.hero     { --hero-bg: #fdeff3; --hero-bd: #eaa5b8; --hero-fg: #be185d; }
 #view[data-page="data"] .kpi.hero     { --hero-bg: #eff2f6; --hero-bd: #b4bfcf; --hero-fg: #334155; }
 @media (prefers-color-scheme: dark) {
@@ -241,7 +242,8 @@ dl.basis dd { margin: 0; }
   :root:not([data-theme="light"]) #view[data-page="renewal"] .kpi.hero  { --hero-bg: #33270f; --hero-bd: #a8762a; --hero-fg: #f3c27a; }
   :root:not([data-theme="light"]) #view[data-page="acr"] .kpi.hero      { --hero-bg: #142e1d; --hero-bd: #3c8f57; --hero-fg: #86d9a0; }
   :root:not([data-theme="light"]) #view[data-page="presales"] .kpi.hero { --hero-bg: #261d3d; --hero-bd: #7a5cc4; --hero-fg: #c9b4f5; }
-  :root:not([data-theme="light"]) #view[data-page="total"] .kpi.hero    { --hero-bg: #112a3a; --hero-bd: #2f86b3; --hero-fg: #8ad0f2; }
+  :root:not([data-theme="light"]) #view[data-page="total"] .kpi.hero    { --hero-bg: #241d3d; --hero-bd: #7660c0; --hero-fg: #c6b6f3; }
+  :root:not([data-theme="light"]) #view[data-page="overview"] .kpi.hero { --hero-bg: #1f2350; --hero-bd: #5a63c9; --hero-fg: #b4bcfb; }
   :root:not([data-theme="light"]) #view[data-page="perf"] .kpi.hero     { --hero-bg: #351a25; --hero-bd: #b05476; --hero-fg: #f2a6c0; }
   :root:not([data-theme="light"]) #view[data-page="data"] .kpi.hero     { --hero-bg: #1f2632; --hero-bd: #5a6a82; --hero-fg: #c5cfdd; }
 }
@@ -249,6 +251,12 @@ dl.basis dd { margin: 0; }
 :root[data-theme="dark"] #view[data-page="renewal"] .kpi.hero  { --hero-bg: #33270f; --hero-bd: #a8762a; --hero-fg: #f3c27a; }
 :root[data-theme="dark"] #view[data-page="acr"] .kpi.hero      { --hero-bg: #142e1d; --hero-bd: #3c8f57; --hero-fg: #86d9a0; }
 :root[data-theme="dark"] #view[data-page="presales"] .kpi.hero { --hero-bg: #261d3d; --hero-bd: #7a5cc4; --hero-fg: #c9b4f5; }
-:root[data-theme="dark"] #view[data-page="total"] .kpi.hero    { --hero-bg: #112a3a; --hero-bd: #2f86b3; --hero-fg: #8ad0f2; }
+:root[data-theme="dark"] #view[data-page="total"] .kpi.hero    { --hero-bg: #241d3d; --hero-bd: #7660c0; --hero-fg: #c6b6f3; }
+:root[data-theme="dark"] #view[data-page="overview"] .kpi.hero { --hero-bg: #1f2350; --hero-bd: #5a63c9; --hero-fg: #b4bcfb; }
 :root[data-theme="dark"] #view[data-page="perf"] .kpi.hero     { --hero-bg: #351a25; --hero-bd: #b05476; --hero-fg: #f2a6c0; }
 :root[data-theme="dark"] #view[data-page="data"] .kpi.hero     { --hero-bg: #1f2632; --hero-bd: #5a6a82; --hero-fg: #c5cfdd; }
+/* A/C/R 매출·기여매출 카드 이름 박스(유형 색, 연한 배경) */
+.kpi.lbox .label { display: inline-block; font-size: 15px; font-weight: 700; border-radius: 7px; padding: 2px 10px; margin-bottom: 2px; border: 1.5px solid; }
+.kpi.lbox-A .label { background: var(--ta-bg); color: var(--ta-fg); border-color: color-mix(in srgb, var(--ta-fg) 35%, transparent); }
+.kpi.lbox-C .label { background: var(--tc-bg); color: var(--tc-fg); border-color: color-mix(in srgb, var(--tc-fg) 35%, transparent); }
+.kpi.lbox-R .label { background: var(--tr-bg); color: var(--tr-fg); border-color: color-mix(in srgb, var(--tr-fg) 35%, transparent); }
