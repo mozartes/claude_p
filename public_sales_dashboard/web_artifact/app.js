@@ -309,13 +309,13 @@
     const pb = `${ml} · ${S.f.ym_from}~${S.f.ym_to} 합계`;
     const rt = k.retention || { amount: null, na: "자료 없음" };
     let h = sampleNote;
-    // 1줄: ACR 수주(계약기간) — ACR 수주(계약기간) 화면과 같은 계산
+    // 1줄: ACR 수주(연도) — ACR 수주(계약기간) 화면과 같은 계산
     const tk = d.total_kpi;
     if (tk) {
       const tdk = (extra) => Object.assign({ scope: "total" }, extra || {});
       const tb = esc(`수주년월 ${tk.year}-01~${tk.year}-12 · 계약기간매출 합계`);
       const exn = Object.values(tk.excluded || {}).reduce((x, y) => x + y, 0);
-      h += `<div class="card-head"><h3>ACR 수주(계약기간) · ${tk.year}년 수주</h3><span class="muted">확정 건의 계약 전체 기간 매출을 수주월에 합산 · R = 변경매출 × 계약기간${exn ? ` · 집계 제외 ${cnt(exn)}건` : ""} · 연도는 ACR 수주(계약기간) 화면에서 변경</span></div>
+      h += `<div class="card-head"><h3>ACR 수주(${tk.year}년)</h3><span class="muted">확정 건의 계약 전체 기간 매출을 수주월에 합산 · R = 변경매출 × 계약기간${exn ? ` · 집계 제외 ${cnt(exn)}건` : ""} · 연도는 ACR 수주(계약기간) 화면에서 변경</span></div>
       <div class="grid kpis">
         ${kpiCard("A+C. 매출", amt(tk.AC), `A ${amt(tk.A)} + C ${amt(tk.C)} · Funnel ${cnt(tk.funnels_A + tk.funnels_C)}건<br>${tb}`, "", tdk({ acr_type: ["A", "C"] }))}
         ${kpiCard("A. 매출", amt(tk.A), `Funnel ${cnt(tk.funnels_A)}건<br>${tb}`, "a", tdk({ acr_type: ["A"] }))}
