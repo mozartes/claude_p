@@ -317,7 +317,7 @@
       const exn = Object.values(tk.excluded || {}).reduce((x, y) => x + y, 0);
       h += `<div class="card-head"><h3>ACR 수주(계약기간) · ${tk.year}년 수주</h3><span class="muted">확정 건의 계약 전체 기간 매출을 수주월에 합산 · R = 변경매출 × 계약기간${exn ? ` · 집계 제외 ${cnt(exn)}건` : ""} · 연도는 ACR 수주(계약기간) 화면에서 변경</span></div>
       <div class="grid kpis">
-        ${kpiCard("A+C+R. 매출", amt(tk.ACR), `A+C ${amt(tk.AC)} + R ${amt(tk.R)} · Funnel ${cnt(tk.funnels)}건<br>${tb}`, "", tdk())}
+        ${kpiCard("A+C. 매출", amt(tk.AC), `A ${amt(tk.A)} + C ${amt(tk.C)} · Funnel ${cnt(tk.funnels_A + tk.funnels_C)}건<br>${tb}`, "", tdk({ acr_type: ["A", "C"] }))}
         ${kpiCard("A. 매출", amt(tk.A), `Funnel ${cnt(tk.funnels_A)}건<br>${tb}`, "a", tdk({ acr_type: ["A"] }))}
         ${kpiCard("C. 매출", amt(tk.C), `Funnel ${cnt(tk.funnels_C)}건<br>${tb}`, "c", tdk({ acr_type: ["C"] }))}
         ${kpiCard("R. 매출(리텐션)", amt(tk.R), `Funnel ${cnt(tk.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"})<br>${tb}`, "r", tdk({ acr_type: ["R"] }))}
@@ -328,7 +328,7 @@
       : `재계약 후 월매출(변경매출) · 재계약완료 ${cnt(a.funnels_R)}건<br>기존매출 유지 ${amt(rt.prev_amount)} → 증감 ${amt(rt.amount - rt.prev_amount)}`;
     h += `<div class="card-head" style="margin-top:14px"><h3>기여매출 · ${esc(S.f.ym_from)}~${esc(S.f.ym_to)}</h3><span class="muted">확정 ACR · ${esc(ml)} · 매출발생년월 기준 조회기간 반영분 · R = 재계약 후 월매출(리텐션)</span></div>
     <div class="grid kpis">
-      ${kpiCard("A+C+R 기여매출", amt(a.ACR), `A+C ${amt(a.AC)} + R ${amt(a.R)} · 고유 Funnel ${cnt(a.funnels)}건<br>${esc(pb)}`, "", { scope: "acr" })}
+      ${kpiCard("A+C 기여매출", amt(a.AC), `A ${amt(a.A)} + C ${amt(a.C)} · Funnel ${cnt(a.funnels_A + a.funnels_C)}건<br>${esc(pb)}`, "", { scope: "acr", acr_type: ["A", "C"] })}
       ${kpiCard("A 기여매출", amt(a.A), `Funnel ${cnt(a.funnels_A)}건<br>${esc(pb)}`, "a", { scope: "acr", acr_type: ["A"] })}
       ${kpiCard("C 기여매출", amt(a.C), `Funnel ${cnt(a.funnels_C)}건<br>${esc(pb)}`, "c", { scope: "acr", acr_type: ["C"] })}
       ${kpiCard("R 기여매출", amt(a.R), `${rSub}<br>${esc(pb)}`, "r", { scope: "acr", acr_type: ["R"] })}
