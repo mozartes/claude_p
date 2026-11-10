@@ -338,7 +338,7 @@
     <div class="grid kpis">
       ${(() => { const ch = k.churn_acr || { amount: 0, funnels: 0, excluded: {} }; const exn = Object.values(ch.excluded).reduce((x, y) => x + y, 0);
         const rd = rt.amount === null ? a.R : rt.amount - rt.prev_amount;  // R 증감액
-        return kpiCard("R+해지 기여매출", amt(rd + ch.amount), `R 증감 ${amt(rd)} + 해지 ${amt(ch.amount)} (해지확정 ${cnt(ch.funnels)}건${exn ? ` · 계산 제외 ${cnt(exn)}건` : ""})<br>${esc(`${pb} · A+C+R에 미포함`)}`, "neg", { status: ["해지확정"], period: "rev_ym" }); })()}
+        return kpiCard("리텐션 재계약 및 해지 감소 매출", amt(rd + ch.amount), `R 증감 ${amt(rd)} + 해지 ${amt(ch.amount)} (해지확정 ${cnt(ch.funnels)}건${exn ? ` · 계산 제외 ${cnt(exn)}건` : ""})<br>${esc(`${pb} · A+C+R에 미포함`)}`, "neg", { status: ["해지확정"], period: "rev_ym" }); })()}
     </div>`;
     if (d.acr_excluded && Object.keys(d.acr_excluded).length) {
       h += `<div class="notice warn">확정 ACR 조건이지만 계산에서 제외된 건: ${Object.entries(d.acr_excluded).map(([r, n]) => `${esc(r)} ${n}건`).join(", ")} <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr_excluded" }))}'>목록 보기</span></div>`;
