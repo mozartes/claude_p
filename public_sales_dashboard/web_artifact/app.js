@@ -450,11 +450,11 @@
     const kb = esc(`${lbl} · ${S.f.ym_from}~${S.f.ym_to}`);
     let h = `<div class="notice info"><b>${esc(d.mode_label)}</b> — ${esc(d.basis["주의"])}</div>
     <div class="grid kpis">
-      ${kpiCard("A. 누적매출", amt(t.A), `Funnel ${cnt(t.funnels_A)}건<br>${kb}`, "a", { scope: "acr", acr_type: ["A"] })}
-      ${kpiCard("C. 누적매출", amt(t.C), `Funnel ${cnt(t.funnels_C)}건<br>${kb}`, "c", { scope: "acr", acr_type: ["C"] })}
-      ${kpiCard("R. 누적매출", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (재계약 증감)<br>${kb}`, "r", { scope: "acr", acr_type: ["R"] })}
-      ${kpiCard("A+C. 누적매출", amt(t.AC), `Funnel ${cnt(t.funnels_A + t.funnels_C)}건<br>${kb}`, "", { scope: "acr", acr_type: ["A", "C"] })}
-      ${kpiCard("A+C+R. 누적매출", amt(t.ACR), `고유 Funnel ${cnt(t.funnels)}건<br>${kb}`, "", { scope: "acr" })}
+      ${kpiCard("A. 매출", amt(t.A), `Funnel ${cnt(t.funnels_A)}건<br>${kb}`, "a", { scope: "acr", acr_type: ["A"] })}
+      ${kpiCard("C. 매출", amt(t.C), `Funnel ${cnt(t.funnels_C)}건<br>${kb}`, "c", { scope: "acr", acr_type: ["C"] })}
+      ${kpiCard("R. 매출", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (재계약 증감)<br>${kb}`, "r", { scope: "acr", acr_type: ["R"] })}
+      ${kpiCard("A+C. 매출", amt(t.AC), `Funnel ${cnt(t.funnels_A + t.funnels_C)}건<br>${kb}`, "", { scope: "acr", acr_type: ["A", "C"] })}
+      ${kpiCard("A+C+R. 매출", amt(t.ACR), `고유 Funnel ${cnt(t.funnels)}건<br>${kb}`, "", { scope: "acr" })}
       ${kpiCard("고유 Funnel 건수", cnt(t.funnels) + "건", "월별 반복 반영 횟수 아님", "", { scope: "acr" })}
     </div>
     ${Object.keys(d.excluded).length ? `<div class="notice warn">확정 조건이지만 이 지표에서 제외: ${Object.entries(d.excluded).map(([r, n]) => `${esc(r)} ${n}건`).join(", ")} <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr_excluded" }))}'>목록 보기</span></div>` : ""}
