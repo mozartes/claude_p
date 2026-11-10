@@ -342,3 +342,15 @@ def test_r_plus_churn_separate(make_ds):
     assert k["acr"]["R"] == -2 * 10
     assert k["churn_acr"]["amount"] == -5 * 7 and k["churn_acr"]["funnels"] == 1
     assert sum(k["churn_acr"]["excluded"].values()) == 1
+
+
+def test_retention_revenue(make_ds):
+    """R매출(리텐션) = 재계약완료 건의 변경매출을 계약기간 반영. 증감(R 기여매출)과 별도"""
+    import analytics as A
+    ds = make_ds([row(type="Ret.", status="재계약완료", monthly=-2, 기존매출=10, 변경매출=8, rev=202603, term=12),
+                  row(type="Ret.", status="해지확정", monthly=-5, 기존매출=5, 변경매출=0, rev=202606, term=12)])
+    p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12"})
+    k = A.overview_view(ds, p)["kpi"]
+    assert k["acr"]["R"] == -20
+    assert k["retention"]["amount"] == 80 and k["retention"]["prev_amount"] == 100 and k["retention"]["funnels"] == 1
+    assert A.overview_view(ds, A.parse_params({"ym_from": "2026-01", "ym_to": "2026-12", "products": ["국내전용"]}))["kpi"]["retention"]["amount"] is None

@@ -153,6 +153,29 @@ def churn_contrib(df: pd.DataFrame, mode: str, ym_from: int, ym_to: int,
             "excluded": {str(k): int(v) for k, v in ex.value_counts().sort_index().items()}}
 
 
+def retention_contrib(df: pd.DataFrame, mode: str, ym_from: int, ym_to: int,
+                      products: list[str] | None = None) -> dict:
+    """R매출(리텐션): 재계약완료 건의 재계약 후 월매출(변경매출)을 R과 같은 규칙(매출발생년월·계약기간)으로 반영.
+    증감(R 기여매출)이 아니라 재계약으로 확보한 매출 전체. 기존매출 유지분도 같은 규칙으로 함께 산출. 합계 지표와 별도."""
+    if products:
+        return {"amount": None, "prev_amount": None, "funnels": 0, "excluded": {},
+                "na": "상품 선택 시 산출 안 함(변경매출은 상품별 값이 없음)"}
+    sub = df[(df["acr_type"] == "R") & (df["status"] == C.ACR_CONFIRMED_STATUS["R"])]
+    if sub.empty:
+        return {"amount": 0.0, "prev_amount": 0.0, "funnels": 0, "excluded": {}, "na": None}
+    out = {}
+    for key, col in (("amount", "new_monthly"), ("prev_amount", "prev_monthly")):
+        con, basis = contributions(sub.assign(monthly=sub[col]), mode, ym_from, ym_to, None)
+        out[key] = float(con["amount"].sum()) if len(con) else 0.0
+        if key == "amount":
+            out["funnels"] = int(con["row"].nunique()) if len(con) else 0
+            ex = basis.loc[basis["excl_reason"].notna(), "excl_reason"]
+            ex = ex.replace({EXCL_MONTHLY: "변경매출 누락·숫자 오류"})
+            out["excluded"] = {str(k): int(v) for k, v in ex.value_counts().sort_index().items()}
+    out["na"] = None
+    return out
+
+
 def _type_sums(g: pd.DataFrame) -> dict:
     s = g.groupby("acr_type")["amount"].sum() if len(g) else pd.Series(dtype=float)
     a, c, r = float(s.get("A", 0.0)), float(s.get("C", 0.0)), float(s.get("R", 0.0))
