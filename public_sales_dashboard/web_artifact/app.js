@@ -1013,12 +1013,26 @@
     render();
     window.scrollTo(0, 0);
   }
+  // 메뉴별 핵심 카드 강조(종합 현황은 화면 코드에서 직접 지정). 라벨 앞부분으로 찾고, 없으면 첫 카드
+  const HERO_LABEL = { funnel: "진행 중 A/C · 이번 달", renewal: "재계약완료", acr: "A+C. 기여매출", presales: "A. 예상매출",
+    total: "A+C. 매출", perf: "단순 수주율", data: "원본 건수" };
+  function applyHero() {
+    const v = $("view"); v.dataset.page = S.page;
+    if (S.page === "overview" || !(S.page in HERO_LABEL)) return;
+    const cards = Array.from(v.querySelectorAll(".kpi"));
+    if (!cards.length || cards.some((c) => c.classList.contains("hero"))) return;
+    const want = HERO_LABEL[S.page];
+    const hit = cards.find((c) => { const l = c.querySelector(".label"); return l && l.textContent.trim().startsWith(want); }) || cards[0];
+    hit.classList.add("hero");
+  }
   async function render() {
     destroyCharts();
     loading();
     $("pageTitle").textContent = PAGE_TITLES[S.page];
     S.last = { basisView: BASIS_VIEW[S.page] };
+    $("view").dataset.page = S.page;
     try { await PAGES[S.page](); } catch (e) { errorState(e.message); }
+    applyHero();
   }
   async function loadMeta(keepFilters) {
     S.meta = await api("/meta");
@@ -1102,5 +1116,6 @@
     const h = (location.hash || "").replace("#", "");
     go(PAGES[h] ? h : (PSD.getDataset().empty ? "data" : "overview"));
   }
+  new MutationObserver(() => applyHero()).observe($("view"), { childList: true });
   init();
 })();

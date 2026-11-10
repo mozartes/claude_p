@@ -202,10 +202,30 @@ dl.basis dd { margin: 0; }
 .seg-light button { border: 0; background: transparent; color: var(--text-2); padding: 3px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; }
 .seg-light button.on { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: var(--shadow); }
 
-/* 종합 현황 핵심 카드(A+C) 강조: 큰 글씨 + 박스 */
-.kpi.hero { border: 2px solid var(--primary); background: var(--primary-weak); box-shadow: 0 1px 4px rgba(37, 99, 235, .12); }
-.kpi.hero .label { font-size: 14.5px; font-weight: 700; color: var(--text); }
-.kpi.hero .value { font-size: 30px; color: var(--primary); }
-.kpi.hero .meta { font-size: 12.5px; color: var(--text-2); }
-.kpi.hero .bar { width: 5px; }
-@media (max-width: 720px) { .kpi.hero .value { font-size: 24px; } }
+/* 핵심 카드 강조: 숫자 크기는 그대로, 카드 이름만 크게 + 박스. 메뉴별 연한 색(종합 현황=파랑) */
+.kpi.hero { --hero-bg: var(--primary-weak); --hero-bd: var(--primary); --hero-fg: var(--primary); }
+.kpi.hero .label { display: inline-block; font-size: 15px; font-weight: 700; color: var(--hero-fg);
+  background: var(--hero-bg); border: 1.5px solid var(--hero-bd); border-radius: 7px; padding: 2px 10px; margin-bottom: 2px; }
+#view[data-page="funnel"] .kpi.hero   { --hero-bg: #e8f6f4; --hero-bd: #7cc6bc; --hero-fg: #0f766e; }
+#view[data-page="renewal"] .kpi.hero  { --hero-bg: #fff6e6; --hero-bd: #f2c27a; --hero-fg: #b45309; }
+#view[data-page="acr"] .kpi.hero      { --hero-bg: #ebf7ef; --hero-bd: #8fcca2; --hero-fg: #15803d; }
+#view[data-page="presales"] .kpi.hero { --hero-bg: #f4effc; --hero-bd: #c2acec; --hero-fg: #6d28d9; }
+#view[data-page="total"] .kpi.hero    { --hero-bg: #e8f6fd; --hero-bd: #86cbea; --hero-fg: #0369a1; }
+#view[data-page="perf"] .kpi.hero     { --hero-bg: #fdeff3; --hero-bd: #eaa5b8; --hero-fg: #be185d; }
+#view[data-page="data"] .kpi.hero     { --hero-bg: #eff2f6; --hero-bd: #b4bfcf; --hero-fg: #334155; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #view[data-page="funnel"] .kpi.hero   { --hero-bg: #13302d; --hero-bd: #2f8f83; --hero-fg: #7fd8cc; }
+  :root:not([data-theme="light"]) #view[data-page="renewal"] .kpi.hero  { --hero-bg: #33270f; --hero-bd: #a8762a; --hero-fg: #f3c27a; }
+  :root:not([data-theme="light"]) #view[data-page="acr"] .kpi.hero      { --hero-bg: #142e1d; --hero-bd: #3c8f57; --hero-fg: #86d9a0; }
+  :root:not([data-theme="light"]) #view[data-page="presales"] .kpi.hero { --hero-bg: #261d3d; --hero-bd: #7a5cc4; --hero-fg: #c9b4f5; }
+  :root:not([data-theme="light"]) #view[data-page="total"] .kpi.hero    { --hero-bg: #112a3a; --hero-bd: #2f86b3; --hero-fg: #8ad0f2; }
+  :root:not([data-theme="light"]) #view[data-page="perf"] .kpi.hero     { --hero-bg: #351a25; --hero-bd: #b05476; --hero-fg: #f2a6c0; }
+  :root:not([data-theme="light"]) #view[data-page="data"] .kpi.hero     { --hero-bg: #1f2632; --hero-bd: #5a6a82; --hero-fg: #c5cfdd; }
+}
+:root[data-theme="dark"] #view[data-page="funnel"] .kpi.hero   { --hero-bg: #13302d; --hero-bd: #2f8f83; --hero-fg: #7fd8cc; }
+:root[data-theme="dark"] #view[data-page="renewal"] .kpi.hero  { --hero-bg: #33270f; --hero-bd: #a8762a; --hero-fg: #f3c27a; }
+:root[data-theme="dark"] #view[data-page="acr"] .kpi.hero      { --hero-bg: #142e1d; --hero-bd: #3c8f57; --hero-fg: #86d9a0; }
+:root[data-theme="dark"] #view[data-page="presales"] .kpi.hero { --hero-bg: #261d3d; --hero-bd: #7a5cc4; --hero-fg: #c9b4f5; }
+:root[data-theme="dark"] #view[data-page="total"] .kpi.hero    { --hero-bg: #112a3a; --hero-bd: #2f86b3; --hero-fg: #8ad0f2; }
+:root[data-theme="dark"] #view[data-page="perf"] .kpi.hero     { --hero-bg: #351a25; --hero-bd: #b05476; --hero-fg: #f2a6c0; }
+:root[data-theme="dark"] #view[data-page="data"] .kpi.hero     { --hero-bg: #1f2632; --hero-bd: #5a6a82; --hero-fg: #c5cfdd; }
