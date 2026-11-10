@@ -477,7 +477,7 @@
     <div class="grid kpis">
       ${kpiCard("A. 기여매출", amt(t.A), `Funnel ${cnt(t.funnels_A)}건<br>${kb}`, "a", { scope: "acr", acr_type: ["A"] })}
       ${kpiCard("C. 기여매출", amt(t.C), `Funnel ${cnt(t.funnels_C)}건<br>${kb}`, "c", { scope: "acr", acr_type: ["C"] })}
-      ${kpiCard("R. 매출(리텐션)", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감" : "재계약 후 월매출"})<br>${kb}`, "r", { scope: "acr", acr_type: ["R"] })}
+      ${kpiCard("R. 기여매출", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감" : "재계약 후 월매출"})<br>${kb}`, "r", { scope: "acr", acr_type: ["R"] })}
       ${kpiCard("A+C. 기여매출", amt(t.AC), `Funnel ${cnt(t.funnels_A + t.funnels_C)}건<br>${kb}`, "", { scope: "acr", acr_type: ["A", "C"] })}
       ${kpiCard("A+C+R. 기여매출", amt(t.ACR), `A+C ${amt(t.AC)} + R ${amt(t.R)} · 고유 Funnel ${cnt(t.funnels)}건<br>${kb}`, "", { scope: "acr" })}
       ${kpiCard("고유 Funnel 건수", cnt(t.funnels) + "건", "월별 반복 반영 횟수 아님", "", { scope: "acr" })}
