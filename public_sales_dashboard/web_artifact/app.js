@@ -326,7 +326,7 @@
     // 2줄: 기여매출 — 조회기간 매출발생 반영분(ACR 기준), R = 재계약 후 월매출(리텐션)
     const rSub = rt.amount === null ? `재계약완료 Funnel ${cnt(a.funnels_R)}건 · 상품 선택: 재계약 증감 기준`
       : `재계약 후 월매출(변경매출) · 재계약완료 ${cnt(a.funnels_R)}건<br>기존매출 유지 ${amt(rt.prev_amount)} → 증감 ${amt(rt.amount - rt.prev_amount)}`;
-    h += `<div class="card-head" style="margin-top:14px"><h3>기여매출 · ${esc(S.f.ym_from)}~${esc(S.f.ym_to)}</h3><span class="muted">확정 ACR · ${esc(ml)} · 매출발생년월 기준 조회기간 반영분 · R = 재계약 후 월매출(리텐션)</span></div>
+    h += `<div class="card-head" style="margin-top:14px"><h3>해당기간 기여매출 · ${esc(S.f.ym_from)}~${esc(S.f.ym_to)}</h3><span class="muted">확정 ACR · ${esc(ml)} · 매출발생년월 기준 조회기간 반영분 · R = 재계약 후 월매출(리텐션)</span></div>
     <div class="grid kpis">
       ${kpiCard("A+C 기여매출", amt(a.AC), `A ${amt(a.A)} + C ${amt(a.C)} · Funnel ${cnt(a.funnels_A + a.funnels_C)}건<br>${esc(pb)}`, "", { scope: "acr", acr_type: ["A", "C"] })}
       ${kpiCard("A 기여매출", amt(a.A), `Funnel ${cnt(a.funnels_A)}건<br>${esc(pb)}`, "a", { scope: "acr", acr_type: ["A"] })}
