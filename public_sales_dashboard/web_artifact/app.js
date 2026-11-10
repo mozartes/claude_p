@@ -310,10 +310,13 @@
       ${kpiCard("A+C 기여매출", amt(a.AC), `A ${amt(a.A)} · C ${amt(a.C)} · Funnel ${cnt(a.funnels_A + a.funnels_C)}건<br>${esc(accBasis)}`, "a", acDrill)}
       ${(() => { const rt = k.retention || { amount: null, na: "자료 없음" }; const exn = Object.values(rt.excluded || {}).reduce((x, y) => x + y, 0);
         if (rt.amount === null) return kpiCard("R매출(리텐션)", "—", esc(rt.na || "자료 없음"), "r", null);
-        return kpiCard("R매출(리텐션)", amt(rt.amount), `재계약 후 월매출(변경매출) 기준 · 재계약완료 ${cnt(rt.funnels)}건${exn ? ` · 계산 제외 ${cnt(exn)}건` : ""}<br>기존매출 유지 ${amt(rt.prev_amount)} → 증감 ${amt(rt.amount - rt.prev_amount)}<br>${esc(`${ml} · ${S.f.ym_from}~${S.f.ym_to} 합계 · A+C+R에 미포함`)}`, "r", { scope: "acr", acr_type: ["R"] }); })()}
+        return kpiCard("R매출(리텐션)", amt(rt.amount), `재계약 후 월매출(변경매출) 기준 · 재계약완료 ${cnt(rt.funnels)}건${exn ? ` · 계산 제외 ${cnt(exn)}건` : ""}<br>기존매출 유지 ${amt(rt.prev_amount)} → 증감 ${amt(rt.amount - rt.prev_amount)}<br>${esc(`${ml} · ${S.f.ym_from}~${S.f.ym_to} 합계 · A+C+R에 포함`)}`, "r", { scope: "acr", acr_type: ["R"] }); })()}
       ${(() => { const ch = k.churn_acr || { amount: 0, funnels: 0, excluded: {} }; const exn = Object.values(ch.excluded).reduce((x, y) => x + y, 0);
         return kpiCard("R+해지 기여매출", amt(a.R + ch.amount), `R ${amt(a.R)} + 해지 ${amt(ch.amount)} (해지확정 ${cnt(ch.funnels)}건${exn ? ` · 계산 제외 ${cnt(exn)}건` : ""})<br>${esc(`${ml} · ${S.f.ym_from}~${S.f.ym_to} 합계 · A+C+R에 미포함`)}`, "neg", { status: ["해지확정"], period: "rev_ym" }); })()}
-      ${kpiCard("A+C+R 기여매출", amt(a.ACR), `고유 Funnel ${cnt(a.funnels)}건<br>${esc(accBasis)}`, "", { scope: "acr" })}
+      ${(() => { const rt = k.retention || { amount: null };
+        // A+C+R 기여매출 = A+C 기여매출 + R매출(리텐션). 상품 선택 시 R매출을 산출하지 않으므로 표시 안 함
+        if (rt.amount === null) return kpiCard("A+C+R 기여매출", "—", `R매출(리텐션) 미산출: ${esc(rt.na || "자료 없음")}`, "", { scope: "acr" });
+        return kpiCard("A+C+R 기여매출", amt(a.AC + rt.amount), `A+C ${amt(a.AC)} + R매출 ${amt(rt.amount)} · Funnel ${cnt(a.funnels_A + a.funnels_C + rt.funnels)}건<br>${esc(`${ml} · ${S.f.ym_from}~${S.f.ym_to} 합계`)}`, "", { scope: "acr" }); })()}
       ${kpiCard("진행 중 A/C Funnel", cnt(k.prog_ac_count) + "건", `계약기간매출 ${amt(k.prog_ac_amount.total)}${k.prog_ac_amount.neg_count ? ` (음수 ${k.prog_ac_amount.neg_count}건 ${amt(k.prog_ac_amount.negative)})` : ""}`, "", { scope: "in_progress", acr_type: ["A", "C"] })}
       ${kpiCard("진행 중 재계약(R)", cnt(k.prog_r_count) + "건", `기존 월매출 ${amt(k.prog_r_prev)}`, "", { scope: "in_progress", acr_type: ["R"] })}
       ${kpiCard("해지확정", cnt(k.churn_count) + "건", "수주년월 기간 내 · 확정 ACR 합계 제외", "neg", { status: ["해지확정"], period: "win_ym" })}
