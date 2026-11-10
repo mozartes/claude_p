@@ -731,7 +731,7 @@
       renewal_decrease: rowsOf(rDec, 10), renewal_decrease_count: rDec.length,
       churn: rowsOf(sortBy(churn, [[(r) => r.prev_monthly, false]]), 10),
       team_checks: teamChecks, priority: priorityRows(df, p, ck, 20),
-      // ACR 수주(계약기간) 화면과 같은 계산(수주년월 집계연도, 계약기간매출, R = 변경매출 × 계약기간)
+      // ACR 수주(연도) 화면과 같은 계산(수주년월 집계연도, 계약기간매출, R = 변경매출 × 계약기간)
       total_kpi: (() => { const tv = totalView(ds, p); return Object.assign({ year: tv.year }, tv.totals, { excluded: tv.excluded }); })(),
       basis: {
         "ACR": `${MODES[p.mode]} · 매출발생년월 ${ymLabel(p.ym_from)}~${ymLabel(p.ym_to)}`,
@@ -1019,7 +1019,7 @@
     };
   }
 
-  // ================================================================ 화면: ACR 수주(계약기간)
+  // ================================================================ 화면: ACR 수주(연도) — 구 ACR 수주(계약기간)
   function totalRows(df, p) {
     const lo = p.total_year * 100 + 1, hi = p.total_year * 100 + 12;
     const sel = new Set(p.products);

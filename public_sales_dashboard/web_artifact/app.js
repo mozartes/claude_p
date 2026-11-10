@@ -17,7 +17,7 @@
   const SERIES_LABEL = { A: "A", C: "C", R: "R", AC: "A+C", ACR: "A+C+R" };
   const UNIT_WON = { "원": 1, "천원": 1e3, "백만원": 1e6, "억원": 1e8 };
   const PAGE_TITLES = {
-    overview: "종합 현황", funnel: "수주·Funnel 관리", renewal: "재계약·해지 관리", acr: "ACR 수주", presales: "ACR 수주(Pre-sales)", total: "ACR 수주(계약기간)",
+    overview: "종합 현황", funnel: "수주·Funnel 관리", renewal: "재계약·해지 관리", acr: "ACR 수주", presales: "ACR 수주(Pre-sales)", total: "ACR 수주(2026년)",
     team: "팀·AM 관리", perf: "AM 성과·활동 점검", insight: "고객·상품·입찰 분석", priority: "우선 확인할 Funnel", detail: "상세 목록", data: "데이터 관리",
   };
 
@@ -309,13 +309,13 @@
     const pb = `${ml} · ${S.f.ym_from}~${S.f.ym_to} 합계`;
     const rt = k.retention || { amount: null, na: "자료 없음" };
     let h = sampleNote;
-    // 1줄: ACR 수주(연도) — ACR 수주(계약기간) 화면과 같은 계산
+    // 1줄: ACR 수주(연도) — ACR 수주(연도) 화면과 같은 계산
     const tk = d.total_kpi;
     if (tk) {
       const tdk = (extra) => Object.assign({ scope: "total" }, extra || {});
       const tb = esc(`수주년월 ${tk.year}-01~${tk.year}-12 · 계약기간매출 합계`);
       const exn = Object.values(tk.excluded || {}).reduce((x, y) => x + y, 0);
-      h += `<div class="card-head"><h3>ACR 수주(${tk.year}년)</h3><span class="muted">확정 건의 계약 전체 기간 매출을 수주월에 합산 · R = 변경매출 × 계약기간${exn ? ` · 집계 제외 ${cnt(exn)}건` : ""} · 연도는 ACR 수주(계약기간) 화면에서 변경</span></div>
+      h += `<div class="card-head"><h3>ACR 수주(${tk.year}년)</h3><span class="muted">확정 건의 계약 전체 기간 매출을 수주월에 합산 · R = 변경매출 × 계약기간${exn ? ` · 집계 제외 ${cnt(exn)}건` : ""} · 연도는 ACR 수주(연도) 화면에서 변경</span></div>
       <div class="grid kpis">
         ${kpiCard("A+C. 매출", amt(tk.AC), `A ${amt(tk.A)} + C ${amt(tk.C)} · Funnel ${cnt(tk.funnels_A + tk.funnels_C)}건<br>${tb}`, "", tdk({ acr_type: ["A", "C"] }))}
         ${kpiCard("A. 매출", amt(tk.A), `Funnel ${cnt(tk.funnels_A)}건<br>${tb}`, "a", tdk({ acr_type: ["A"] }))}
@@ -616,13 +616,16 @@
         onClick: (e, els) => { if (els.length) openDetail({ scope: "in_progress", acr_type: [tab], period: "rev_ym", prob_band: labels[els[0].index] }); } } });
   }
 
-  // ------------------------------------------------------------ 페이지: ACR 수주(계약기간)
+  // ------------------------------------------------------------ 페이지: ACR 수주(연도) — 구 ACR 수주(계약기간)
   async function pageTotal() {
     const j = await api("/view/total", { filters: S.f });
     setHeader(j);
     const d = j.data;
     if (d.empty) { $("view").innerHTML = emptyState(); return; }
     const t = d.totals, y = d.year, rf = d.r_ref;
+    // 메뉴·제목에 집계연도 표시
+    $("pageTitle").textContent = `ACR 수주(${y}년)`;
+    document.querySelectorAll('[data-page="total"]').forEach((b) => { b.textContent = `ACR 수주(${y}년)`; });
     const years = Array.from(new Set((S.meta.options.years || []).concat([y]))).sort((a, b) => a - b);
     const kb = esc(`수주년월 ${y}-01~${y}-12 · 계약기간매출 합계`);
     const dk = (extra) => Object.assign({ scope: "total" }, extra || {});
@@ -632,7 +635,7 @@
     <div class="grid kpis">
       ${kpiCard("A. 매출", amt(t.A), `Funnel ${cnt(t.funnels_A)}건<br>${kb}`, "a", dk({ acr_type: ["A"] }))}
       ${kpiCard("C. 매출", amt(t.C), `Funnel ${cnt(t.funnels_C)}건<br>${kb}`, "c", dk({ acr_type: ["C"] }))}
-      ${kpiCard("R. 매출(리텐션)", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"})<br>${kb}`, "r", dk({ acr_type: ["R"] }))}
+      ${kpiCard("R. 매출", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"})<br>${kb}`, "r", dk({ acr_type: ["R"] }))}
       ${kpiCard("A+C. 매출", amt(t.AC), `Funnel ${cnt(t.funnels_A + t.funnels_C)}건<br>${kb}`, "", dk({ acr_type: ["A", "C"] }))}
       ${kpiCard("A+C+R. 매출", amt(t.ACR), `A+C ${amt(t.AC)} + R ${amt(t.R)} · Funnel ${cnt(t.funnels)}건<br>${kb}`, "", dk())}
     </div>

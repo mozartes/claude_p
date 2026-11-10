@@ -529,7 +529,7 @@ def overview_view(ds: Dataset, p: Params) -> dict:
         "churn": rows_of(churn.sort_values("prev_monthly", ascending=False, kind="mergesort"), 10),
         "team_checks": team_checks,
         "priority": priority_rows(df, p, ck, limit=20),
-        # ACR 수주(계약기간) 화면과 같은 계산(수주년월 집계연도, 계약기간매출, R = 변경매출 × 계약기간)
+        # ACR 수주(연도) 화면과 같은 계산(수주년월 집계연도, 계약기간매출, R = 변경매출 × 계약기간)
         "total_kpi": (lambda tv: {"year": tv["year"], **tv["totals"], "excluded": tv["excluded"]})(total_view(ds, p)),
         "basis": {
             "ACR": f"{R.MODES[p.mode]} · 매출발생년월 {R.ym_label(p.ym_from)}~{R.ym_label(p.ym_to)}",
@@ -978,7 +978,7 @@ def presales_view(ds: Dataset, p: Params) -> dict:
     }
 
 
-# ================================================================ 화면: ACR 수주(계약기간)
+# ================================================================ 화면: ACR 수주(연도) — 구 ACR 수주(계약기간)
 
 
 def _total_amount(r: pd.Series, sel: set[str]) -> float | None:
