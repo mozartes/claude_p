@@ -1026,11 +1026,14 @@
       let amt;
       if (sel.size) { const a = productAmount(r.products, sel)[0]; amt = a === null || r.term === null ? null : a * r.term; }
       else amt = r.contract_amt;
-      return { r, amt };
+      const dlt = amt;  // 증감 기준 계약기간매출(R 감액·증액 판정용)
+      // R = 재계약 후 월매출(변경매출) × 계약기간. 상품 선택 시는 상품 슬롯(증감) 유지
+      if (!sel.size && r.acr_type === "R") amt = r.new_monthly === null || r.term === null ? null : r.new_monthly * r.term;
+      return { r, amt, dlt };
     });
     const excl = {};
     const nMiss = g.filter((x) => x.amt === null).length;
-    if (nMiss) excl["계약기간매출(또는 상품 월매출·계약기간) 누락"] = nMiss;
+    if (nMiss) excl["계약기간매출(R은 변경매출·계약기간, 상품 선택 시 상품 월매출·계약기간) 누락"] = nMiss;
     const nWin = conf.filter((r) => r.win_ym === null).length;
     if (nWin) excl["수주년월 누락"] = nWin;
     return [g.filter((x) => x.amt !== null), excl];
@@ -1053,13 +1056,13 @@
       const rows = [];
       groupBy(g, (e) => e.r[key]).forEach((x, k) => {
         const rec = { key: k }; labels.forEach((l) => { rec[l] = x[0].r[l]; });
-        rows.push(Object.assign(rec, sums(x), { funnels: x.length, r_neg_count: x.filter((e) => e.r.acr_type === "R" && e.amt < 0).length }));
+        rows.push(Object.assign(rec, sums(x), { funnels: x.length, r_neg_count: x.filter((e) => e.r.acr_type === "R" && e.dlt !== null && e.dlt < 0).length }));
       });
       return rows.sort((a, b) => b.ACR - a.ACR);
     };
     const rr = g.filter((e) => e.r.acr_type === "R");
     const rRef = { count: rr.length, new_total: rr.reduce((a, e) => a + e.r.new_monthly * e.r.term, 0), prev_total: rr.reduce((a, e) => a + e.r.prev_monthly * e.r.term, 0),
-      decrease_count: rr.filter((e) => e.amt < 0).length, same_count: rr.filter((e) => e.amt === 0).length, increase_count: rr.filter((e) => e.amt > 0).length };
+      decrease_count: rr.filter((e) => e.dlt !== null && e.dlt < 0).length, same_count: rr.filter((e) => e.dlt === 0).length, increase_count: rr.filter((e) => e.dlt !== null && e.dlt > 0).length };
     let mismatch = 0;
     if (!p.products.length) mismatch = g.filter((e) => { const r = e.r; if (!nn(r.monthly) || !nn(r.term) || !nn(r.contract_amt)) return false; const c = r.monthly * r.term; return Math.abs(r.contract_amt - c) > 1e-6 + 1e-9 * Math.abs(c); }).length;
     return {
@@ -1068,7 +1071,8 @@
         "대상": "확정 건 — A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
         "기간": `수주년월 ${y}-01 ~ ${y}-12 (사이드바 조회기간과 별개, 화면 상단에서 연도 선택)`,
         "금액": (p.products.length ? "선택 상품 월매출 × 계약기간(월)" : "원본 계약기간매출(= 월매출합계 × 계약기간)") + " — 계약 전체 기간의 총액을 수주월에 1회 반영",
-        "R 해석": "R의 계약기간매출은 재계약 증감액 × 계약기간 → 감액은 음수, 동일 금액은 0. 재계약 후 계약총액(변경매출×계약기간)은 참고로만 표시하고 합계에 넣지 않음",
+        "R 해석": p.products.length ? "상품 선택: R = 선택 상품 슬롯 금액(재계약 증감) × 계약기간"
+          : "R = 재계약 후 월매출(변경매출) × 계약기간(리텐션 계약기간 매출). 증감(변경−기존)×계약기간은 R 참고 표에 표시",
         "주의": "수주 시점의 계약 총액 기준이며 월별 청구·회계 매출이 아님",
       },
     };

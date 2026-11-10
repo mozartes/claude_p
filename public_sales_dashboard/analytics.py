@@ -1000,10 +1000,15 @@ def total_rows(df: pd.DataFrame, p: Params) -> tuple[pd.DataFrame, dict]:
     sel = set(p.products)
     g["amt"] = [_total_amount(r, sel) for _, r in g.iterrows()] if len(g) else []
     g["amt"] = pd.to_numeric(g["amt"], errors="coerce").astype(float)
+    g["dlt"] = g["amt"]  # 증감 기준 계약기간매출(R 감액·증액 판정용)
+    if not sel and len(g):
+        # 2026-11: R = 재계약 후 월매출(변경매출) × 계약기간(리텐션 계약기간 매출). 상품 선택 시는 상품 슬롯(증감) 유지
+        isr = g["acr_type"] == "R"
+        g.loc[isr, "amt"] = (pd.to_numeric(g.loc[isr, "new_monthly"], errors="coerce") * pd.to_numeric(g.loc[isr, "term"], errors="coerce")).astype(float)
     excl = {}
     n_miss = int(g["amt"].isna().sum())
     if n_miss:
-        excl["계약기간매출(또는 상품 월매출·계약기간) 누락"] = n_miss
+        excl["계약기간매출(R은 변경매출·계약기간, 상품 선택 시 상품 월매출·계약기간) 누락"] = n_miss
     n_win = int(conf["win_ym"].isna().sum())
     if n_win:
         excl["수주년월 누락"] = n_win
@@ -1038,7 +1043,7 @@ def total_view(ds: Dataset, p: Params) -> dict:
         rows = []
         for k, x in g.groupby(key):
             rows.append({"key": k, **{l: x.iloc[0][l] for l in labels}, **sums(x), "funnels": int(len(x)),
-                         "r_neg_count": int(((x["acr_type"] == "R") & (x["amt"] < 0)).sum())})
+                         "r_neg_count": int(((x["acr_type"] == "R") & (x["dlt"] < 0)).sum())})
         rows.sort(key=lambda r: -r["ACR"])
         return rows
 
@@ -1047,8 +1052,8 @@ def total_view(ds: Dataset, p: Params) -> dict:
     r_ref = {"count": int(len(rr)),
              "new_total": float((rr["new_monthly"] * terms).sum()) if len(rr) else 0.0,
              "prev_total": float((rr["prev_monthly"] * terms).sum()) if len(rr) else 0.0,
-             "decrease_count": int((rr["amt"] < 0).sum()), "same_count": int((rr["amt"] == 0).sum()),
-             "increase_count": int((rr["amt"] > 0).sum())}
+             "decrease_count": int((rr["dlt"] < 0).sum()), "same_count": int((rr["dlt"] == 0).sum()),
+             "increase_count": int((rr["dlt"] > 0).sum())}
     mismatch = 0
     if not p.products and len(g):
         calc = g["monthly"] * g["term"].astype(float)
@@ -1061,7 +1066,8 @@ def total_view(ds: Dataset, p: Params) -> dict:
             "대상": "확정 건 — A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
             "기간": f"수주년월 {y}-01 ~ {y}-12 (사이드바 조회기간과 별개, 화면 상단에서 연도 선택)",
             "금액": ("선택 상품 월매출 × 계약기간(월)" if p.products else "원본 계약기간매출(= 월매출합계 × 계약기간)") + " — 계약 전체 기간의 총액을 수주월에 1회 반영",
-            "R 해석": "R의 계약기간매출은 재계약 증감액 × 계약기간 → 감액은 음수, 동일 금액은 0. 재계약 후 계약총액(변경매출×계약기간)은 참고로만 표시하고 합계에 넣지 않음",
+            "R 해석": ("상품 선택: R = 선택 상품 슬롯 금액(재계약 증감) × 계약기간" if p.products
+                       else "R = 재계약 후 월매출(변경매출) × 계약기간(리텐션 계약기간 매출). 증감(변경−기존)×계약기간은 R 참고 표에 표시"),
             "주의": "수주 시점의 계약 총액 기준이며 월별 청구·회계 매출이 아님",
         },
     }

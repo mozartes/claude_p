@@ -588,14 +588,14 @@
     <div class="grid kpis">
       ${kpiCard("A. 매출", amt(t.A), `Funnel ${cnt(t.funnels_A)}건<br>${kb}`, "a", dk({ acr_type: ["A"] }))}
       ${kpiCard("C. 매출", amt(t.C), `Funnel ${cnt(t.funnels_C)}건<br>${kb}`, "c", dk({ acr_type: ["C"] }))}
-      ${kpiCard("R. 매출", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (재계약 증감분 × 계약기간)<br>${kb}`, "r", dk({ acr_type: ["R"] }))}
+      ${kpiCard("R. 매출(리텐션)", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"})<br>${kb}`, "r", dk({ acr_type: ["R"] }))}
       ${kpiCard("A+C. 매출", amt(t.AC), `Funnel ${cnt(t.funnels_A + t.funnels_C)}건<br>${kb}`, "", dk({ acr_type: ["A", "C"] }))}
-      ${kpiCard("A+C+R. 매출", amt(t.ACR), `Funnel ${cnt(t.funnels)}건<br>${kb}`, "", dk())}
+      ${kpiCard("A+C+R. 매출", amt(t.ACR), `A+C ${amt(t.AC)} + R ${amt(t.R)} · Funnel ${cnt(t.funnels)}건<br>${kb}`, "", dk())}
     </div>
     ${Object.keys(d.excluded).length ? `<div class="notice warn">집계에서 제외: ${Object.entries(d.excluded).map(([k, v]) => `${esc(k)} ${v}건`).join(", ")}</div>` : ""}
     ${d.mismatch ? `<div class="notice warn">계약기간매출이 월매출합계 × 계약기간과 다른 건 ${d.mismatch}건 — 원본 계약기간매출 그대로 합산했습니다.</div>` : ""}
     <div class="card" style="margin-top:14px"><div class="card-head"><h3>월별 ACR 수주 매출 (계약기간 합계, 수주월 기준, ${y}년)</h3><span class="muted">막대 A·C·R, 선 A+C+R · 클릭 → 해당 월 Funnel</span></div>
-      <p class="desc">각 건의 계약기간매출을 수주년월에 한 번 배치 · 단위 ${esc(unitName())} · 0 기준선 아래는 R 감액</p>
+      <p class="desc">각 건의 계약기간매출(R은 변경매출 × 계약기간)을 수주년월에 한 번 배치 · 단위 ${esc(unitName())}</p>
       <div class="chart-box tall"><canvas id="totChart"></canvas></div></div>
     <div class="card" style="margin-top:14px"><h3>월별 표</h3><div class="table-wrap"><table class="t"><thead><tr><th>수주년월</th><th class="num">A</th><th class="num">C</th><th class="num">R</th><th class="num">A+C</th><th class="num">A+C+R</th><th class="num">누적 A+C+R</th><th class="num">건수</th></tr></thead>
         <tbody>${d.monthly.map((m) => `<tr class="clickable" data-drill='${esc(JSON.stringify(dk({ win_month: m.ym })))}'><td>${m.label}</td><td class="num">${amt(m.A)}</td><td class="num">${amt(m.C)}</td><td class="num">${amt(m.R)}</td><td class="num">${amt(m.AC)}</td><td class="num"><b>${amt(m.ACR)}</b></td><td class="num">${amt(m.cum_ACR)}</td><td class="num">${cnt(m.funnels)}</td></tr>`).join("")}</tbody>
@@ -603,11 +603,11 @@
       <div class="card" style="margin-top:14px"><h3>R 재계약 매출 참고</h3><p class="desc">재계약완료 ${cnt(rf.count)}건 · 증액 ${cnt(rf.increase_count)} / 동일 ${cnt(rf.same_count)} / 감액 ${cnt(rf.decrease_count)}건</p>
         <div class="table-wrap"><table class="t"><tbody>
           <tr><td>기존 계약총액 (기존매출 × 계약기간)</td><td class="num">${amt(rf.prev_total)}</td></tr>
-          <tr><td>재계약 후 계약총액 (변경매출 × 계약기간)</td><td class="num">${amt(rf.new_total)}</td></tr>
-          <tr><td><b>R. 매출 (증감 = 계약기간매출 합계)</b></td><td class="num"><b>${amt(t.R)}</b></td></tr></tbody></table></div>
-        <p class="desc" style="margin-top:6px">R. 매출은 재계약으로 늘거나 줄어든 금액의 계약기간 합계입니다. 재계약 후 계약총액은 참고용이며 A+C+R 합계에 넣지 않습니다.</p></div>
+          <tr><td><b>재계약 후 계약총액 (변경매출 × 계약기간) = R. 매출</b></td><td class="num"><b>${amt(rf.new_total)}</b></td></tr>
+          <tr><td>증감 (재계약 후 − 기존, 계약기간 합계)</td><td class="num">${amt(rf.new_total - rf.prev_total)}</td></tr></tbody></table></div>
+        <p class="desc" style="margin-top:6px">R. 매출은 재계약으로 확보한 매출(변경매출)의 계약기간 합계이며 A+C+R에 포함됩니다. 증감은 기존 계약 대비 늘거나 줄어든 금액입니다. 상품 선택 시에는 R이 상품별 증감 기준이라 위 표와 다를 수 있습니다.</p></div>
     <div class="card" style="margin-top:14px"><h3>조직별 (${S.f.level === "am" ? "AM" : "팀"})</h3><p class="desc">사이드바 ‘집계 수준’을 AM으로 바꾸면 AM별 · 조직별 합계 = 담당 전체</p>
-      <div class="table-wrap" style="max-height:520px"><table class="t"><thead><tr><th>${S.f.level === "am" ? "AM(팀)" : "팀"}</th><th class="num">A</th><th class="num">C</th><th class="num">R</th><th class="num">A+C</th><th class="num">A+C+R</th><th class="num">건수</th><th class="num">R 감액 건수</th></tr></thead>
+      <div class="table-wrap" style="max-height:520px"><table class="t"><thead><tr><th>${S.f.level === "am" ? "AM(팀)" : "팀"}</th><th class="num">A</th><th class="num">C</th><th class="num">R</th><th class="num">A+C</th><th class="num">A+C+R</th><th class="num">건수</th><th class="num" title="변경매출 &lt; 기존매출">R 감액 건수</th></tr></thead>
       <tbody>${orgRows.map((r) => `<tr class="clickable" data-drill='${esc(JSON.stringify(dk(S.f.level === "am" ? { am_key: r.key } : { team: r.key })))}'><td>${esc(r.am ? `${r.am} (${r.team})` : r.team)}</td><td class="num">${amt(r.A)}</td><td class="num">${amt(r.C)}</td><td class="num">${amt(r.R)}</td><td class="num">${amt(r.AC)}</td><td class="num"><b>${amt(r.ACR)}</b></td><td class="num">${cnt(r.funnels)}</td><td class="num">${cnt(r.r_neg_count)}</td></tr>`).join("") || '<tr><td colspan="8" class="muted">자료 없음</td></tr>'}</tbody>
       <tfoot><tr><td>담당 합계</td><td class="num">${amt(t.A)}</td><td class="num">${amt(t.C)}</td><td class="num">${amt(t.R)}</td><td class="num">${amt(t.AC)}</td><td class="num">${amt(t.ACR)}</td><td class="num">${cnt(t.funnels)}</td><td></td></tr></tfoot></table></div></div>
     ${basisBlock(d.basis)}`;

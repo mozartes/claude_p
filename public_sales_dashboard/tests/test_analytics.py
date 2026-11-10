@@ -247,10 +247,10 @@ def test_total_view_contract_amount_by_win_month(make_ds, params):
     ])
     v = A.total_view(ds, params(base_date="2026-11-04"))
     t = v["totals"]
-    assert v["year"] == 2026 and t["A"] == 240 and t["C"] == 120 and t["R"] == -12 and t["ACR"] == 348
-    assert t["funnels"] == 3 and v["excluded"] == {"계약기간매출(또는 상품 월매출·계약기간) 누락": 1}
+    assert v["year"] == 2026 and t["A"] == 240 and t["C"] == 120 and t["R"] == 108 and t["ACR"] == 468  # R = 변경매출 9 × 12개월
+    assert t["funnels"] == 3 and v["excluded"] == {"계약기간매출(R은 변경매출·계약기간, 상품 선택 시 상품 월매출·계약기간) 누락": 1}
     mon = {m["ym"]: m for m in v["monthly"]}
-    assert mon[202611]["A"] == 240 and mon[202612]["A"] == 0 and mon[202612]["cum_ACR"] == 348
+    assert mon[202611]["A"] == 240 and mon[202612]["A"] == 0 and mon[202612]["cum_ACR"] == 468
     assert v["r_ref"]["new_total"] == 108 and v["r_ref"]["prev_total"] == 120 and v["r_ref"]["decrease_count"] == 1
     assert A.total_view(ds, params(base_date="2026-11-04", total_year=2027))["totals"]["A"] == 50
     d = A.detail_view(ds, params(base_date="2026-11-04"), {"scope": "total", "win_month": 202611})
