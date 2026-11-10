@@ -307,15 +307,11 @@
       ${kpiCard("R 기여매출", amt(a.R), `${rSub}<br>${esc(pb)}`, "r", { scope: "acr", acr_type: ["R"] })}
     </div>`;
     // 3줄: 관리 지표
-    h += `<div class="card-head" style="margin-top:14px"><h3>관리 지표</h3><span class="muted">해지·진행 중·확인 필요 (위 매출 합계에 넣지 않음)</span></div>
+    h += `<div class="card-head" style="margin-top:14px"><h3>관리 지표</h3><span class="muted">재계약 증감 + 해지 (위 매출 합계에 넣지 않음)</span></div>
     <div class="grid kpis">
       ${(() => { const ch = k.churn_acr || { amount: 0, funnels: 0, excluded: {} }; const exn = Object.values(ch.excluded).reduce((x, y) => x + y, 0);
         const rd = rt.amount === null ? a.R : rt.amount - rt.prev_amount;  // R 증감액
         return kpiCard("R+해지 기여매출", amt(rd + ch.amount), `R 증감 ${amt(rd)} + 해지 ${amt(ch.amount)} (해지확정 ${cnt(ch.funnels)}건${exn ? ` · 계산 제외 ${cnt(exn)}건` : ""})<br>${esc(`${pb} · A+C+R에 미포함`)}`, "neg", { status: ["해지확정"], period: "rev_ym" }); })()}
-      ${kpiCard("진행 중 A/C Funnel", cnt(k.prog_ac_count) + "건", `계약기간매출 ${amt(k.prog_ac_amount.total)}${k.prog_ac_amount.neg_count ? ` (음수 ${k.prog_ac_amount.neg_count}건 ${amt(k.prog_ac_amount.negative)})` : ""}`, "", { scope: "in_progress", acr_type: ["A", "C"] })}
-      ${kpiCard("진행 중 재계약(R)", cnt(k.prog_r_count) + "건", `기존 월매출 ${amt(k.prog_r_prev)}`, "", { scope: "in_progress", acr_type: ["R"] })}
-      ${kpiCard("해지확정", cnt(k.churn_count) + "건", "수주년월 기간 내 · 확정 ACR 합계 제외", "neg", { status: ["해지확정"], period: "win_ym" })}
-      ${kpiCard("확인 필요 Funnel", cnt(k.check_count) + "건", `높음 등급 ${cnt(k.check_level1)}건 · 고유 Funnel`, "warn", { scope: "checks" })}
     </div>`;
     if (d.acr_excluded && Object.keys(d.acr_excluded).length) {
       h += `<div class="notice warn">확정 ACR 조건이지만 계산에서 제외된 건: ${Object.entries(d.acr_excluded).map(([r, n]) => `${esc(r)} ${n}건`).join(", ")} <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr_excluded" }))}'>목록 보기</span></div>`;
