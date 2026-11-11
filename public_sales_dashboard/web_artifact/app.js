@@ -1166,10 +1166,10 @@
     go(PAGES[h] ? h : (PSD.getDataset().empty ? "data" : "overview"));
   }
   new MutationObserver(() => applyHero()).observe($("view"), { childList: true });
-  // 라이트·다크 전환(기본 라이트, 회의실 빔프로젝터 기준). 선택은 이 브라우저에만 저장
+  // 라이트·다크 전환(기본 다크, 2026-11 변경). 선택은 이 브라우저에만 저장
   (function themeInit() {
-    let t = "light";
-    try { t = localStorage.getItem("psd-theme") || "light"; } catch (e) { /* 저장 불가 시 기본값 */ }
+    let t = "dark";
+    try { t = localStorage.getItem("psd-theme") || "dark"; } catch (e) { /* 저장 불가 시 기본값 */ }
     const apply = (v) => {
       document.documentElement.setAttribute("data-theme", v);
       const b = $("themeBtn"); if (b) { b.textContent = v === "dark" ? "라이트 모드" : "다크 모드"; b.setAttribute("aria-pressed", String(v === "dark")); }
