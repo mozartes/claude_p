@@ -240,3 +240,14 @@ dl.basis dd { margin: 0; }
 .kpi.lbox-ok .label { background: var(--ok-bg); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
 .kpi.lbox-info .label { background: var(--info-bg); color: var(--info-ink); border-color: color-mix(in srgb, var(--info-ink) 30%, transparent); }
 .kpi.lbox-neg .label { background: var(--neg-bg); color: var(--neg); border-color: color-mix(in srgb, var(--neg) 35%, transparent); }
+.kpi.lbox-warn .label { background: var(--warn-bg); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.kpi.lbox-sky .label { background: #e6f3fb; color: #0b6aa2; border-color: #9fd0ee; }
+.kpi.lbox-violet .label { background: #f2edfc; color: #6a3fc0; border-color: #c8b6f0; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .kpi.lbox-sky .label { background: #12304a; color: #93cff3; border-color: #2c6f9e; }
+  :root:not([data-theme="light"]) .kpi.lbox-violet .label { background: #261d3d; color: #c9b6f5; border-color: #6a52b0; }
+}
+:root[data-theme="dark"] .kpi.lbox-sky .label { background: #12304a; color: #93cff3; border-color: #2c6f9e; }
+:root[data-theme="dark"] .kpi.lbox-violet .label { background: #261d3d; color: #c9b6f5; border-color: #6a52b0; }
+/* 수주·Funnel 관리: 카드 이름이 길어 한 줄 유지(숫자 줄 맞춤) */
+#view[data-page="funnel"] .kpi.lbox .label, #view[data-page="funnel"] .kpi.hero .label { font-size: 13.5px; white-space: nowrap; padding: 2px 8px; }

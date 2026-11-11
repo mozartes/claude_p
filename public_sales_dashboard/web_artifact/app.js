@@ -1025,8 +1025,12 @@
       if (m) c.classList.add("lbox", "lbox-" + m[1]);
     });
     // 재계약·해지 관리: 나머지 카드 이름도 서로 다른 연한 색 박스(재계약완료는 강조 카드)
-    if (S.page === "renewal") {
-      const RB = [["진행 중 재계약", "ok"], ["재계약 매출 증감률", "info"], ["해지확정", "neg"]];
+    const BOX_MAP = {
+      renewal: [["진행 중 재계약", "ok"], ["재계약 매출 증감률", "info"], ["해지확정", "neg"]],
+      funnel: [["진행 중 A/C · 다음 달", "sky"], ["진행 중 A/C · 이후", "violet"], ["진행 중 A/C · 예정월 경과", "neg"], ["진행 중 A/C · 예정월 미입력", "warn"]],
+    };
+    if (BOX_MAP[S.page]) {
+      const RB = BOX_MAP[S.page];
       v.querySelectorAll(".kpi").forEach((c) => {
         const l = c.querySelector(".label"); if (!l || c.classList.contains("lbox")) return;
         const hit = RB.find(([w]) => l.textContent.trim().startsWith(w));
