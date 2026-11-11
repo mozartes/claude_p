@@ -321,6 +321,7 @@
         ${kpiCard("A. 수주", amt(tk.A), `Funnel ${cnt(tk.funnels_A)}건<br>${tb}`, "a", tdk({ acr_type: ["A"] }))}
         ${kpiCard("C. 수주", amt(tk.C), `Funnel ${cnt(tk.funnels_C)}건<br>${tb}`, "c", tdk({ acr_type: ["C"] }))}
         ${kpiCard("R. 재계약", amt(tk.R), `Funnel ${cnt(tk.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"})<br>${tb}`, "r", tdk({ acr_type: ["R"] }))}
+        ${kpiCard("A+C+R 수주", amt(tk.ACR), `A+C ${amt(tk.AC)} + R ${amt(tk.R)} · Funnel ${cnt(tk.funnels)}건<br>${tb}`, "lbox lbox-sum", tdk())}
       </div>`;
     }
     // 2줄: 기여매출 — 조회기간 매출발생 반영분(ACR 기준), R = 재계약 후 월매출(리텐션)
@@ -332,6 +333,7 @@
       ${kpiCard("A 기여매출", amt(a.A), `Funnel ${cnt(a.funnels_A)}건<br>${esc(pb)}`, "a", { scope: "acr", acr_type: ["A"] })}
       ${kpiCard("C 기여매출", amt(a.C), `Funnel ${cnt(a.funnels_C)}건<br>${esc(pb)}`, "c", { scope: "acr", acr_type: ["C"] })}
       ${kpiCard("R 기여매출", amt(a.R), `${rSub}<br>${esc(pb)}`, "r", { scope: "acr", acr_type: ["R"] })}
+      ${kpiCard("A+C+R 기여매출", amt(a.ACR), `A+C ${amt(a.AC)} + R ${amt(a.R)} · 고유 Funnel ${cnt(a.funnels)}건<br>${esc(pb)}`, "lbox lbox-sum", { scope: "acr" })}
     </div>`;
     // 3줄: 관리 지표
     h += `<div class="card-head" style="margin-top:14px"><h3>관리 지표</h3><span class="muted">재계약 증감 + 해지 (위 매출 합계에 넣지 않음)</span></div>

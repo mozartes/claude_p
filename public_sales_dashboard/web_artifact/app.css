@@ -274,3 +274,7 @@ dl.basis dd { margin: 0; }
 :root[data-theme="dark"] .kpi.lbox-violet .label { background: #261d3d; color: #c9b6f5; border-color: #6a52b0; }
 /* 수주·Funnel 관리: 카드 이름이 길어 한 줄 유지(숫자 줄 맞춤) */
 #view[data-page="funnel"] .kpi.lbox .label, #view[data-page="funnel"] .kpi.hero .label { font-size: 13.5px; white-space: nowrap; padding: 2px 8px; }
+.kpi.lbox-sum .label { background: #eef1f5; color: #1f2937; border-color: #aab4c3; }
+.kpi.lbox-sum .bar { background: #64748b; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .kpi.lbox-sum .label { background: #232b38; color: #e7eaf0; border-color: #5a6a82; } }
+:root[data-theme="dark"] .kpi.lbox-sum .label { background: #232b38; color: #e7eaf0; border-color: #5a6a82; }
