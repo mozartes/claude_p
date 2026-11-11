@@ -972,6 +972,15 @@
       const m = l.textContent.trim().match(/^([ACR])\.? (기여)?매출$/);
       if (m) c.classList.add("lbox", "lbox-" + m[1]);
     });
+    // 재계약·해지 관리: 나머지 카드 이름도 서로 다른 연한 색 박스(재계약완료는 강조 카드)
+    if (S.page === "renewal") {
+      const RB = [["진행 중 재계약", "ok"], ["재계약 매출 증감률", "info"], ["해지확정", "neg"]];
+      v.querySelectorAll(".kpi").forEach((c) => {
+        const l = c.querySelector(".label"); if (!l || c.classList.contains("lbox")) return;
+        const hit = RB.find(([w]) => l.textContent.trim().startsWith(w));
+        if (hit) c.classList.add("lbox", "lbox-" + hit[1]);
+      });
+    }
     if (S.page === "overview" || !(S.page in HERO_LABEL)) return;
     const cards = Array.from(v.querySelectorAll(".kpi"));
     if (!cards.length || cards.some((c) => c.classList.contains("hero"))) return;

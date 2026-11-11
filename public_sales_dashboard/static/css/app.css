@@ -237,3 +237,6 @@ dl.basis dd { margin: 0; }
 .kpi.lbox-A .label { background: var(--ta-bg); color: var(--ta-fg); border-color: color-mix(in srgb, var(--ta-fg) 35%, transparent); }
 .kpi.lbox-C .label { background: var(--tc-bg); color: var(--tc-fg); border-color: color-mix(in srgb, var(--tc-fg) 35%, transparent); }
 .kpi.lbox-R .label { background: var(--tr-bg); color: var(--tr-fg); border-color: color-mix(in srgb, var(--tr-fg) 35%, transparent); }
+.kpi.lbox-ok .label { background: var(--ok-bg); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+.kpi.lbox-info .label { background: var(--info-bg); color: var(--info-ink); border-color: color-mix(in srgb, var(--info-ink) 30%, transparent); }
+.kpi.lbox-neg .label { background: var(--neg-bg); color: var(--neg); border-color: color-mix(in srgb, var(--neg) 35%, transparent); }
