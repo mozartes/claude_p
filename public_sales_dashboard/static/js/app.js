@@ -252,6 +252,80 @@
     return c;
   }
   function tooltipAmt(ctx) { return `${ctx.dataset.label}: ${fmtNum(ctx.parsed.y != null && ctx.chart.options.indexAxis !== "y" ? ctx.parsed.y : ctx.parsed.x).replace(/<[^>]+>/g, "")}`; }
+  // ------------------------------------------------------------ 기간 단위(월·분기·반기·연간) 표시 + 증감률
+  // 계산 결과(월별 값)를 표시 단위로 묶어 합산만 함. 원 계산 로직은 그대로.
+  const PERIODS = [["M", "월별"], ["Q", "분기"], ["H", "반기"], ["Y", "연간"]];
+  const CMP_NAME = { M: "MoM", Q: "QoQ", H: "HoH", Y: "YoY" };
+  function perOf() { return ["M", "Q", "H", "Y"].includes(S.ui.per) ? S.ui.per : "M"; }
+  function cmpOf() { return S.ui.cmp === "yoy" ? "yoy" : "prev"; }
+  function cmpLabel(g, c) { return c === "yoy" || g === "Y" ? "YoY" : CMP_NAME[g]; }
+  function periodOf(ym, g) {
+    const y = Math.floor(ym / 100), m = ym % 100;
+    if (g === "Q") { const q = Math.ceil(m / 3); return { key: `${y}Q${q}`, label: `${y} ${q}분기`, y, i: q, n: 3 }; }
+    if (g === "H") { const hh = m <= 6 ? 1 : 2; return { key: `${y}H${hh}`, label: `${y} ${hh === 1 ? "상반기" : "하반기"}`, y, i: hh, n: 6 }; }
+    if (g === "Y") return { key: `${y}`, label: `${y}년`, y, i: 1, n: 12 };
+    return { key: String(ym), label: `${y}-${String(m).padStart(2, "0")}`, y, i: m, n: 1, ym };
+  }
+  function prevKey(b, g, c) {
+    if (c === "yoy" || g === "Y") return g === "M" ? String((b.y - 1) * 100 + b.i) : g === "Y" ? `${b.y - 1}` : `${b.y - 1}${g}${b.i}`;
+    const cnt = { M: 12, Q: 4, H: 2 }[g];
+    const y = b.i === 1 ? b.y - 1 : b.y, i = b.i === 1 ? cnt : b.i - 1;
+    return g === "M" ? String(y * 100 + i) : `${y}${g}${i}`;
+  }
+  // monthly: [{ym, A, C, R, AC, ACR, funnels?}] → 기간 묶음(합산). sumFunnels=true일 때만 건수 합산(월별 고유 건수는 합산 불가)
+  function aggPeriods(monthly, g, sumFunnels, cutYm) {
+    const out = [], idx = {};
+    (monthly || []).forEach((m) => {
+      if (m.ym == null) return;
+      const p = periodOf(m.ym, g);
+      if (!idx[p.key]) { idx[p.key] = Object.assign(p, { months: 0, A: 0, C: 0, R: 0, AC: 0, ACR: 0, funnels: sumFunnels || g === "M" ? 0 : null }); out.push(idx[p.key]); }
+      const b = idx[p.key];
+      if (cutYm && m.ym > cutYm) b.ongoing = true; else b.months += 1;  // 기준월 이후 달은 아직 진행 중(수주 실적 미확정)
+      ["A", "C", "R", "AC", "ACR"].forEach((k) => { b[k] += Number(m[k]) || 0; });
+      if (b.funnels != null) b.funnels += Number(m.funnels) || 0;
+    });
+    const cum = { A: 0, C: 0, R: 0, AC: 0, ACR: 0 };
+    out.forEach((b) => { b.partial = b.months < b.n; ["A", "C", "R", "AC", "ACR"].forEach((k) => { cum[k] += b[k]; }); b.cum = Object.assign({}, cum); b.cum_ACR = cum.ACR; if (b.ongoing) b.label += " (진행 중)"; else if (b.partial) b.label += " (일부)"; });
+    return out;
+  }
+  // 증감률 = (이번 − 비교) ÷ 비교. 비교 기간이 없거나 0 이하·일부 기간이면 산출하지 않음
+  function growthOf(b, pool, g, c, k) {
+    const p = pool[prevKey(b, g, c)];
+    if (!p) return { r: null, why: "비교 기간 자료 없음" };
+    if (b.ongoing || p.ongoing) return { r: null, why: "진행 중인 기간(기준월 이후 포함)" };
+    if (b.partial || p.partial) return { r: null, why: "기간 일부만 포함" };
+    if (!(p[k] > 0)) return { r: null, why: "비교 값 0 이하" };
+    return { r: (b[k] - p[k]) / p[k], prev: p[k] };
+  }
+  function growthCell(gr) {
+    if (gr.r == null) return `<span class="muted" title="${esc(gr.why)}">—</span>`;
+    const v = (gr.r * 100).toFixed(1);
+    const tip = `비교 기간 ${fmtNum(conv(gr.prev)).replace(/<[^>]+>/g, "")}`;
+    if (gr.r > 0) return `<span class="gr up" title="${esc(tip)}">▲ ${v}%</span>`;
+    if (gr.r < 0) return `<span class="gr down" title="${esc(tip)}">▼ ${Math.abs(gr.r * 100).toFixed(1)}%</span>`;
+    return `<span class="gr" title="${esc(tip)}">0.0%</span>`;
+  }
+  function periodToolbar(id) {
+    const g = perOf(), c = cmpOf();
+    return `<span class="per-tools" id="${id}"><span class="seg-light" role="group" aria-label="기간 단위">${PERIODS.map(([v, l]) => `<button type="button" data-per="${v}" class="${v === g ? "on" : ""}" aria-pressed="${v === g}">${l}</button>`).join("")}</span>
+      <span class="seg-light" role="group" aria-label="비교 기준">${[["prev", g === "Y" ? "전년 대비" : "직전 기간 대비"], ["yoy", "전년 동기 대비"]].filter(([v]) => !(g === "Y" && v === "yoy")).map(([v, l]) => `<button type="button" data-cmp="${v}" class="${(g === "Y" ? "prev" : c) === v ? "on" : ""}">${l}</button>`).join("")}</span></span>`;
+  }
+  function bindPeriodToolbar(id) {
+    const el = $(id); if (!el) return;
+    el.querySelectorAll("[data-per]").forEach((b) => b.addEventListener("click", () => { S.ui.per = b.dataset.per; store.set("ui", S.ui); render(); }));
+    el.querySelectorAll("[data-cmp]").forEach((b) => b.addEventListener("click", () => { S.ui.cmp = b.dataset.cmp; store.set("ui", S.ui); render(); }));
+  }
+  // 기간 표: A·C·R·A+C·A+C+R + 증감률(A+C, A+C+R) + 누적 + 건수
+  function periodTable(rows, pool, opts) {
+    const g = perOf(), c = g === "Y" ? "prev" : cmpOf(), cl = cmpLabel(g, c);
+    const drill = opts.drill;
+    const showF = rows.some((b) => b.funnels != null);
+    return `<div class="table-wrap" style="max-height:${opts.maxH || 460}px"><table class="t"><thead><tr><th>${esc(opts.first || "기간")}</th><th class="num">A</th><th class="num">C</th><th class="num">R</th><th class="num">A+C</th><th class="num">A+C ${cl}</th><th class="num">A+C+R</th><th class="num">A+C+R ${cl}</th><th class="num">누적 A+C+R</th>${showF ? `<th class="num">${esc(opts.fLabel || "건수")}</th>` : ""}</tr></thead>
+      <tbody>${rows.map((b) => `<tr ${b.ym != null && drill ? `class="clickable" data-drill='${esc(JSON.stringify(drill(b)))}'` : ""}><td>${esc(b.label)}</td><td class="num">${amt(b.A)}</td><td class="num">${amt(b.C)}</td><td class="num">${amt(b.R)}</td><td class="num">${amt(b.AC)}</td><td class="num">${growthCell(growthOf(b, pool, g, c, "AC"))}</td><td class="num"><b>${amt(b.ACR)}</b></td><td class="num">${growthCell(growthOf(b, pool, g, c, "ACR"))}</td><td class="num">${amt(b.cum_ACR)}</td>${showF ? `<td class="num">${b.funnels == null ? '<span class="muted">—</span>' : cnt(b.funnels)}</td>` : ""}</tr>`).join("") || '<tr><td colspan="10" class="muted">자료 없음</td></tr>'}</tbody></table></div>
+      <p class="desc" style="margin-top:6px">${esc(cl)} = (이번 기간 − 비교 기간) ÷ 비교 기간. 비교 기간 자료가 없거나 0 이하이면, 조회기간이 기간 일부만 포함하거나 기준월 이후가 섞인 진행 중 기간이면 "—"로 표시합니다.${g !== "M" && !opts.sumF ? " 고유 Funnel 건수는 기간 합산이 불가해 월별에서만 표시합니다." : ""}${g !== "M" ? " 행 클릭(목록)은 월별 보기에서 사용할 수 있습니다." : ""}</p>`;
+  }
+  const poolOf = (arr) => { const o = {}; arr.forEach((b) => { o[b.key] = b; }); return o; };
+
   function acrMonthlyChart(id, monthly, series, onClick) {
     const labels = monthly.map((m) => m.label);
     const ds = [];
@@ -262,11 +336,12 @@
       options: {
         maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
         plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: tooltipAmt } } },
-        scales: { y: { title: { display: true, text: `월별 금액 (${unitName()})` }, grid: zeroGrid }, x: { grid: { display: false } } },
+        scales: { y: { title: { display: true, text: `${(PERIODS.find((x) => x[0] === perOf()) || PERIODS[0])[1]} 금액 (${unitName()})` }, grid: zeroGrid }, x: { grid: { display: false } } },
         onClick: (evt, els, c) => {
           const pts = c.getElementsAtEventForMode(evt, "index", { intersect: false }, false);
           if (!pts.length) return;
           const m = monthly[pts[0].index];
+          if (m.ym == null) return;  // 분기·반기·연간 묶음은 목록 이동 없음(월별에서 사용)
           const near = c.getElementsAtEventForMode(evt, "nearest", { intersect: true }, false);
           const key = near.length ? c.data.datasets[near[0].datasetIndex].key : null;
           onClick && onClick(m, key);
@@ -334,6 +409,7 @@
     const chEx = Object.values(ch.excluded || {}).reduce((x, y) => x + y, 0);
     const rd = rt.amount === null ? a.R : rt.amount - rt.prev_amount;  // R 증감액
     const exAcr = Object.values(d.acr_excluded || {}).reduce((x, y) => x + y, 0);
+    const ovRows = aggPeriods(d.acr_monthly, perOf(), false);
     const warns = ((j.dataset || {}).warnings || []).length;
     const risks = [
       ["hi", "리텐션 재계약 및 해지 감소 매출", `R 증감 ${amt(rd)} + 해지 ${amt(ch.amount)} · 해지확정 ${cnt(ch.funnels)}건${chEx ? ` (계산 제외 ${cnt(chEx)}건)` : ""} · A+C+R에 미포함`, amt(rd + ch.amount), rd + ch.amount < 0, `data-drill='${esc(JSON.stringify({ status: ["해지확정"], period: "rev_ym" }))}'`],
@@ -344,8 +420,9 @@
     ];
     const riskCount = risks.filter((x, i) => (i === 0 ? x[4] : !/^0건$/.test(String(x[3]).replace(/<[^>]+>/g, "")))).length;
     h += `<section class="ov-sec ov-split">
-      <div class="card"><div class="card-head"><h3>② 월별 기여매출 추이 ${info(`${k.acr_mode_label} · 막대 A·C·R, 선 A+C+R(같은 축) · 0 기준선 아래는 감액 · 막대/선 클릭 → 해당 월 Funnel`)}</h3><span class="muted">${esc(S.f.ym_from)}~${esc(S.f.ym_to)}</span></div>
-        <div class="chart-box"><canvas id="ovChart"></canvas></div></div>
+      <div class="card"><div class="card-head"><h3>② 기간별 기여매출 추이 ${info(`${k.acr_mode_label} · 막대 A·C·R, 선 A+C+R(같은 축) · 0 기준선 아래는 감액 · 월별 보기에서 막대/선 클릭 → 해당 월 Funnel`)}</h3>${periodToolbar("ovPer")}</div>
+        <div class="chart-box"><canvas id="ovChart"></canvas></div>
+        <details class="per-table" ${perOf() !== "M" ? "open" : ""}><summary>기간별 표 · ${esc(cmpLabel(perOf(), perOf() === "Y" ? "prev" : cmpOf()))} 증감률</summary>${periodTable(ovRows, poolOf(ovRows), { drill: (x) => ({ scope: "acr", ym: x.ym }), maxH: 300, fLabel: "고유 Funnel" })}</details></div>
       <div class="card"><div class="card-head"><h3>③ 확인 필요</h3><span class="muted">${riskCount}건</span></div>
         <div class="alert-list">${risks.map(([lv, t, ds, v, neg, act]) => `<div class="alert" role="button" tabindex="0" ${act}><span class="sbar ${lv}"></span><div><div class="t">${t}</div><div class="d">${ds}</div></div><div class="v ${neg ? "negv" : ""}">${v}</div></div>`).join("")}</div></div>
     </section>`;
@@ -373,7 +450,8 @@
       <p class="desc">여러 사유에 해당하면 한 행에 모아 표시 · 등급 → 사유 수 → 금액 순</p>${funnelTable(d.priority, { priority: true, maxH: 520 })}</div>
     ${basisBlock(d.basis)}${rulesBlock(d.rules)}`;
     $("view").innerHTML = h;
-    acrMonthlyChart("ovChart", d.acr_monthly, ["A", "C", "R", "ACR"], (m, key) => openDetail({ scope: "acr", ym: m.ym, acr_type: key && ["A", "C", "R"].includes(key) ? [key] : undefined }));
+    bindPeriodToolbar("ovPer");
+    acrMonthlyChart("ovChart", ovRows, ["A", "C", "R", "ACR"], (m, key) => openDetail({ scope: "acr", ym: m.ym, acr_type: key && ["A", "C", "R"].includes(key) ? [key] : undefined }));
   }
 
   // ------------------------------------------------------------ 페이지: 수주·Funnel
@@ -474,6 +552,7 @@
     const term = d.mode === "term";
     const lbl = term ? "기간 합계(월별 추정값 합)" : "매출개시월 기준 합계";
     const orgRows = S.f.level === "am" ? d.by_am : d.by_team;
+    const pRows = aggPeriods(d.monthly, perOf(), false), pPool = poolOf(pRows);
     // 누적매출 = 조회기간 합계(기준·기간을 카드 아래에 표기)
     const kb = esc(`${lbl} · ${S.f.ym_from}~${S.f.ym_to}`);
     let h = `<div class="notice info"><b>${esc(d.mode_label)}</b> — ${esc(d.basis["주의"])}</div>
@@ -486,26 +565,25 @@
       ${kpiCard("고유 Funnel 건수", cnt(t.funnels) + "건", "월별 반복 반영 횟수 아님", "", { scope: "acr" })}
     </div>
     ${Object.keys(d.excluded).length ? `<div class="notice warn">확정 조건이지만 이 지표에서 제외: ${Object.entries(d.excluded).map(([r, n]) => `${esc(r)} ${n}건`).join(", ")} <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr_excluded" }))}'>목록 보기</span></div>` : ""}
-    <div class="card" style="margin-top:14px"><div class="card-head"><h3>월별 ${term ? "증감 추정" : "ACR 월매출 증감액"}</h3>
+    <div class="card" style="margin-top:14px"><div class="card-head"><h3>${(PERIODS.find((x) => x[0] === perOf()) || PERIODS[0])[1]} ${term ? "기여매출" : "ACR 월매출 증감액"}</h3>${periodToolbar("acrPer")}
       <div class="legend" id="serSel">${["A", "C", "R", "AC", "ACR"].map((k) => `<label><input type="checkbox" value="${k}" ${ser.includes(k) ? "checked" : ""}><i style="background:${COLORS[k]}"></i>${SERIES_LABEL[k]}</label>`).join("")}</div></div>
-      <p class="desc">막대=A·C·R, 선=합산 · 단위 ${esc(unitName())} · 0 기준선 아래는 감액 · 클릭 → 해당 월 Funnel</p>
+      <p class="desc">막대=A·C·R, 선=합산 · 단위 ${esc(unitName())} · 0 기준선 아래는 감액 · 월별 보기에서 클릭 → 해당 월 Funnel</p>
       <div class="chart-box tall"><canvas id="acrChart"></canvas></div></div>
     <div class="card" style="margin-top:14px"><h3>누적 (${esc(d.basis["누적"])})</h3><p class="desc">월별 금액과 축을 분리한 별도 차트 · 단위 ${esc(unitName())}</p><div class="chart-box"><canvas id="cumChart"></canvas></div></div>
     <div class="grid cols-2" style="margin-top:14px">
       <div class="card"><h3>팀별 비교</h3><p class="desc">${esc(lbl)} · 단위 ${esc(unitName())}</p><div class="chart-box"><canvas id="teamChart"></canvas></div></div>
       <div class="card"><h3>AM별 비교 (A+C+R 상위 20)</h3><p class="desc">${esc(lbl)}</p><div class="chart-box tall"><canvas id="amChart"></canvas></div></div>
     </div>
-    <div class="card" style="margin-top:14px"><h3>월별 표</h3><div class="table-wrap"><table class="t"><thead><tr><th>년월</th><th class="num">A</th><th class="num">C</th><th class="num">R</th><th class="num">A+C</th><th class="num">A+C+R</th><th class="num">누적 A+C+R</th><th class="num">고유 Funnel</th></tr></thead>
-      <tbody>${d.monthly.map((m) => `<tr class="clickable" data-drill='${esc(JSON.stringify({ scope: "acr", ym: m.ym }))}'><td>${m.label}</td><td class="num">${amt(m.A)}</td><td class="num">${amt(m.C)}</td><td class="num">${amt(m.R)}</td><td class="num">${amt(m.AC)}</td><td class="num"><b>${amt(m.ACR)}</b></td><td class="num">${amt(m.cum.ACR)}</td><td class="num">${cnt(m.funnels)}</td></tr>`).join("")}</tbody>
-      <tfoot><tr><td>${term ? "기간 합계" : "합계"}</td><td class="num">${amt(t.A)}</td><td class="num">${amt(t.C)}</td><td class="num">${amt(t.R)}</td><td class="num">${amt(t.AC)}</td><td class="num">${amt(t.ACR)}</td><td></td><td class="num">${cnt(t.funnels)} (고유)</td></tr></tfoot></table></div></div>
+    <div class="card" style="margin-top:14px"><div class="card-head"><h3>기간별 표</h3><span class="muted">${term ? "기간 합계" : "합계"} A+C+R ${amt(t.ACR)} · 고유 Funnel ${cnt(t.funnels)}건</span></div>${periodTable(pRows, pPool, { first: "기간", drill: (x) => ({ scope: "acr", ym: x.ym }), fLabel: "고유 Funnel" })}</div>
     <div class="card" style="margin-top:14px"><h3>조직별 표 (${S.f.level === "am" ? "AM" : "팀"})</h3><p class="desc">집계 수준 ‘AM’ 선택 시 AM별 · 조직별 합계는 담당 전체와 일치</p>
       <div class="table-wrap" style="max-height:520px"><table class="t"><thead><tr><th>${S.f.level === "am" ? "AM(팀)" : "팀"}</th><th class="num">A</th><th class="num">C</th><th class="num">R</th><th class="num">A+C</th><th class="num">A+C+R</th><th class="num">고유 Funnel</th><th class="num">R 음수 건수</th><th class="num">R 음수 금액</th></tr></thead>
       <tbody>${orgRows.map((r) => `<tr class="clickable" data-drill='${esc(JSON.stringify(S.f.level === "am" ? { scope: "acr", am_key: r.key } : { scope: "acr", team: r.key }))}'><td>${esc(r.am ? `${r.am} (${r.team})` : r.team)}</td><td class="num">${amt(r.A)}</td><td class="num">${amt(r.C)}</td><td class="num">${amt(r.R)}</td><td class="num">${amt(r.AC)}</td><td class="num"><b>${amt(r.ACR)}</b></td><td class="num">${cnt(r.funnels)}</td><td class="num">${cnt(r.r_neg_count)}</td><td class="num">${amt(r.r_neg_amount)}</td></tr>`).join("") || '<tr><td colspan="9" class="muted">자료 없음</td></tr>'}</tbody></table></div></div>
     ${basisBlock(d.basis)}`;
     $("view").innerHTML = h;
-    acrMonthlyChart("acrChart", d.monthly, ser, (m, key) => openDetail({ scope: "acr", ym: m.ym, acr_type: key && ["A", "C", "R"].includes(key) ? [key] : undefined }));
-    const cumDs = ser.map((k) => ({ label: `누적 ${SERIES_LABEL[k]}`, data: d.monthly.map((m) => conv(m.cum[k])), borderColor: COLORS[k], backgroundColor: COLORS[k], borderWidth: 2, pointRadius: 2, tension: 0 }));
-    chart("cumChart", { type: "line", data: { labels: d.monthly.map((m) => m.label), datasets: cumDs },
+    bindPeriodToolbar("acrPer");
+    acrMonthlyChart("acrChart", pRows, ser, (m, key) => openDetail({ scope: "acr", ym: m.ym, acr_type: key && ["A", "C", "R"].includes(key) ? [key] : undefined }));
+    const cumDs = ser.map((k) => ({ label: `누적 ${SERIES_LABEL[k]}`, data: pRows.map((m) => conv(m.cum[k])), borderColor: COLORS[k], backgroundColor: COLORS[k], borderWidth: 2, pointRadius: 2, tension: 0 }));
+    chart("cumChart", { type: "line", data: { labels: pRows.map((m) => m.label), datasets: cumDs },
       options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false }, plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: tooltipAmt } } }, scales: { y: { title: { display: true, text: `누적 금액 (${unitName()})` }, grid: zeroGrid }, x: { grid: { display: false } } } } });
     const orgBar = (id, rows, labelFn, horizontal) => {
       const dsets = ["A", "C", "R"].map((k) => ({ label: k, data: rows.map((r) => conv(r[k])), backgroundColor: COLORS[k], borderRadius: 2, maxBarThickness: 16 }));
@@ -626,6 +704,11 @@
     const d = j.data;
     if (d.empty) { $("view").innerHTML = emptyState(); return; }
     const t = d.totals, y = d.year, rf = d.r_ref;
+    // 전년 동기 비교용: 같은 화면 계산을 직전 연도로 한 번 더 조회(계산 로직 동일)
+    let prevMonthly = [];
+    try { const jp = await api("/view/total", { filters: Object.assign({}, S.f, { total_year: y - 1 }) }); prevMonthly = (jp.data && jp.data.monthly) || []; } catch (e) { prevMonthly = []; }
+    const baseYm = Number(String(S.f.base_date || "").slice(0, 7).replace("-", "")) || null;
+    const tRows = aggPeriods(d.monthly, perOf(), true, baseYm), tPool = poolOf(aggPeriods(prevMonthly, perOf(), true, baseYm).concat(tRows));
     // 메뉴·제목에 집계연도 표시
     $("pageTitle").textContent = `ACR 수주(${y}년)`;
     document.querySelectorAll('[data-page="total"]').forEach((b) => { b.textContent = `ACR 수주(${y}년)`; });
@@ -644,12 +727,10 @@
     </div>
     ${Object.keys(d.excluded).length ? `<div class="notice warn">집계에서 제외: ${Object.entries(d.excluded).map(([k, v]) => `${esc(k)} ${v}건`).join(", ")}</div>` : ""}
     ${d.mismatch ? `<div class="notice warn">계약기간매출이 월매출합계 × 계약기간과 다른 건 ${d.mismatch}건 — 원본 계약기간매출 그대로 합산했습니다.</div>` : ""}
-    <div class="card" style="margin-top:14px"><div class="card-head"><h3>월별 ACR 수주 매출 (계약기간 합계, 수주월 기준, ${y}년)</h3><span class="muted">막대 A·C·R, 선 A+C+R · 클릭 → 해당 월 Funnel</span></div>
+    <div class="card" style="margin-top:14px"><div class="card-head"><h3>${(PERIODS.find((x) => x[0] === perOf()) || PERIODS[0])[1]} ACR 수주 매출 (계약기간 합계, 수주월 기준, ${y}년)</h3>${periodToolbar("totPer")}</div>
       <p class="desc">각 건의 계약기간매출(R은 변경매출 × 계약기간)을 수주년월에 한 번 배치 · 단위 ${esc(unitName())}</p>
       <div class="chart-box tall"><canvas id="totChart"></canvas></div></div>
-    <div class="card" style="margin-top:14px"><h3>월별 표</h3><div class="table-wrap"><table class="t"><thead><tr><th>수주년월</th><th class="num">A</th><th class="num">C</th><th class="num">R</th><th class="num">A+C</th><th class="num">A+C+R</th><th class="num">누적 A+C+R</th><th class="num">건수</th></tr></thead>
-        <tbody>${d.monthly.map((m) => `<tr class="clickable" data-drill='${esc(JSON.stringify(dk({ win_month: m.ym })))}'><td>${m.label}</td><td class="num">${amt(m.A)}</td><td class="num">${amt(m.C)}</td><td class="num">${amt(m.R)}</td><td class="num">${amt(m.AC)}</td><td class="num"><b>${amt(m.ACR)}</b></td><td class="num">${amt(m.cum_ACR)}</td><td class="num">${cnt(m.funnels)}</td></tr>`).join("")}</tbody>
-        <tfoot><tr><td>${y}년 합계</td><td class="num">${amt(t.A)}</td><td class="num">${amt(t.C)}</td><td class="num">${amt(t.R)}</td><td class="num">${amt(t.AC)}</td><td class="num">${amt(t.ACR)}</td><td></td><td class="num">${cnt(t.funnels)}</td></tr></tfoot></table></div></div>
+    <div class="card" style="margin-top:14px"><div class="card-head"><h3>기간별 표 (${y}년)</h3><span class="muted">${y}년 합계 A+C+R ${amt(t.ACR)} · ${cnt(t.funnels)}건 · 전년 동기 비교는 ${y - 1}년 같은 기간 값 사용</span></div>${periodTable(tRows, tPool, { first: "수주 기간", drill: (x) => dk({ win_month: x.ym }), sumF: true, fLabel: "건수" })}</div>
       <div class="card" style="margin-top:14px"><h3>R 재계약 매출 참고</h3><p class="desc">재계약완료 ${cnt(rf.count)}건 · 증액 ${cnt(rf.increase_count)} / 동일 ${cnt(rf.same_count)} / 감액 ${cnt(rf.decrease_count)}건</p>
         <div class="table-wrap"><table class="t"><tbody>
           <tr><td>기존 계약총액 (기존매출 × 계약기간)</td><td class="num">${amt(rf.prev_total)}</td></tr>
@@ -662,7 +743,8 @@
       <tfoot><tr><td>담당 합계</td><td class="num">${amt(t.A)}</td><td class="num">${amt(t.C)}</td><td class="num">${amt(t.R)}</td><td class="num">${amt(t.AC)}</td><td class="num">${amt(t.ACR)}</td><td class="num">${cnt(t.funnels)}</td><td></td></tr></tfoot></table></div></div>
     ${basisBlock(d.basis)}`;
     $("view").innerHTML = h;
-    acrMonthlyChart("totChart", d.monthly, ["A", "C", "R", "ACR"], (m, key) => openDetail(dk({ win_month: m.ym, acr_type: key && ["A", "C", "R"].includes(key) ? [key] : undefined })));
+    bindPeriodToolbar("totPer");
+    acrMonthlyChart("totChart", tRows, ["A", "C", "R", "ACR"], (m, key) => openDetail(dk({ win_month: m.ym, acr_type: key && ["A", "C", "R"].includes(key) ? [key] : undefined })));
     document.querySelectorAll("#tyearSel button").forEach((b) => b.addEventListener("click", () => { S.f.total_year = Number(b.dataset.v); store.set("filters", S.f); render(); }));
   }
 
@@ -1107,6 +1189,7 @@
     try { t = localStorage.getItem("psd-theme") || "dark"; } catch (e) { /* 저장 불가 시 기본값 */ }
     const apply = (v) => {
       document.documentElement.setAttribute("data-theme", v);
+      refreshColors();  // 차트 색을 테마에 맞춰 즉시 갱신
       const b = $("themeBtn"); if (b) { b.textContent = v === "dark" ? "라이트 모드" : "다크 모드"; b.setAttribute("aria-pressed", String(v === "dark")); }
     };
     apply(t);

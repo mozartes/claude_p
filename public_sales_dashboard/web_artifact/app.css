@@ -279,3 +279,10 @@ details.card > summary { cursor: pointer; font-size: 14px; }
   .status-line { max-width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } .drawer { transition: none; } }
+
+/* 기간 단위·증감률 */
+.per-tools { display: inline-flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.gr { font-weight: 600; white-space: nowrap; }
+.gr.up { color: var(--ok); } .gr.down { color: var(--neg); }
+details.per-table { margin-top: 10px; }
+details.per-table > summary { cursor: pointer; font-size: 13px; color: var(--text-2); padding: 4px 0; }
