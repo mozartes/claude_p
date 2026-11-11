@@ -1,7 +1,7 @@
 <title>공공영업 통합 대시보드</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="app.css">
 <div class="layout" id="app">
   <aside class="sidebar" id="sidebar">
@@ -10,17 +10,22 @@
       <div><h1>공공영업 통합 대시보드</h1><p>공공고객담당 · Funnel / ACR · 브라우저 계산</p></div>
     </div>
     <ul class="nav" id="nav">
+      <li class="nav-gt">현황</li>
       <li><button data-page="overview" class="active">종합 현황</button></li>
+      <li><button data-page="priority">우선 확인 Funnel</button></li>
+      <li class="nav-gt">수주·Funnel</li>
       <li><button data-page="funnel">수주·Funnel 관리</button></li>
       <li><button data-page="renewal">재계약·해지 관리</button></li>
+      <li><button data-page="detail">상세 목록</button></li>
+      <li class="nav-gt">ACR</li>
       <li><button data-page="acr">ACR 수주</button></li>
       <li><button data-page="presales">ACR 수주(Pre-sales)</button></li>
       <li><button data-page="total">ACR 수주(2026년)</button></li>
+      <li class="nav-gt">조직·AM</li>
       <li><button data-page="team">팀·AM 관리</button></li>
       <li><button data-page="perf">AM 성과·활동 점검</button></li>
       <li><button data-page="insight">고객·상품·입찰</button></li>
-      <li><button data-page="priority">우선 확인 Funnel</button></li>
-      <li><button data-page="detail">상세 목록</button></li>
+      <li class="nav-gt">데이터</li>
       <li><button data-page="data">데이터 관리</button></li>
     </ul>
     <button class="btn small ghost-dark mobile-toggle" id="toggleFilters" type="button">필터 열기/닫기</button>
@@ -128,10 +133,11 @@
         <div class="sub" id="pageSub"></div>
       </div>
       <div class="top-actions">
-        <span class="chip gray" id="dataChip">데이터 확인 중</span>
+        <span class="status-line" id="dataChip">데이터 확인 중</span>
         <span class="chip neg link" id="warnChip" data-goto-data="1" hidden></span>
         <span class="chip gray" id="unitChip">단위 확인 중</span>
         <button class="btn small" id="panelBtn" type="button">확인 패널</button>
+        <button class="theme-btn" id="themeBtn" type="button" aria-label="화면 테마 전환">다크 모드</button>
       </div>
     </div>
     <div class="applied" id="applied"></div>
