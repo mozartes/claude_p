@@ -299,16 +299,16 @@
   }
   function growthCell(gr) {
     if (gr.r == null) return `<span class="muted" title="${esc(gr.why)}">—</span>`;
-    const v = (gr.r * 100).toFixed(1);
+    const f1 = (x) => Math.abs(x * 100).toLocaleString("ko-KR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+    const v = f1(gr.r);
     const tip = `비교 기간 ${fmtNum(conv(gr.prev)).replace(/<[^>]+>/g, "")}`;
     if (gr.r > 0) return `<span class="gr up" title="${esc(tip)}">▲ ${v}%</span>`;
-    if (gr.r < 0) return `<span class="gr down" title="${esc(tip)}">▼ ${Math.abs(gr.r * 100).toFixed(1)}%</span>`;
+    if (gr.r < 0) return `<span class="gr down" title="${esc(tip)}">▼ ${v}%</span>`;
     return `<span class="gr" title="${esc(tip)}">0.0%</span>`;
   }
   function periodToolbar(id) {
-    const g = perOf(), c = cmpOf();
-    return `<span class="per-tools" id="${id}"><span class="seg-light" role="group" aria-label="기간 단위">${PERIODS.map(([v, l]) => `<button type="button" data-per="${v}" class="${v === g ? "on" : ""}" aria-pressed="${v === g}">${l}</button>`).join("")}</span>
-      <span class="seg-light" role="group" aria-label="비교 기준">${[["prev", g === "Y" ? "전년 대비" : "직전 기간 대비"], ["yoy", "전년 동기 대비"]].filter(([v]) => !(g === "Y" && v === "yoy")).map(([v, l]) => `<button type="button" data-cmp="${v}" class="${(g === "Y" ? "prev" : c) === v ? "on" : ""}">${l}</button>`).join("")}</span></span>`;
+    const g = perOf();
+    return `<span class="per-tools" id="${id}"><span class="seg-light" role="group" aria-label="기간 단위">${PERIODS.map(([v, l]) => `<button type="button" data-per="${v}" class="${v === g ? "on" : ""}" aria-pressed="${v === g}">${l}</button>`).join("")}</span></span>`;
   }
   function bindPeriodToolbar(id) {
     const el = $(id); if (!el) return;
@@ -317,12 +317,14 @@
   }
   // 기간 표: A·C·R·A+C·A+C+R + 증감률(A+C, A+C+R) + 누적 + 건수
   function periodTable(rows, pool, opts) {
-    const g = perOf(), c = g === "Y" ? "prev" : cmpOf(), cl = cmpLabel(g, c);
-    const drill = opts.drill;
+    const g = perOf(), drill = opts.drill;
+    const cols = g === "Y" ? [["prev", "YoY"]] : [["prev", CMP_NAME[g]], ["yoy", "전년동기 YoY"]];
     const showF = rows.some((b) => b.funnels != null);
-    return `<div class="table-wrap" style="max-height:${opts.maxH || 460}px"><table class="t"><thead><tr><th>${esc(opts.first || "기간")}</th><th class="num">A</th><th class="num">C</th><th class="num">R</th><th class="num">A+C</th><th class="num">A+C ${cl}</th><th class="num">A+C+R</th><th class="num">A+C+R ${cl}</th><th class="num">누적 A+C+R</th>${showF ? `<th class="num">${esc(opts.fLabel || "건수")}</th>` : ""}</tr></thead>
-      <tbody>${rows.map((b) => `<tr ${b.ym != null && drill ? `class="clickable" data-drill='${esc(JSON.stringify(drill(b)))}'` : ""}><td>${esc(b.label)}</td><td class="num">${amt(b.A)}</td><td class="num">${amt(b.C)}</td><td class="num">${amt(b.R)}</td><td class="num">${amt(b.AC)}</td><td class="num">${growthCell(growthOf(b, pool, g, c, "AC"))}</td><td class="num"><b>${amt(b.ACR)}</b></td><td class="num">${growthCell(growthOf(b, pool, g, c, "ACR"))}</td><td class="num">${amt(b.cum_ACR)}</td>${showF ? `<td class="num">${b.funnels == null ? '<span class="muted">—</span>' : cnt(b.funnels)}</td>` : ""}</tr>`).join("") || '<tr><td colspan="10" class="muted">자료 없음</td></tr>'}</tbody></table></div>
-      <p class="desc" style="margin-top:6px">${esc(cl)} = (이번 기간 − 비교 기간) ÷ 비교 기간. 비교 기간 자료가 없거나 0 이하이면, 조회기간이 기간 일부만 포함하거나 기준월 이후가 섞인 진행 중 기간이면 "—"로 표시합니다.${g !== "M" && !opts.sumF ? " 고유 Funnel 건수는 기간 합산이 불가해 월별에서만 표시합니다." : ""}${g !== "M" ? " 행 클릭(목록)은 월별 보기에서 사용할 수 있습니다." : ""}</p>`;
+    const gh = (k) => cols.map(([, l]) => `<th class="num">${k} ${l}</th>`).join("");
+    const gc = (b, k) => cols.map(([c]) => `<td class="num">${growthCell(growthOf(b, pool, g, c, k))}</td>`).join("");
+    return `<div class="table-wrap" style="max-height:${opts.maxH || 460}px"><table class="t"><thead><tr><th>${esc(opts.first || "기간")}</th><th class="num">A</th><th class="num">C</th><th class="num">R</th><th class="num">A+C</th>${gh("A+C")}<th class="num">A+C+R</th>${gh("A+C+R")}<th class="num">누적 A+C+R</th>${showF ? `<th class="num">${esc(opts.fLabel || "건수")}</th>` : ""}</tr></thead>
+      <tbody>${rows.map((b) => `<tr ${b.ym != null && drill ? `class="clickable" data-drill='${esc(JSON.stringify(drill(b)))}'` : ""}><td>${esc(b.label)}</td><td class="num">${amt(b.A)}</td><td class="num">${amt(b.C)}</td><td class="num">${amt(b.R)}</td><td class="num">${amt(b.AC)}</td>${gc(b, "AC")}<td class="num"><b>${amt(b.ACR)}</b></td>${gc(b, "ACR")}<td class="num">${amt(b.cum_ACR)}</td>${showF ? `<td class="num">${b.funnels == null ? '<span class="muted">—</span>' : cnt(b.funnels)}</td>` : ""}</tr>`).join("") || '<tr><td colspan="12" class="muted">자료 없음</td></tr>'}</tbody></table></div>
+      <p class="desc" style="margin-top:6px">${g === "Y" ? "YoY = (올해 − 전년) ÷ 전년" : `${CMP_NAME[g]} = (이번 기간 − 직전 기간) ÷ 직전 기간, 전년동기 YoY = (이번 기간 − 전년 같은 기간) ÷ 전년 같은 기간`}. 비교 기간 자료가 없거나 0 이하, 조회기간이 기간 일부만 포함하거나 기준월 이후가 섞인 진행 중 기간이면 "—"로 표시합니다.${g !== "M" && !opts.sumF ? " 고유 Funnel 건수는 기간 합산이 불가해 월별에서만 표시합니다." : ""}${g !== "M" ? " 행 클릭(목록)은 월별 보기에서 사용할 수 있습니다." : ""}</p>`;
   }
   const poolOf = (arr) => { const o = {}; arr.forEach((b) => { o[b.key] = b; }); return o; };
 
@@ -422,7 +424,7 @@
     h += `<section class="ov-sec ov-split">
       <div class="card"><div class="card-head"><h3>② 기간별 기여매출 추이 ${info(`${k.acr_mode_label} · 막대 A·C·R, 선 A+C+R(같은 축) · 0 기준선 아래는 감액 · 월별 보기에서 막대/선 클릭 → 해당 월 Funnel`)}</h3>${periodToolbar("ovPer")}</div>
         <div class="chart-box"><canvas id="ovChart"></canvas></div>
-        <details class="per-table" ${perOf() !== "M" ? "open" : ""}><summary>기간별 표 · ${esc(cmpLabel(perOf(), perOf() === "Y" ? "prev" : cmpOf()))} 증감률</summary>${periodTable(ovRows, poolOf(ovRows), { drill: (x) => ({ scope: "acr", ym: x.ym }), maxH: 300, fLabel: "고유 Funnel" })}</details></div>
+        <details class="per-table" ${perOf() !== "M" ? "open" : ""}><summary>기간별 표 · ${perOf() === "Y" ? "YoY" : `${CMP_NAME[perOf()]} · 전년동기 YoY`} 증감률</summary>${periodTable(ovRows, poolOf(ovRows), { drill: (x) => ({ scope: "acr", ym: x.ym }), maxH: 300, fLabel: "고유 Funnel" })}</details></div>
       <div class="card"><div class="card-head"><h3>③ 확인 필요</h3><span class="muted">${riskCount}건</span></div>
         <div class="alert-list">${risks.map(([lv, t, ds, v, neg, act]) => `<div class="alert" role="button" tabindex="0" ${act}><span class="sbar ${lv}"></span><div><div class="t">${t}</div><div class="d">${ds}</div></div><div class="v ${neg ? "negv" : ""}">${v}</div></div>`).join("")}</div></div>
     </section>`;
