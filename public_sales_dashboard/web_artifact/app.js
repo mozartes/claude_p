@@ -730,7 +730,7 @@
     document.querySelectorAll("#psTypeSel button").forEach((b) => b.addEventListener("click", () => { S.ui.psChartType = b.dataset.v; store.set("ui", S.ui); render(); }));
     const labels = T.bins.map((b) => b.band);
     chart("psChart", { type: "bar",
-      data: { labels, datasets: [{ label: `${tab} 예상 월매출`, data: T.bins.map((b) => conv(b.monthly || 0)), backgroundColor: COLORS[tab], borderRadius: 3, maxBarThickness: 34 }] },
+      data: { labels, datasets: [{ label: `${tab} 예상 월매출`, data: T.bins.map((b) => conv(b.monthly || 0)), backgroundColor: T.bins.map((b) => { const g = PSG.find((x) => x[1].includes(b.band)); return g ? css(g[2], "#3a7fd0") : css("--muted", "#94a3b8"); }), borderRadius: 3, maxBarThickness: 34 }] },
       options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: tooltipAmt } } },
         scales: { y: { title: { display: true, text: `월매출 (${unitName()})` }, grid: zeroGrid }, x: { grid: { display: false } } },
         onClick: (e, els) => { if (els.length) openDetail({ scope: "in_progress", acr_type: [tab], period: "rev_ym", prob_band: labels[els[0].index] }); } } });
