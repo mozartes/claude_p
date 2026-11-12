@@ -17,7 +17,7 @@
   const SERIES_LABEL = { A: "A", C: "C", R: "R", AC: "A+C", ACR: "A+C+R" };
   const UNIT_WON = { "원": 1, "천원": 1e3, "백만원": 1e6, "억원": 1e8 };
   const PAGE_TITLES = {
-    overview: "종합 현황", funnel: "수주·Funnel 관리", renewal: "재계약·해지 관리", acr: "ACR 수주", presales: "ACR 수주(Pre-sales)", total: "ACR 수주(2026년)",
+    overview: "종합 현황", funnel: "수주·Funnel 관리", renewal: "재계약·해지 관리", acr: "ACR 수주(기여매출)", presales: "ACR 수주(Pre-sales)", total: "ACR 수주(2026년)",
     team: "팀·AM 관리", perf: "AM 성과·활동 점검", insight: "고객·상품·입찰 분석", priority: "우선 확인할 Funnel", detail: "상세 목록", data: "데이터 관리",
   };
 
@@ -571,7 +571,7 @@
     });
   }
 
-  // ------------------------------------------------------------ 페이지: ACR 수주
+  // ------------------------------------------------------------ 페이지: ACR 수주(기여매출)
   async function pageAcr() {
     const j = await api("/view/acr", { filters: S.f });
     setHeader(j);
