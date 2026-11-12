@@ -286,3 +286,25 @@ details.card > summary { cursor: pointer; font-size: 14px; }
 .gr.up { color: var(--ok); } .gr.down { color: var(--neg); }
 details.per-table { margin-top: 10px; }
 details.per-table > summary { cursor: pointer; font-size: 13px; color: var(--text-2); padding: 4px 0; }
+
+/* 메뉴 그룹 이름: 그룹마다 다른 글자색 + 연한 박스 */
+.nav .nav-gt { --gb: var(--surface-2); --gf: var(--text-2); --gl: var(--border);
+  display: inline-block; margin: 12px 0 4px 6px; padding: 2px 10px; border-radius: 6px; font-size: 13px; letter-spacing: .02em;
+  background: var(--gb); color: var(--gf); border: 1px solid var(--gl); }
+.nav .nav-gt.g1 { --gb: #e2f3f1; --gf: #0f766e; --gl: #9fd6cf; }
+.nav .nav-gt.g2 { --gb: #e8ecfd; --gf: #3730a3; --gl: #b6bff3; }
+.nav .nav-gt.g3 { --gb: #fdf1e1; --gf: #9a4a06; --gl: #f2c48c; }
+.nav .nav-gt.g4 { --gb: #fbe9f0; --gf: #a3184f; --gl: #efaec7; }
+.nav .nav-gt.g5 { --gb: #eef1f5; --gf: #334155; --gl: #b8c2d0; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .nav .nav-gt.g1 { --gb: #10302d; --gf: #5eead4; --gl: #1f6b62; }
+  :root:not([data-theme="light"]) .nav .nav-gt.g2 { --gb: #1c2147; --gf: #b4bcff; --gl: #3c4596; }
+  :root:not([data-theme="light"]) .nav .nav-gt.g3 { --gb: #33240f; --gf: #f8c58b; --gl: #7a5420; }
+  :root:not([data-theme="light"]) .nav .nav-gt.g4 { --gb: #3a1626; --gf: #f6a8c6; --gl: #84304f; }
+  :root:not([data-theme="light"]) .nav .nav-gt.g5 { --gb: #232b38; --gf: #cbd5e1; --gl: #4a5668; }
+}
+:root[data-theme="dark"] .nav .nav-gt.g1 { --gb: #10302d; --gf: #5eead4; --gl: #1f6b62; }
+:root[data-theme="dark"] .nav .nav-gt.g2 { --gb: #1c2147; --gf: #b4bcff; --gl: #3c4596; }
+:root[data-theme="dark"] .nav .nav-gt.g3 { --gb: #33240f; --gf: #f8c58b; --gl: #7a5420; }
+:root[data-theme="dark"] .nav .nav-gt.g4 { --gb: #3a1626; --gf: #f6a8c6; --gl: #84304f; }
+:root[data-theme="dark"] .nav .nav-gt.g5 { --gb: #232b38; --gf: #cbd5e1; --gl: #4a5668; }
