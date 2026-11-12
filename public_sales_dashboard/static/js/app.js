@@ -570,6 +570,9 @@
     const kb = esc(`${lbl} · ${S.f.ym_from}~${S.f.ym_to}`);
     let h = `<div class="notice info"><b>${esc(d.mode_label)}</b> — ${esc(d.basis["주의"])}</div>
     <div class="grid kpis">
+      ${(() => { const rc = d.r_change || {}, rt2 = rc.retention || { amount: null }, ch2 = rc.churn || { amount: 0 };
+        const rChg2 = (rt2.amount === null ? t.R : rt2.amount - rt2.prev_amount) + ch2.amount;  // R. 증감매출
+        return kpiCard("A+C+R. 기여매출", amt(t.A + t.C + rChg2), `A ${amt(t.A)} + C ${amt(t.C)} + R 증감 ${amt(rChg2)} · 고유 Funnel ${cnt(t.funnels)}건<br>${kb}`, "hero", { scope: "acr" }); })()}
       ${kpiCard("A. 기여매출", amt(t.A), `Funnel ${cnt(t.funnels_A)}건<br>${kb}`, "a", { scope: "acr", acr_type: ["A"] })}
       ${kpiCard("C. 기여매출", amt(t.C), `Funnel ${cnt(t.funnels_C)}건<br>${kb}`, "c", { scope: "acr", acr_type: ["C"] })}
       ${kpiCard("R. 기여매출", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감" : "재계약 후 월매출"}) · A+C+R 미포함<br>${kb}`, "r", { scope: "acr", acr_type: ["R"] })}
@@ -578,9 +581,6 @@
         const rd = rt.amount === null ? t.R : rt.amount - rt.prev_amount;  // 재계약 증감(변경 − 기존, 상품 선택 시 상품 슬롯 증감)
         return kpiCard("R. 증감매출", amt(rd + ch.amount), `재계약 증감 ${amt(rd)} + 해지 감소 ${amt(ch.amount)}<br>해지확정 ${cnt(ch.funnels)}건${exn ? ` · 계산 제외 ${cnt(exn)}건` : ""} · A+C+R에 포함<br>${kb}`, "neg", { status: ["해지확정"], period: "rev_ym" }); })()}
       ${kpiCard("A+C. 기여매출", amt(t.AC), `Funnel ${cnt(t.funnels_A + t.funnels_C)}건<br>${kb}`, "", { scope: "acr", acr_type: ["A", "C"] })}
-      ${(() => { const rc = d.r_change || {}, rt2 = rc.retention || { amount: null }, ch2 = rc.churn || { amount: 0 };
-        const rChg2 = (rt2.amount === null ? t.R : rt2.amount - rt2.prev_amount) + ch2.amount;  // R. 증감매출
-        return kpiCard("A+C+R. 기여매출", amt(t.A + t.C + rChg2), `A ${amt(t.A)} + C ${amt(t.C)} + R 증감 ${amt(rChg2)} · 고유 Funnel ${cnt(t.funnels)}건<br>${kb}`, "", { scope: "acr" }); })()}
       ${kpiCard("고유 Funnel 건수", cnt(t.funnels) + "건", "월별 반복 반영 횟수 아님", "", { scope: "acr" })}
     </div>
     ${Object.keys(d.excluded).length ? `<div class="notice warn">확정 조건이지만 이 지표에서 제외: ${Object.entries(d.excluded).map(([r, n]) => `${esc(r)} ${n}건`).join(", ")} <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr_excluded" }))}'>목록 보기</span></div>` : ""}
