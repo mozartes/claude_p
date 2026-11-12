@@ -289,8 +289,9 @@ details.per-table > summary { cursor: pointer; font-size: 13px; color: var(--tex
 
 /* 메뉴 그룹 이름: 그룹마다 다른 글자색 + 연한 박스 */
 .nav .nav-gt { --gb: var(--surface-2); --gf: var(--text-2); --gl: var(--border);
-  display: inline-block; margin: 12px 0 4px 6px; padding: 2px 10px; border-radius: 6px; font-size: 13px; letter-spacing: .02em;
-  background: var(--gb); color: var(--gf); border: 1px solid var(--gl); }
+  display: block; margin: 16px 2px 6px; padding: 6px 12px; border-radius: 8px; font-size: 15px; font-weight: 800; letter-spacing: .02em;
+  background: var(--gb); color: var(--gf); border: 2px solid color-mix(in srgb, var(--gf) 70%, var(--gl)); }
+.nav .nav-gt:first-child { margin-top: 10px; }
 .nav .nav-gt.g1 { --gb: #e2f3f1; --gf: #0f766e; --gl: #9fd6cf; }
 .nav .nav-gt.g2 { --gb: #e8ecfd; --gf: #3730a3; --gl: #b6bff3; }
 .nav .nav-gt.g3 { --gb: #fdf1e1; --gf: #9a4a06; --gl: #f2c48c; }
