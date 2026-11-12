@@ -312,3 +312,9 @@ details.per-table > summary { cursor: pointer; font-size: 13px; color: var(--tex
 
 /* 제목 옆 기간: 제목보다 작게 */
 .h-period { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 4px; letter-spacing: 0; }
+
+/* 종합 현황 ACR(기여매출) 줄: Hero + 보조 5칸(R. 증감매출 포함) */
+@media (min-width: 1281px) {
+  .strip.six { grid-template-columns: minmax(0, 2fr) repeat(5, minmax(0, 1fr)); }
+  .strip.six .kpi.hero, .strip.six .kpi:not(.hero) { grid-column: auto; }
+}
