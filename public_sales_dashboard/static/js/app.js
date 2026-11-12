@@ -386,13 +386,18 @@
       const tdk = (extra) => Object.assign({ scope: "total" }, extra || {});
       const exn = Object.values(tk.excluded || {}).reduce((x, y) => x + y, 0);
       const rNote = S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간";
-      h += `<section class="ov-sec"><div class="ov-h"><h3>ACR 수주(${tk.year}년) ${info(`확정 건(A·C=Win, R=재계약완료)의 계약 전체 기간 매출을 수주년월에 합산 · 수주년월 ${tk.year}-01~${tk.year}-12 · R = ${rNote}${exn ? ` · 계약기간 누락 등 ${exn}건 제외` : ""} · 연도는 ACR 수주(${tk.year}년) 화면에서 변경`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
-      <div class="strip">
-        ${kpiCard("A+C+R 수주", amt(tk.ACR), `${row(`Funnel ${cnt(tk.funnels)}건`, '<span class="badge" title="원본에 목표·전년 자료 없음">목표 · 자료 없음</span>')}${mini(tk)}${row(`A+C ${amt(tk.AC)} · ${pctOf(tk.AC, tk.ACR)}`, `R ${pctOf(tk.R, tk.ACR)}`)}`, "hero", tdk())}
-        ${kpiCard("A. 수주", amt(tk.A), row(`${cnt(tk.funnels_A)}건`, pctOf(tk.A, tk.ACR)), "a", tdk({ acr_type: ["A"] }))}
-        ${kpiCard("C. 수주", amt(tk.C), row(`${cnt(tk.funnels_C)}건`, pctOf(tk.C, tk.ACR)), "c", tdk({ acr_type: ["C"] }))}
-        ${kpiCard("R. 재계약", amt(tk.R), row(`${cnt(tk.funnels_R)}건`, pctOf(tk.R, tk.ACR)), "r", tdk({ acr_type: ["R"] }))}
-        ${kpiCard(`${tk.year}년 수주(A+C)`, amt(tk.AC), row(`${cnt(tk.funnels_A + tk.funnels_C)}건`, pctOf(tk.AC, tk.ACR)), "", tdk({ acr_type: ["A", "C"] }))}
+      const pSel = S.f.products.length || S.f.product_group !== "all";
+      // R. 증감매출 = 재계약 증감 × 계약기간 + 해지 감소 × 계약기간, A+C+R 수주 = A + C + R. 증감매출
+      const cr = tk.churn_ref || { amount: 0, count: 0, excluded: 0 }, rf0 = tk.r_ref || { new_total: 0, prev_total: 0 };
+      const rdT = pSel ? tk.R : rf0.new_total - rf0.prev_total, rChgT = rdT + cr.amount, acrT = tk.A + tk.C + rChgT;
+      h += `<section class="ov-sec"><div class="ov-h"><h3>ACR 수주(${tk.year}년) ${info(`확정 건(A·C=Win, R=재계약완료)의 계약 전체 기간 매출을 수주년월에 합산 · 수주년월 ${tk.year}-01~${tk.year}-12 · A+C+R 수주 = A + C + R. 증감매출(재계약 증감 + 해지 감소, 계약기간 기준) · R. 재계약(${rNote})은 참고용으로 합계 미포함${exn ? ` · 계약기간 누락 등 ${exn}건 제외` : ""} · 연도는 ACR 수주(${tk.year}년) 화면에서 변경`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
+      <div class="strip six">
+        ${kpiCard("A+C+R 수주", amt(acrT), `${row(`Funnel ${cnt(tk.funnels_A + tk.funnels_C)}건 (A+C)`, '<span class="badge" title="원본에 목표·전년 자료 없음">목표 · 자료 없음</span>')}<span class="row"><span>A+C ${amt(tk.AC)} + R 증감 ${amt(rChgT)}</span></span><div class="mini" aria-hidden="true"><span style="width:${wOf(tk.A, tk.AC)}%;background:var(--series-a)"></span><span style="width:${wOf(tk.C, tk.AC)}%;background:var(--series-c)"></span></div>${row(`A ${pctOf(tk.A, tk.AC)} · C ${pctOf(tk.C, tk.AC)}`, "A+C 구성비")}`, "hero", tdk())}
+        ${kpiCard("A. 수주", amt(tk.A), row(`${cnt(tk.funnels_A)}건`, `<span title="A+C 중 비중">${pctOf(tk.A, tk.AC)}</span>`), "a", tdk({ acr_type: ["A"] }))}
+        ${kpiCard("C. 수주", amt(tk.C), row(`${cnt(tk.funnels_C)}건`, `<span title="A+C 중 비중">${pctOf(tk.C, tk.AC)}</span>`), "c", tdk({ acr_type: ["C"] }))}
+        ${kpiCard("R. 재계약", amt(tk.R), row(`${cnt(tk.funnels_R)}건`, '<span class="muted" title="A+C+R 수주에는 R. 증감매출을 더함">합계 미포함</span>'), "r", tdk({ acr_type: ["R"] }))}
+        ${kpiCard("R. 증감매출", amt(rChgT), `<span class="row"><span>재계약 ${amt(rdT)}</span></span><span class="row"><span>해지 ${amt(cr.amount)} · ${cnt(cr.count)}건</span></span><span class="row"><span class="muted">A+C+R에 포함</span></span>`, "neg", { status: ["해지확정"], period: "win_ym" })}
+        ${kpiCard(`${tk.year}년 수주(A+C)`, amt(tk.AC), row(`${cnt(tk.funnels_A + tk.funnels_C)}건`, ""), "", tdk({ acr_type: ["A", "C"] }))}
       </div></section>`;
     }
     // ① 핵심 KPI — 2줄: 해당기간 기여매출(조회기간 매출 발생분), R = 재계약 후 월매출(리텐션)
@@ -735,13 +740,15 @@
     <div class="grid kpis">
       ${kpiCard("A. 수주", amt(t.A), `Funnel ${cnt(t.funnels_A)}건<br>${kb}`, "a", dk({ acr_type: ["A"] }))}
       ${kpiCard("C. 수주", amt(t.C), `Funnel ${cnt(t.funnels_C)}건<br>${kb}`, "c", dk({ acr_type: ["C"] }))}
-      ${kpiCard("R. 재계약", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"})<br>${kb}`, "r", dk({ acr_type: ["R"] }))}
+      ${kpiCard("R. 재계약", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"}) · A+C+R 미포함<br>${kb}`, "r", dk({ acr_type: ["R"] }))}
       ${(() => { const cr = d.churn_ref || { amount: 0, count: 0, excluded: 0 };
         const pSel = S.f.products.length || S.f.product_group !== "all";
         const rd = pSel ? t.R : rf.new_total - rf.prev_total;  // 재계약 증감 × 계약기간(상품 선택 시 슬롯 증감 × 계약기간)
-        return kpiCard("R. 증감매출", amt(rd + cr.amount), `재계약 증감 ${amt(rd)} + 해지 감소 ${amt(cr.amount)}<br>해지확정 ${cnt(cr.count)}건${cr.excluded ? ` · 계산 제외 ${cnt(cr.excluded)}건` : ""} · A+C+R 합계와 별도<br>${kb}`, "neg", { status: ["해지확정"], period: "win_ym" }); })()}
+        return kpiCard("R. 증감매출", amt(rd + cr.amount), `재계약 증감 ${amt(rd)} + 해지 감소 ${amt(cr.amount)}<br>해지확정 ${cnt(cr.count)}건${cr.excluded ? ` · 계산 제외 ${cnt(cr.excluded)}건` : ""} · A+C+R에 포함<br>${kb}`, "neg", { status: ["해지확정"], period: "win_ym" }); })()}
       ${kpiCard(`${y}년 수주(A+C)`, amt(t.AC), `Funnel ${cnt(t.funnels_A + t.funnels_C)}건<br>${kb}`, "", dk({ acr_type: ["A", "C"] }))}
-      ${kpiCard("A+C+R. 매출", amt(t.ACR), `A+C ${amt(t.AC)} + R ${amt(t.R)} · Funnel ${cnt(t.funnels)}건<br>${kb}`, "", dk())}
+      ${(() => { const cr = d.churn_ref || { amount: 0 }; const pSel = S.f.products.length || S.f.product_group !== "all";
+        const rChg = (pSel ? t.R : rf.new_total - rf.prev_total) + cr.amount;  // R. 증감매출
+        return kpiCard("A+C+R. 매출", amt(t.A + t.C + rChg), `A ${amt(t.A)} + C ${amt(t.C)} + R 증감 ${amt(rChg)}<br>Funnel ${cnt(t.funnels_A + t.funnels_C)}건(A+C)<br>${kb}`, "", dk()); })()}
     </div>
     ${Object.keys(d.excluded).length ? `<div class="notice warn">집계에서 제외: ${Object.entries(d.excluded).map(([k, v]) => `${esc(k)} ${v}건`).join(", ")}</div>` : ""}
     ${d.mismatch ? `<div class="notice warn">계약기간매출이 월매출합계 × 계약기간과 다른 건 ${d.mismatch}건 — 원본 계약기간매출 그대로 합산했습니다.</div>` : ""}
