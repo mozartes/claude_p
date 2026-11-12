@@ -659,8 +659,8 @@
     const drill = (extra) => esc(JSON.stringify(dObj(extra)));
     const sm = d.summary;
     // 월별 ACR 수주 증감액(Pre-sales) — 가능성 5개 묶음(겹치지 않음) 막대 + 합계 선
-    const PSG = [["30%이하", ["30%이하"], "--pb-1"], ["30%이상", ["30%이상", "40%이상"], "--pb-2"], ["50%이상", ["50%이상", "60%이상"], "--pb-3"],
-      ["70%이상", ["70%이상", "80%이상"], "--pb-4"], ["90%이상", ["90%이상", "100%이상"], "--pb-5"]];
+    const PSG = [["30%이하", ["30%이하"], "--ps-1"], ["30%이상", ["30%이상", "40%이상"], "--ps-2"], ["50%이상", ["50%이상", "60%이상"], "--ps-3"],
+      ["70%이상", ["70%이상", "80%이상"], "--ps-4"], ["90%이상", ["90%이상", "100%이상"], "--ps-5"]];
     const pct_ = ["ALL", "A", "C", "R"].includes(S.ui.psChartType) ? S.ui.psChartType : "ALL";
     const cTypes = pct_ === "ALL" ? ["A", "C", "R"] : [pct_];
     const psSer = Array.isArray(S.ui.psSeries) ? S.ui.psSeries : PSG.map((g) => g[0]).concat(["합계"]);
@@ -671,7 +671,7 @@
     const unk = mons.reduce((a, m, i) => a + gsum(i, ["미확인"]), 0);
     let h = `<div class="card"><div class="card-head"><h3>월별 ACR 수주 증감액 (Pre-sales)</h3>
         <div class="legend" id="psSerSel">${PSG.map(([lb, , tok]) => `<label><input type="checkbox" value="${lb}" ${psSer.includes(lb) ? "checked" : ""}><i style="background:${css(tok, "#3a7fd0")}"></i>${lb}</label>`).join("")}
-          <label><input type="checkbox" value="합계" ${psSer.includes("합계") ? "checked" : ""}><i style="background:${COLORS.ACR}"></i>합계</label></div></div>
+          <label><input type="checkbox" value="합계" ${psSer.includes("합계") ? "checked" : ""}><i style="background:${css("--ps-6", "#7c3aed")}"></i>합계</label></div></div>
       <div class="toolbar" style="margin:4px 0 6px"><span class="seg-light" id="psTypeSel">${[["ALL", "A+C+R"], ["A", "A"], ["C", "C"], ["R", "R"]].map(([k, l]) => `<button type="button" data-v="${k}" class="${k === pct_ ? "on" : ""}">${l}</button>`).join("")}</span>
         <span class="muted">진행 중(Pre Sales·제안완료) · 매출발생년월 기준 · 막대=가능성 구간, 선=합계 · 단위 ${esc(unitName())} · 클릭 → 해당 월·구간 Funnel</span></div>
       <p class="desc">30%이하=0~29%, 30%이상=30~49%, 50%이상=50~69%, 70%이상=70~89%, 90%이상=90~100%.${unk ? ` 가능성 미확인 ${fmtNum(conv(unk)).replace(/<[^>]+>/g, "")}은 차트에서 제외.` : ""}</p>
@@ -713,7 +713,7 @@
     document.querySelectorAll("[data-pstab]").forEach((b) => b.addEventListener("click", (e) => { e.stopPropagation(); S.ui.psTab = b.dataset.pstab; store.set("ui", S.ui); render(); }));
     const visG = PSG.map((g, i) => [g, i]).filter(([g]) => psSer.includes(g[0]));
     const mds = visG.map(([g, i]) => ({ type: "bar", label: g[0], bands: g[1], data: gData[i].map(conv), backgroundColor: css(g[2], "#3a7fd0"), borderRadius: 3, maxBarThickness: 14, order: 2 }));
-    if (psSer.includes("합계")) mds.push({ type: "line", label: "합계", bands: PSG.flatMap((g) => g[1]), data: totData.map(conv), borderColor: COLORS.ACR, backgroundColor: COLORS.ACR, borderWidth: 2, pointRadius: 3, tension: 0, order: 1 });
+    if (psSer.includes("합계")) mds.push({ type: "line", label: "합계", bands: PSG.flatMap((g) => g[1]), data: totData.map(conv), borderColor: css("--ps-6", "#7c3aed"), backgroundColor: css("--ps-6", "#7c3aed"), borderWidth: 2, pointRadius: 3, tension: 0, order: 1 });
     chart("psMonthChart", { data: { labels: mons.map((m) => m.label), datasets: mds },
       options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
         plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: tooltipAmt } } },

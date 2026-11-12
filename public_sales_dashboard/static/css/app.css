@@ -318,3 +318,8 @@ details.per-table > summary { cursor: pointer; font-size: 13px; color: var(--tex
   .strip.six { grid-template-columns: minmax(0, 2fr) repeat(5, minmax(0, 1fr)); }
   .strip.six .kpi.hero, .strip.six .kpi:not(.hero) { grid-column: auto; }
 }
+
+/* Pre-sales 가능성 구간 색: 낮음→높음 = 적색·주황·노랑·파랑·녹색, 합계 선 = 보라 */
+:root { --ps-1: #dc2626; --ps-2: #ea7a0c; --ps-3: #eab308; --ps-4: #2563eb; --ps-5: #16a34a; --ps-6: #7c3aed; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ps-1: #f87171; --ps-2: #fb923c; --ps-3: #facc15; --ps-4: #60a5fa; --ps-5: #4ade80; --ps-6: #c084fc; } }
+:root[data-theme="dark"] { --ps-1: #f87171; --ps-2: #fb923c; --ps-3: #facc15; --ps-4: #60a5fa; --ps-5: #4ade80; --ps-6: #c084fc; }
