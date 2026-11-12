@@ -309,3 +309,6 @@ details.per-table > summary { cursor: pointer; font-size: 13px; color: var(--tex
 :root[data-theme="dark"] .nav .nav-gt.g3 { --gb: #33240f; --gf: #f8c58b; --gl: #7a5420; }
 :root[data-theme="dark"] .nav .nav-gt.g4 { --gb: #3a1626; --gf: #f6a8c6; --gl: #84304f; }
 :root[data-theme="dark"] .nav .nav-gt.g5 { --gb: #232b38; --gf: #cbd5e1; --gl: #4a5668; }
+
+/* 제목 옆 기간: 제목보다 작게 */
+.h-period { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 4px; letter-spacing: 0; }

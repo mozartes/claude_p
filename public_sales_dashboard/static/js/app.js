@@ -398,7 +398,7 @@
     // ① 핵심 KPI — 2줄: 해당기간 기여매출(조회기간 매출 발생분), R = 재계약 후 월매출(리텐션)
     const rMeta = rt.amount === null ? row(`${cnt(a.funnels_R)}건`, pctOf(a.R, a.ACR))
       : `${row(`${cnt(a.funnels_R)}건`, pctOf(a.R, a.ACR))}<span class="row"><span title="재계약 전 월매출 기준 유지분 → 증감">증감 ${amt(rt.amount - rt.prev_amount)}</span></span>`;
-    h += `<section class="ov-sec"><div class="ov-h"><h3>해당기간 기여매출 · ${esc(S.f.ym_from)}~${esc(S.f.ym_to)} ${info(`확정 ACR 중 조회기간에 매출이 발생하는 부분(매출발생년월 기준) · ${ml} · R = 재계약 후 월매출(리텐션)${rt.amount === null ? " · 상품 선택 시 R은 재계약 증감 기준" : ""}`)}</h3><span class="unit">단위 ${esc(unitName())} · 막대 안 선 = 월별 추이</span></div>
+    h += `<section class="ov-sec"><div class="ov-h"><h3>ACR(기여매출) <span class="h-period">${esc(S.f.ym_from)}~${esc(S.f.ym_to)}</span> ${info(`확정 ACR 중 조회기간에 매출이 발생하는 부분(매출발생년월 기준) · ${ml} · R = 재계약 후 월매출(리텐션)${rt.amount === null ? " · 상품 선택 시 R은 재계약 증감 기준" : ""}`)}</h3><span class="unit">단위 ${esc(unitName())} · 막대 안 선 = 월별 추이</span></div>
     <div class="strip">
       ${kpiCard("A+C+R 기여매출", amt(a.ACR), `${row(`고유 Funnel ${cnt(a.funnels)}건`, '<span class="badge" title="원본에 목표·전년 자료 없음">목표 · 자료 없음</span>')}${mini(a)}${row(`A+C ${amt(a.AC)} · ${pctOf(a.AC, a.ACR)}`, `R ${pctOf(a.R, a.ACR)}`)}`, "hero", { scope: "acr" })}
       ${kpiCard("A 기여매출", amt(a.A), row(`${cnt(a.funnels_A)}건`, pctOf(a.A, a.ACR)) + spark("A", "var(--series-a)"), "a", { scope: "acr", acr_type: ["A"] })}
