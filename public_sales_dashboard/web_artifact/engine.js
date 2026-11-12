@@ -663,11 +663,14 @@
     const df = filterDf(ds, p);
     if (!df.length) return { empty: true };
     const res = computeAcr(df, p.mode, p.ym_from, p.ym_to, p.products, p.types);
+    // R. 증감매출 = 재계약 증감(변경−기존) + 해지확정 감소액(같은 ACR 기준). 종합 현황 관리 지표와 같은 계산
+    res.r_change = { retention: retentionContrib(df, p.mode, p.ym_from, p.ym_to, p.products), churn: churnContrib(df, p.mode, p.ym_from, p.ym_to, p.products) };
     res.basis = {
       "기간 기준": p.mode === "start" ? "매출발생년월" : "매출발생년월부터 계약기간(월) 동안 매월 반영(시작월 포함)",
       "확정 조건": "A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
       "금액": p.products.length ? "선택 상품·카테고리의 대응 월매출(상품1~5 슬롯 합)" : "월매출합계",
       "상품 카테고리": CFG.PRODUCT_GROUPS[p.product_group] + (p.product_group !== "all" ? " — 전용회선 + 전용회선외 = 상품별 월매출 합계(월매출합계와 다른 행은 데이터 품질에 표시)" : ""),
+      "R. 증감매출": "재계약 증감(재계약 후 − 기존, 계약기간 반영) + 해지확정 감소액(월매출합계 = −기존매출, R과 같은 기준). A+C+R 합계에 넣지 않음",
       "R 해석": p.products.length ? "상품 선택: R = 선택 상품 슬롯 금액(재계약 증감). 변경매출은 상품별 값이 없어 리텐션 매출 산출 불가"
           : "R = 재계약 후 월매출(변경매출, 리텐션 매출). A+C+R = A+C 기여매출 + R매출. 증감액은 R매출 − 기존매출",
       "누적": `선택기간 시작월(${ymLabel(p.ym_from)})부터 누적`,

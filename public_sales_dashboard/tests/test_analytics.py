@@ -355,3 +355,15 @@ def test_retention_revenue(make_ds):
     assert k["acr"]["R"] == 80  # R = 변경매출 8 × 10개월
     assert k["retention"]["amount"] == 80 and k["retention"]["prev_amount"] == 100 and k["retention"]["funnels"] == 1
     assert A.overview_view(ds, A.parse_params({"ym_from": "2026-01", "ym_to": "2026-12", "products": ["국내전용"]}))["kpi"]["retention"]["amount"] is None
+
+
+def test_acr_r_change(make_ds):
+    """ACR 수주(기여매출) R. 증감매출 = 재계약 증감 + 해지 감소(종합 현황 관리 지표와 같은 값)"""
+    import analytics as A
+    ds = make_ds([row(type="Ret.", status="재계약완료", monthly=-2, prev=10, new=8, rev=202603, term=12),
+                  row(type="Ret.", status="해지확정", monthly=-5, prev=5, new=0, rev=202606, term=12)])
+    p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12"})
+    rc = A.acr_view(ds, p)["r_change"]
+    assert rc["retention"]["amount"] - rc["retention"]["prev_amount"] == -20 and rc["churn"]["amount"] == -35
+    k = A.overview_view(ds, p)["kpi"]
+    assert rc["churn"] == k["churn_acr"] and rc["retention"] == k["retention"]

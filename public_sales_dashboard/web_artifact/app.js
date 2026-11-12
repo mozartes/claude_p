@@ -589,6 +589,11 @@
       ${kpiCard("A. 기여매출", amt(t.A), `Funnel ${cnt(t.funnels_A)}건<br>${kb}`, "a", { scope: "acr", acr_type: ["A"] })}
       ${kpiCard("C. 기여매출", amt(t.C), `Funnel ${cnt(t.funnels_C)}건<br>${kb}`, "c", { scope: "acr", acr_type: ["C"] })}
       ${kpiCard("R. 기여매출", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감" : "재계약 후 월매출"})<br>${kb}`, "r", { scope: "acr", acr_type: ["R"] })}
+      ${(() => { const rc = d.r_change || {}, rt = rc.retention || { amount: null }, ch = rc.churn || { amount: 0, funnels: 0, excluded: {} };
+        const exn = Object.values(ch.excluded || {}).reduce((x, y) => x + y, 0);
+        const rd = rt.amount === null ? null : rt.amount - rt.prev_amount;  // 재계약 증감(변경 − 기존)
+        if (rd === null) return kpiCard("R. 증감매출", '<span class="nodata">산출 안 함</span>', `상품 선택 시 재계약 증감을 상품별로 나눌 수 없음 · 해지 ${amt(ch.amount)}`, "neg", { status: ["해지확정"], period: "rev_ym" });
+        return kpiCard("R. 증감매출", amt(rd + ch.amount), `재계약 증감 ${amt(rd)} + 해지 감소 ${amt(ch.amount)}<br>해지확정 ${cnt(ch.funnels)}건${exn ? ` · 계산 제외 ${cnt(exn)}건` : ""} · A+C+R에 미포함<br>${kb}`, "neg", { status: ["해지확정"], period: "rev_ym" }); })()}
       ${kpiCard("A+C. 기여매출", amt(t.AC), `Funnel ${cnt(t.funnels_A + t.funnels_C)}건<br>${kb}`, "", { scope: "acr", acr_type: ["A", "C"] })}
       ${kpiCard("A+C+R. 기여매출", amt(t.ACR), `A+C ${amt(t.AC)} + R ${amt(t.R)} · 고유 Funnel ${cnt(t.funnels)}건<br>${kb}`, "", { scope: "acr" })}
       ${kpiCard("고유 Funnel 건수", cnt(t.funnels) + "건", "월별 반복 반영 횟수 아님", "", { scope: "acr" })}
