@@ -18,7 +18,7 @@
     meta: null, page: "overview", charts: [], last: null,
     f: null, // filters
     ui: { srcUnit: "unknown", dispUnit: "백만원", dec: 1, acrSeries: ["A", "C", "R", "ACR"], insightTab: "customer" },
-    detail: { drill: {}, page: 1, sort: "row", desc: false, q: "", size: 50 },
+    detail: { drill: { period: "rev_ym" }, page: 1, sort: "row", desc: false, q: "", size: 50 },
   };
 
   // ------------------------------------------------------------ 유틸
@@ -912,11 +912,13 @@
     let meta = S.meta && S.meta.rules ? S.meta.rules : null;
     let h = `<div class="card"><div class="toolbar">
         <span class="chip">${esc(d.desc || "전체")}</span>
+        <span class="seg-light" id="dPeriod" role="group" aria-label="기간 적용 기준">${[["", "기간 무관"], ["rev_ym", "매출발생년월 기간 내"], ["win_ym", "수주년월 기간 내"]].map(([v, l]) => `<button type="button" data-prd="${v}" class="${(dt.drill.period || "") === v ? "on" : ""}" aria-pressed="${(dt.drill.period || "") === v}">${l}</button>`).join("")}</span>
         <input type="text" id="dq" placeholder="목록 내 검색(고객사·Funnel·AM·팀)" value="${esc(dt.q)}">
         <button class="btn small" id="dqBtn" type="button">검색</button>
         ${isPriority ? "" : `<button class="btn small" id="dReset" type="button">조건 해제(전체)</button>`}
         <button class="btn small primary" id="dExport" type="button">Excel 다운로드</button>
         <span class="muted">총 ${cnt(d.total)}건 · 금액 단위 ${esc(unitName())}</span></div>
+      <p class="desc">조회기간 ${esc(S.f.ym_from)}~${esc(S.f.ym_to)} · ${dt.drill.period === "rev_ym" ? "매출발생년월이 조회기간 안인 건만 표시" : dt.drill.period === "win_ym" ? "수주년월이 조회기간 안인 건만 표시" : "기간과 관계없이 조건에 맞는 전체 건 표시"}${dt.drill.scope === "acr" && S.f.mode === "term" ? " · 확정 ACR(계약기간 반영) 목록은 매출발생년월이 조회기간 이전이어도 조회기간에 매출이 이어지는 계약을 포함합니다. 조회기간에 매출이 시작된 건만 보려면 ‘매출발생년월 기간 내’를 고르세요." : ""}</p>
       ${isPriority ? '<p class="desc">우선순위는 설명 가능한 조건 규칙으로 계산한 업무 확인 순서이며, 수주 확률이나 AM 평가점수가 아닙니다. 한 Funnel의 여러 사유는 한 행에 모아 표시합니다.</p>' : ""}
       <div class="table-wrap" style="max-height:68vh"><table class="t"><thead><tr>
         ${sortH("level", "우선순위")}<th>확인 사유</th><th>권장 확인 행동</th>${sortH("team", "팀")}${sortH("am", "AM")}${sortH("customer", "고객사")}${sortH("funnel_id", "Funnel번호")}
@@ -945,7 +947,11 @@
     const doQ = () => { dt.q = $("dq").value.trim(); dt.page = 1; rerun(); };
     $("dqBtn").addEventListener("click", doQ);
     $("dq").addEventListener("keydown", (e) => { if (e.key === "Enter") doQ(); });
-    if ($("dReset")) $("dReset").addEventListener("click", () => { dt.drill = {}; dt.q = ""; dt.page = 1; rerun(); });
+    if ($("dReset")) $("dReset").addEventListener("click", () => { dt.drill = dt.drill.period ? { period: dt.drill.period } : {}; dt.q = ""; dt.page = 1; rerun(); });
+    document.querySelectorAll("#dPeriod [data-prd]").forEach((b) => b.addEventListener("click", () => {
+      if (b.dataset.prd) dt.drill.period = b.dataset.prd; else delete dt.drill.period;
+      dt.page = 1; rerun();
+    }));
     $("dExport").addEventListener("click", () => exportExcel(dt.drill, dt.q));
   }
   function exportExcel(drill, q) {
@@ -1140,7 +1146,11 @@
 
   // ------------------------------------------------------------ 이벤트
   function bind() {
-    document.querySelectorAll("#nav button").forEach((b) => b.addEventListener("click", () => go(b.dataset.page)));
+    document.querySelectorAll("#nav button").forEach((b) => b.addEventListener("click", () => {
+      // 메뉴에서 '상세 목록'을 열면 조회기간(매출발생년월) 안의 건부터 보여 줌
+      if (b.dataset.page === "detail") S.detail = { drill: { period: "rev_ym" }, page: 1, sort: "row", desc: false, q: "", size: S.detail.size || 50 };
+      go(b.dataset.page);
+    }));
     $("applyBtn").addEventListener("click", () => { readFilters(); render(); });
     // 기준일·기간·ACR 기준은 바꾸는 즉시 다시 계산('조회' 버튼 없이도 반영)
     ["f_base", "f_from", "f_to", "f_mode"].forEach((id) => $(id).addEventListener("change", () => { readFilters(); render(); }));
