@@ -690,7 +690,7 @@
       <div class="card"><div class="card-head"><h3>${tab} 수주${isR ? "(재계약)" : ""} 가능성 구간별 예상 월매출</h3><span class="muted">막대 클릭 → 해당 구간 Funnel</span></div>
         <p class="desc">구간 금액(막대) · 단위 ${esc(unitName())} · 0 기준선 아래는 감액</p>
         <div class="chart-box"><canvas id="psChart"></canvas></div></div>
-      <div class="card"><h3>구간별 건수</h3><p class="desc">상태별(Pre Sales / 제안완료) 건수</p><div class="chart-box"><canvas id="psCntChart"></canvas></div></div>
+      <div class="card"><h3>구간별 건수</h3><p class="desc">막대 색 = 가능성 구간 색(위 차트와 동일) · 진한 색 Pre Sales / 연한 색 제안완료</p><div class="chart-box"><canvas id="psCntChart"></canvas></div></div>
     </div>
     <div class="card" style="margin-top:14px"><h3>${tab} 가능성 구간표</h3>
       <p class="desc">30%이하 = 0~29%, 30%이상 = 30~39% … 90%이상 = 90~99%, 100%이상 = 100%. ‘해당 % 이상 누적’은 그 구간부터 100%까지의 합입니다. 행 클릭 → Funnel 목록</p>
@@ -729,16 +729,19 @@
       S.ui.psSeries = Array.from(document.querySelectorAll("#psSerSel input:checked")).map((x) => x.value); store.set("ui", S.ui); render(); }));
     document.querySelectorAll("#psTypeSel button").forEach((b) => b.addEventListener("click", () => { S.ui.psChartType = b.dataset.v; store.set("ui", S.ui); render(); }));
     const labels = T.bins.map((b) => b.band);
+    // 구간 색(월별 차트와 동일): 30%이하 적 · 30~49% 주황 · 50~69% 노랑 · 70~89% 파랑 · 90~100% 녹색 · 미확인 회색
+    const binCols = T.bins.map((b) => { const g = PSG.find((x) => x[1].includes(b.band)); return g ? css(g[2], "#3a7fd0") : css("--muted", "#94a3b8"); });
+    const alphaOf = (c, a) => { const m = /^#([0-9a-f]{6})$/i.exec(String(c).trim()); if (!m) return c; const n = parseInt(m[1], 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
     chart("psChart", { type: "bar",
-      data: { labels, datasets: [{ label: `${tab} 예상 월매출`, data: T.bins.map((b) => conv(b.monthly || 0)), backgroundColor: T.bins.map((b) => { const g = PSG.find((x) => x[1].includes(b.band)); return g ? css(g[2], "#3a7fd0") : css("--muted", "#94a3b8"); }), borderRadius: 3, maxBarThickness: 34 }] },
+      data: { labels, datasets: [{ label: `${tab} 예상 월매출`, data: T.bins.map((b) => conv(b.monthly || 0)), backgroundColor: binCols, borderRadius: 3, maxBarThickness: 34 }] },
       options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: tooltipAmt } } },
         scales: { y: { title: { display: true, text: `월매출 (${unitName()})` }, grid: zeroGrid }, x: { grid: { display: false } } },
         onClick: (e, els) => { if (els.length) openDetail({ scope: "in_progress", acr_type: [tab], period: "rev_ym", prob_band: labels[els[0].index] }); } } });
     chart("psCntChart", { type: "bar",
       data: { labels, datasets: [
-        { label: "Pre Sales", data: T.bins.map((b) => b.presales), backgroundColor: COLORS[tab], borderRadius: 2, maxBarThickness: 34, stack: "s" },
-        { label: "제안완료", data: T.bins.map((b) => b.proposal), backgroundColor: COLORS.ACR, borderRadius: 2, maxBarThickness: 34, stack: "s" }] },
-      options: { maintainAspectRatio: false, plugins: { legend: { position: "bottom" } },
+        { label: "Pre Sales(진한 색)", data: T.bins.map((b) => b.presales), backgroundColor: binCols.map((c) => alphaOf(c, 1)), borderColor: binCols, borderWidth: 1, borderRadius: 2, maxBarThickness: 34, stack: "s" },
+        { label: "제안완료(연한 색)", data: T.bins.map((b) => b.proposal), backgroundColor: binCols.map((c) => alphaOf(c, 0.45)), borderColor: binCols, borderWidth: 1, borderRadius: 2, maxBarThickness: 34, stack: "s" }] },
+      options: { maintainAspectRatio: false, plugins: { legend: { position: "bottom", labels: { generateLabels: () => [{ text: "Pre Sales(진한 색)", fillStyle: alphaOf(css("--text-2", "#888"), 1), strokeStyle: "transparent", fontColor: css("--text-2", "#555") }, { text: "제안완료(연한 색)", fillStyle: alphaOf(css("--text-2", "#888"), 0.4), strokeStyle: "transparent", fontColor: css("--text-2", "#555") }] } } },
         scales: { y: { stacked: true, title: { display: true, text: "건수" }, grid: zeroGrid, ticks: { precision: 0 } }, x: { stacked: true, grid: { display: false } } },
         onClick: (e, els) => { if (els.length) openDetail({ scope: "in_progress", acr_type: [tab], period: "rev_ym", prob_band: labels[els[0].index] }); } } });
   }
