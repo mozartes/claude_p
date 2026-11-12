@@ -741,6 +741,9 @@
     let h = `<div class="toolbar"><span class="muted">집계연도</span><span class="seg-light" id="tyearSel">${years.map((yy) => `<button type="button" data-v="${yy}" class="${yy === y ? "on" : ""}">${yy}년</button>`).join("")}</span>
         <span class="muted">확정 건(A·C=Win, R=재계약완료)의 계약 전체 기간 매출을 수주월에 합산 · 단위 ${esc(unitName())}</span></div>
     <div class="grid kpis">
+      ${(() => { const cr = d.churn_ref || { amount: 0 }; const pSel = S.f.products.length || S.f.product_group !== "all";
+        const rChg = (pSel ? t.R : rf.new_total - rf.prev_total) + cr.amount;  // R. 증감매출
+        return kpiCard("A+C+R. 매출", amt(t.A + t.C + rChg), `A ${amt(t.A)} + C ${amt(t.C)} + R 증감 ${amt(rChg)}<br>Funnel ${cnt(t.funnels_A + t.funnels_C)}건(A+C)<br>${kb}`, "hero", dk()); })()}
       ${kpiCard("A. 수주", amt(t.A), `Funnel ${cnt(t.funnels_A)}건<br>${kb}`, "a", dk({ acr_type: ["A"] }))}
       ${kpiCard("C. 수주", amt(t.C), `Funnel ${cnt(t.funnels_C)}건<br>${kb}`, "c", dk({ acr_type: ["C"] }))}
       ${kpiCard("R. 재계약", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"}) · A+C+R 미포함<br>${kb}`, "r", dk({ acr_type: ["R"] }))}
@@ -749,9 +752,6 @@
         const rd = pSel ? t.R : rf.new_total - rf.prev_total;  // 재계약 증감 × 계약기간(상품 선택 시 슬롯 증감 × 계약기간)
         return kpiCard("R. 증감매출", amt(rd + cr.amount), `재계약 증감 ${amt(rd)} + 해지 감소 ${amt(cr.amount)}<br>해지확정 ${cnt(cr.count)}건${cr.excluded ? ` · 계산 제외 ${cnt(cr.excluded)}건` : ""} · A+C+R에 포함<br>${kb}`, "neg", { status: ["해지확정"], period: "win_ym" }); })()}
       ${kpiCard(`${y}년 수주(A+C)`, amt(t.AC), `Funnel ${cnt(t.funnels_A + t.funnels_C)}건<br>${kb}`, "", dk({ acr_type: ["A", "C"] }))}
-      ${(() => { const cr = d.churn_ref || { amount: 0 }; const pSel = S.f.products.length || S.f.product_group !== "all";
-        const rChg = (pSel ? t.R : rf.new_total - rf.prev_total) + cr.amount;  // R. 증감매출
-        return kpiCard("A+C+R. 매출", amt(t.A + t.C + rChg), `A ${amt(t.A)} + C ${amt(t.C)} + R 증감 ${amt(rChg)}<br>Funnel ${cnt(t.funnels_A + t.funnels_C)}건(A+C)<br>${kb}`, "", dk()); })()}
     </div>
     ${Object.keys(d.excluded).length ? `<div class="notice warn">집계에서 제외: ${Object.entries(d.excluded).map(([k, v]) => `${esc(k)} ${v}건`).join(", ")}</div>` : ""}
     ${d.mismatch ? `<div class="notice warn">계약기간매출이 월매출합계 × 계약기간과 다른 건 ${d.mismatch}건 — 원본 계약기간매출 그대로 합산했습니다.</div>` : ""}
