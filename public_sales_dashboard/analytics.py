@@ -1021,6 +1021,28 @@ def total_rows(df: pd.DataFrame, p: Params) -> tuple[pd.DataFrame, dict]:
     return g[g["amt"].notna()], excl
 
 
+def _total_churn(df: pd.DataFrame, p: Params) -> dict:
+    """해지확정(수주년월이 집계연도) 감소액 × 계약기간. 월매출합계(=−기존매출, 상품 선택 시 슬롯 금액) × 계약기간.
+    R. 증감매출(재계약 증감 + 해지 감소)용. A+C+R 합계와 별도."""
+    lo, hi = p.total_year * 100 + 1, p.total_year * 100 + 12
+    ch = df[(df["status"] == "해지확정") & df["win_ym"].notna()]
+    ch = ch[(ch["win_ym"] >= lo) & (ch["win_ym"] <= hi)]
+    sel = set(p.products)
+    amt, n, ex = 0.0, 0, 0
+    for _, r in ch.iterrows():
+        if sel:
+            a, has = R.product_amount(r["products"], sel)
+            if not has:
+                continue
+        else:
+            a = r["monthly"]
+        if a is None or pd.isna(a) or pd.isna(r["term"]):
+            ex += 1
+            continue
+        amt += float(a) * int(r["term"]); n += 1
+    return {"amount": amt, "count": n, "excluded": ex}
+
+
 def total_view(ds: Dataset, p: Params) -> dict:
     df = filter_df(ds, p)
     if df.empty:
@@ -1067,7 +1089,7 @@ def total_view(ds: Dataset, p: Params) -> dict:
         mismatch = int((calc.notna() & g["contract_amt"].notna() & (diff > 1e-6 + 1e-9 * calc.abs())).sum())
     return {
         "year": y, "totals": totals, "monthly": monthly, "by_team": org("team", ["team"]), "by_am": org("am_key", ["team", "am"]),
-        "r_ref": r_ref, "excluded": excl, "mismatch": mismatch,
+        "r_ref": r_ref, "excluded": excl, "mismatch": mismatch, "churn_ref": _total_churn(df, p),
         "basis": {
             "대상": "확정 건 — A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
             "기간": f"수주년월 {y}-01 ~ {y}-12 (사이드바 조회기간과 별개, 화면 상단에서 연도 선택)",

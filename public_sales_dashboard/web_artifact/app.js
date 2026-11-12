@@ -763,6 +763,10 @@
       ${kpiCard("A. 수주", amt(t.A), `Funnel ${cnt(t.funnels_A)}건<br>${kb}`, "a", dk({ acr_type: ["A"] }))}
       ${kpiCard("C. 수주", amt(t.C), `Funnel ${cnt(t.funnels_C)}건<br>${kb}`, "c", dk({ acr_type: ["C"] }))}
       ${kpiCard("R. 재계약", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"})<br>${kb}`, "r", dk({ acr_type: ["R"] }))}
+      ${(() => { const cr = d.churn_ref || { amount: 0, count: 0, excluded: 0 };
+        const pSel = S.f.products.length || S.f.product_group !== "all";
+        const rd = pSel ? t.R : rf.new_total - rf.prev_total;  // 재계약 증감 × 계약기간(상품 선택 시 슬롯 증감 × 계약기간)
+        return kpiCard("R. 증감매출", amt(rd + cr.amount), `재계약 증감 ${amt(rd)} + 해지 감소 ${amt(cr.amount)}<br>해지확정 ${cnt(cr.count)}건${cr.excluded ? ` · 계산 제외 ${cnt(cr.excluded)}건` : ""} · A+C+R 합계와 별도<br>${kb}`, "neg", { status: ["해지확정"], period: "win_ym" }); })()}
       ${kpiCard(`${y}년 수주(A+C)`, amt(t.AC), `Funnel ${cnt(t.funnels_A + t.funnels_C)}건<br>${kb}`, "", dk({ acr_type: ["A", "C"] }))}
       ${kpiCard("A+C+R. 매출", amt(t.ACR), `A+C ${amt(t.AC)} + R ${amt(t.R)} · Funnel ${cnt(t.funnels)}건<br>${kb}`, "", dk())}
     </div>

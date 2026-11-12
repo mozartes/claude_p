@@ -1043,6 +1043,18 @@
     if (nWin) excl["수주년월 누락"] = nWin;
     return [g.filter((x) => x.amt !== null), excl];
   }
+  // 해지확정(수주년월이 집계연도) 감소액 × 계약기간. R. 증감매출(재계약 증감 + 해지 감소)용. A+C+R 합계와 별도
+  function totalChurn(df, p) {
+    const lo = p.total_year * 100 + 1, hi = p.total_year * 100 + 12, sel = new Set(p.products);
+    let amount = 0, count = 0, excluded = 0;
+    df.filter((r) => r.status === "해지확정" && r.win_ym !== null && r.win_ym >= lo && r.win_ym <= hi).forEach((r) => {
+      let a;
+      if (sel.size) { const [v, has] = productAmount(r.products, sel); if (!has) return; a = v; } else a = r.monthly;
+      if (a === null || a === undefined || Number.isNaN(a) || r.term === null) { excluded += 1; return; }
+      amount += a * r.term; count += 1;
+    });
+    return { amount, count, excluded };
+  }
   function totalView(ds, p) {
     const df = filterDf(ds, p);
     if (!df.length) return { empty: true };
@@ -1071,7 +1083,7 @@
     let mismatch = 0;
     if (!p.products.length) mismatch = g.filter((e) => { const r = e.r; if (!nn(r.monthly) || !nn(r.term) || !nn(r.contract_amt)) return false; const c = r.monthly * r.term; return Math.abs(r.contract_amt - c) > 1e-6 + 1e-9 * Math.abs(c); }).length;
     return {
-      year: y, totals, monthly, by_team: org("team", ["team"]), by_am: org("am_key", ["team", "am"]), r_ref: rRef, excluded: excl, mismatch,
+      year: y, totals, monthly, by_team: org("team", ["team"]), by_am: org("am_key", ["team", "am"]), r_ref: rRef, excluded: excl, mismatch, churn_ref: totalChurn(df, p),
       basis: {
         "대상": "확정 건 — A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
         "기간": `수주년월 ${y}-01 ~ ${y}-12 (사이드바 조회기간과 별개, 화면 상단에서 연도 선택)`,

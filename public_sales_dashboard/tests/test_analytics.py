@@ -367,3 +367,13 @@ def test_acr_r_change(make_ds):
     assert rc["retention"]["amount"] - rc["retention"]["prev_amount"] == -20 and rc["churn"]["amount"] == -35
     k = A.overview_view(ds, p)["kpi"]
     assert rc["churn"] == k["churn_acr"] and rc["retention"] == k["retention"]
+
+
+def test_total_churn_ref(make_ds, params):
+    """ACR 수주(연도) R. 증감매출용 해지 감소 = 해지확정(수주년월 집계연도) 월매출합계 × 계약기간"""
+    import analytics as A
+    ds = make_ds([row(type="Ret.", status="해지확정", win=202605, monthly=-5, term=12),
+                  row(type="Ret.", status="해지확정", win=202606, monthly=-1, term=None),
+                  row(type="Ret.", status="해지확정", win=202501, monthly=-9, term=12)])
+    v = A.total_view(ds, params(base_date="2026-11-04"))
+    assert v["churn_ref"] == {"amount": -60.0, "count": 1, "excluded": 1}
