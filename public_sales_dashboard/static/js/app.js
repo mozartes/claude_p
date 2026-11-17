@@ -759,14 +759,14 @@
     <p class="ov-ref">참고 · <b>R 재계약</b>(${pSelT ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"}, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify(dk({ acr_type: ["R"] })))}'>${amt(t.R)}</span> · ${cnt(t.funnels_R)}건 = 기존 계약총액 ${amt(rf.prev_total)} + 재계약 증감 ${amt(rf.new_total - rf.prev_total)}</p>
     ${Object.keys(d.excluded).length ? `<div class="notice warn">집계에서 제외: ${Object.entries(d.excluded).map(([k, v]) => `${esc(k)} ${v}건`).join(", ")}</div>` : ""}
     ${d.mismatch ? `<div class="notice warn">계약기간매출이 월매출합계 × 계약기간과 다른 건 ${d.mismatch}건 — 원본 계약기간매출 그대로 합산했습니다.</div>` : ""}
+    <div class="card" style="margin-top:16px"><div class="card-head"><h3>${(PERIODS.find((x) => x[0] === perOf()) || PERIODS[0])[1]} 추이 차트 (${y}년)</h3>${periodToolbar("totPer")}</div><p class="desc">막대 A·C 누적, R 증감은 0 아래, 선 A+C+R · 월별 보기에서 클릭 → 해당 월 Funnel</p>
+      <div class="chart-box tall"><canvas id="totChart"></canvas></div></div>
     <div class="grid ov-split" style="margin-top:16px">
-      <div class="card"><div class="card-head"><h3>${(PERIODS.find((x) => x[0] === perOf()) || PERIODS[0])[1]} 수주 (${y}년)</h3>${periodToolbar("totPer")}</div>${periodTable(tRows, tPool, { first: "수주 기간", drill: (x) => dk({ win_month: x.ym }), sumF: true, fLabel: "건수" })}</div>
+      <div class="card"><div class="card-head"><h3>${(PERIODS.find((x) => x[0] === perOf()) || PERIODS[0])[1]} 수주 (${y}년)</h3></div>${periodTable(tRows, tPool, { first: "수주 기간", drill: (x) => dk({ win_month: x.ym }), sumF: true, fLabel: "건수" })}</div>
       <div class="card"><div class="card-head"><h3>팀별 A+C+R</h3><span class="muted">큰 순 · 행 클릭 → 목록</span></div>
         <div class="table-wrap"><table class="t"><thead><tr><th>팀</th><th class="num">A+C</th><th class="num">R 증감</th><th class="num">A+C+R</th><th style="min-width:80px"></th></tr></thead>
         <tbody>${teamTop.map((r) => `<tr class="clickable" data-drill='${esc(JSON.stringify(dk({ team: r.key })))}'><td>${esc(r.team)}</td><td class="num">${amt(r.AC)}</td><td class="num">${amt(r.R)}</td><td class="num"><b>${amt(r.ACR)}</b></td><td><div class="mini" style="margin:6px 0 0"><span style="width:${teamMax > 0 && r.ACR > 0 ? (r.ACR / teamMax * 100).toFixed(1) : 0}%;background:var(--primary)"></span></div></td></tr>`).join("") || '<tr><td colspan="5" class="muted">자료 없음</td></tr>'}</tbody></table></div></div>
     </div>
-    <div class="card" style="margin-top:16px"><div class="card-head"><h3>${(PERIODS.find((x) => x[0] === perOf()) || PERIODS[0])[1]} 추이 차트</h3><span class="muted">막대 A·C 누적, R 증감은 0 아래, 선 A+C+R · 월별 보기에서 클릭 → 해당 월 Funnel</span></div>
-      <div class="chart-box tall"><canvas id="totChart"></canvas></div></div>
       <details class="card" style="margin-top:16px"><summary><b>R 재계약 참고</b> <span class="muted">(기존 계약총액 → 재계약 후, 펼치기)</span></summary><p class="desc">재계약완료 ${cnt(rf.count)}건 · 증액 ${cnt(rf.increase_count)} / 동일 ${cnt(rf.same_count)} / 감액 ${cnt(rf.decrease_count)}건</p>
         <div class="table-wrap"><table class="t"><tbody>
           <tr><td>기존 계약총액 (기존매출 × 계약기간)</td><td class="num">${amt(rf.prev_total)}</td></tr>
