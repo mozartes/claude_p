@@ -149,3 +149,15 @@ def test_win_2611_rev_2612_term24_into_2027(make_ds):
     full = acr(ds, "term", 202601, 202812)
     fm = [m["ym"] for m in full["monthly"] if m["A"]]
     assert len(fm) == 24 and fm[-1] == 202811 and full["totals"]["A"] == 240
+
+
+def test_rc_acrn_unified(make_ds):
+    """통일 산식: R 증감(RC) = 재계약 증감 + 해지 감소, A+C+R(ACRN) = A + C + RC. 월별·조직별 합 = 합계"""
+    ds = make_ds([row(type="Acq.", monthly=10, rev=202603, term=3),
+                  row(type="Ret.", status="재계약완료", monthly=-2, prev=10, new=8, rev=202603, term=3),
+                  row(type="Ret.", status="해지확정", monthly=-5, prev=5, new=0, rev=202604, term=2)])
+    r = acr(ds, "term", 202601, 202612)
+    t = r["totals"]
+    assert t["R"] == 24 and t["RC"] == -2 * 3 + -5 * 2 and t["ACRN"] == 30 - 16
+    assert sum(m["RC"] for m in r["monthly"]) == t["RC"] and r["monthly"][-1]["cum"]["ACRN"] == t["ACRN"]
+    assert sum(o["ACRN"] for o in r["by_team"]) == t["ACRN"]

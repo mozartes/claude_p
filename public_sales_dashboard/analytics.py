@@ -461,7 +461,7 @@ def acr_view(ds: Dataset, p: Params) -> dict:
         "상품 카테고리": C.PRODUCT_GROUPS[p.product_group] + (" — 전용회선 + 전용회선외 = 상품별 월매출 합계(월매출합계와 다른 행은 데이터 품질에 표시)" if p.product_group != "all" else ""),
         "R. 증감매출": "재계약 증감(재계약 후 − 기존, 계약기간 반영) + 해지확정 감소액(월매출합계 = −기존매출, R과 같은 기준). A+C+R 합계에 넣지 않음",
         "R 해석": ("상품 선택: R = 선택 상품 슬롯 금액(재계약 증감). 변경매출은 상품별 값이 없어 리텐션 매출 산출 불가" if p.products
-                   else "R = 재계약 후 월매출(변경매출, 리텐션 매출). A+C+R = A+C 기여매출 + R매출. 증감액은 R매출 − 기존매출"),
+                   else "R 재계약 = 재계약 후 월매출(변경매출, 참고). R 증감 = 재계약 증감(변경 − 기존) + 해지 감소. A+C+R = A + C + R 증감(2026-11 통일 산식)"),
         "누적": f"선택기간 시작월({R.ym_label(p.ym_from)})부터 누적",
         "Funnel 건수": "월별 반복 반영 횟수가 아닌 고유 Funnel 수",
         "주의": "계약기간 반영값은 현재 입력 상태·일정 기반 추정이며 청구·회계 실적이 아님" if p.mode == "term"
@@ -794,7 +794,8 @@ def team_view(ds: Dataset, p: Params) -> dict:
             "win_count": int(len(win)), "win_amount": fsum(win["contract_amt"]),
             "acr_ac": o.get("AC", 0.0), "acr_ac_funnels": o.get("funnels", 0),
             "acr_r": acr_r_org.get(k, {}).get("R", 0.0),
-            "acr_acr": o.get("AC", 0.0) + acr_r_org.get(k, {}).get("R", 0.0),
+            "acr_rc": acr_r_org.get(k, {}).get("RC", 0.0),
+            "acr_acr": o.get("AC", 0.0) + acr_r_org.get(k, {}).get("RC", 0.0),
             "prog_r_count": int(len(pr)), "prog_r_prev": fsum(pr["prev_monthly"]),
             "renewal_decrease_done": int((rdone["monthly"] < 0).sum()),
             "renewal_decrease_expected": int(cg["codes"].apply(lambda cs: "RENEWAL_DECREASE" in cs).sum()),
@@ -830,9 +831,21 @@ def insight_view(ds: Dataset, p: Params) -> dict:
         return {"empty": True}
     # 확정 ACR 기여매출: 화면의 ACR 기준(p.mode)을 그대로 따름(계약기간 반영 시 매월 반영분 합계)
     types = [t for t in (p.types or ["A", "C", "R"]) if t in ("A", "C", "R")] or ["A", "C", "R"]
+    # A+C+R(통일 산식) = A·C 매출 + R 증감(R 행 증감 + 해지 감소)
     con_all, _ = R.contributions(df, p.mode, p.ym_from, p.ym_to, None)
     con_all = con_all[con_all["acr_type"].isin(types)]
-    row_amt = con_all.groupby("row")["amount"].sum() if len(con_all) else pd.Series(dtype=float)
+    con_all = con_all.assign(net=np.where(con_all["acr_type"] == "R", con_all["delta"], con_all["amount"]))
+    parts = [con_all[["row", "net"]]]
+    if "R" in types:
+        sub = df[df["status"] == "해지확정"].copy()
+        if len(sub):
+            sub["status"] = sub["acr_type"].map(C.ACR_CONFIRMED_STATUS)
+            sub["new_monthly"] = sub["monthly"]
+            chc, _ = R.contributions(sub, p.mode, p.ym_from, p.ym_to, None)
+            chc = chc[chc["acr_type"] == "R"]
+            parts.append(chc.assign(net=chc["amount"])[["row", "net"]])
+    allc = pd.concat(parts) if len(parts) > 1 else parts[0]
+    row_amt = allc.groupby("row")["net"].sum() if len(allc) else pd.Series(dtype=float)
     # 고객사 표시명 기준
     cust = []
     for name, g in df.groupby(df["customer"].fillna("(고객사 미입력)")):
@@ -851,8 +864,8 @@ def insight_view(ds: Dataset, p: Params) -> dict:
         a = R.compute_acr(has, p.mode, p.ym_from, p.ym_to, [nm], p.types)
         pa = has[has["status"].isin(C.IN_PROGRESS) & has["acr_type"].isin(["A", "C"])]
         prod.append({"product": nm, "funnels": int(len(has)),
-                     "acr_A": a["totals"]["A"], "acr_C": a["totals"]["C"], "acr_R": a["totals"]["R"],
-                     "acr_ACR": a["totals"]["ACR"], "acr_funnels": a["totals"]["funnels"],
+                     "acr_A": a["totals"]["A"], "acr_C": a["totals"]["C"], "acr_R": a["totals"]["RC"],
+                     "acr_ACR": a["totals"]["ACRN"], "acr_funnels": a["totals"]["funnels"],
                      "prog_ac_count": int(len(pa)), "prog_ac_contract_amt": fsum(pa["contract_amt"])})
     prod.sort(key=lambda x: -x["funnels"])
     diff = df[df["issues"].apply(lambda x: "PRODUCT_SUM_DIFF" in x)]
@@ -1022,6 +1035,27 @@ def total_rows(df: pd.DataFrame, p: Params) -> tuple[pd.DataFrame, dict]:
     return g[g["amt"].notna()], excl
 
 
+def _total_churn_rows(df: pd.DataFrame, p: Params) -> tuple[pd.DataFrame, int]:
+    """해지확정(수주년월이 집계연도) 행별 감소액 × 계약기간. (행 표[win_ym·team·am_key·am·amt], 계산 제외 건수)"""
+    lo, hi = p.total_year * 100 + 1, p.total_year * 100 + 12
+    ch = df[(df["status"] == "해지확정") & df["win_ym"].notna()]
+    ch = ch[(ch["win_ym"] >= lo) & (ch["win_ym"] <= hi)]
+    sel = set(p.products)
+    out, ex = [], 0
+    for _, r in ch.iterrows():
+        if sel:
+            a, has = R.product_amount(r["products"], sel)
+            if not has:
+                continue
+        else:
+            a = r["monthly"]
+        if a is None or pd.isna(a) or pd.isna(r["term"]):
+            ex += 1
+            continue
+        out.append({"win_ym": int(r["win_ym"]), "team": r["team"], "am_key": r["am_key"], "am": r["am"], "amt": float(a) * int(r["term"])})
+    return pd.DataFrame(out, columns=["win_ym", "team", "am_key", "am", "amt"]), ex
+
+
 def _total_churn(df: pd.DataFrame, p: Params) -> dict:
     """해지확정(수주년월이 집계연도) 감소액 × 계약기간. 월매출합계(=−기존매출, 상품 선택 시 슬롯 금액) × 계약기간.
     R. 증감매출(재계약 증감 + 해지 감소)용. A+C+R 합계와 별도."""
@@ -1050,28 +1084,39 @@ def total_view(ds: Dataset, p: Params) -> dict:
         return {"empty": True}
     g, excl = total_rows(df, p)
     y = p.total_year
+    chf, _ = _total_churn_rows(df, p)
 
-    def sums(x: pd.DataFrame) -> dict:
+    def sums(x: pd.DataFrame, cx: pd.DataFrame | None = None) -> dict:
         s = x.groupby("acr_type")["amt"].sum() if len(x) else pd.Series(dtype=float)
         a, c, r = float(s.get("A", 0.0)), float(s.get("C", 0.0)), float(s.get("R", 0.0))
-        return {"A": a, "C": c, "R": r, "AC": a + c, "ACR": a + c + r}
+        out = {"A": a, "C": c, "R": r, "AC": a + c, "ACR": a + c + r}
+        if cx is not None:
+            # R 증감(RC) = 재계약 증감 × 계약기간 + 해지 감소 × 계약기간, A+C+R(ACRN) = A + C + RC
+            rc = float(x.loc[x["acr_type"] == "R", "dlt"].sum()) if len(x) else 0.0
+            rc += float(cx["amt"].sum()) if len(cx) else 0.0
+            out.update({"RC": rc, "ACRN": a + c + rc})
+        return out
 
-    totals = sums(g)
+    totals = sums(g, chf)
     totals["funnels"] = int(len(g))
     for t in ("A", "C", "R"):
         totals["funnels_" + t] = int((g["acr_type"] == t).sum())
-    monthly, cum = [], 0.0
+    monthly, cum, cumn = [], 0.0, 0.0
     for m in range(1, 13):
         ym = y * 100 + m
         gm = g[g["win_ym"] == ym]
-        s = sums(gm)
+        s = sums(gm, chf[chf["win_ym"] == ym])
         cum += s["ACR"]
-        monthly.append({"ym": ym, "label": R.ym_label(ym), **s, "funnels": int(len(gm)), "cum_ACR": cum})
+        cumn += s["ACRN"]
+        monthly.append({"ym": ym, "label": R.ym_label(ym), **s, "funnels": int(len(gm)), "cum_ACR": cum, "cum_ACRN": cumn})
 
     def org(key: str, labels: list[str]) -> list[dict]:
         rows = []
-        for k, x in g.groupby(key):
-            rows.append({"key": k, **{l: x.iloc[0][l] for l in labels}, **sums(x), "funnels": int(len(x)),
+        keys = sorted(set(g[key].dropna()) | set(chf[key].dropna()))
+        for k in keys:
+            x, cx = g[g[key] == k], chf[chf[key] == k]
+            first = x.iloc[0] if len(x) else cx.iloc[0]
+            rows.append({"key": k, **{l: first[l] for l in labels}, **sums(x, cx), "funnels": int(len(x)),
                          "r_neg_count": int(((x["acr_type"] == "R") & (x["dlt"] < 0)).sum())})
         rows.sort(key=lambda r: -r["ACR"])
         return rows

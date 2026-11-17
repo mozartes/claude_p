@@ -14,7 +14,7 @@
     COLORS.AC = css("--series-ac", "#0f766e"); COLORS.ACR = css("--series-total", "#1f2937");
   }
   refreshColors();
-  const SERIES_LABEL = { A: "A", C: "C", R: "R", AC: "A+C", ACR: "A+C+R" };
+  const SERIES_LABEL = { A: "A", C: "C", R: "R 증감", AC: "A+C", ACR: "A+C+R" };
   const UNIT_WON = { "원": 1, "천원": 1e3, "백만원": 1e6, "억원": 1e8 };
   const PAGE_TITLES = {
     overview: "종합 현황", funnel: "수주·Funnel 관리", renewal: "재계약·해지 관리", acr: "ACR 수주(기여매출)", presales: "ACR 수주(Pre-sales)", total: "ACR 수주(2026년)",
@@ -348,10 +348,13 @@
     const showF = rows.some((b) => b.funnels != null);
     const gh = (k) => cols.map(([, l]) => `<th class="num">${k} ${l}</th>`).join("");
     const gc = (b, k) => cols.map(([c]) => `<td class="num">${growthCell(growthOf(b, pool, g, c, k))}</td>`).join("");
-    return `<div class="table-wrap" style="max-height:${opts.maxH || 460}px"><table class="t"><thead><tr><th>${esc(opts.first || "기간")}</th><th class="num">A</th><th class="num">C</th><th class="num">R</th><th class="num">A+C</th>${gh("A+C")}<th class="num">A+C+R</th>${gh("A+C+R")}<th class="num">누적 A+C+R</th>${showF ? `<th class="num">${esc(opts.fLabel || "건수")}</th>` : ""}</tr></thead>
+    return `<div class="table-wrap" style="max-height:${opts.maxH || 460}px"><table class="t"><thead><tr><th>${esc(opts.first || "기간")}</th><th class="num">A</th><th class="num">C</th><th class="num">R 증감</th><th class="num">A+C</th>${gh("A+C")}<th class="num">A+C+R</th>${gh("A+C+R")}<th class="num">누적 A+C+R</th>${showF ? `<th class="num">${esc(opts.fLabel || "건수")}</th>` : ""}</tr></thead>
       <tbody>${rows.map((b) => `<tr ${b.ym != null && drill ? `class="clickable" data-drill='${esc(JSON.stringify(drill(b)))}'` : ""}><td>${esc(b.label)}</td><td class="num">${amt(b.A)}</td><td class="num">${amt(b.C)}</td><td class="num">${amt(b.R)}</td><td class="num">${amt(b.AC)}</td>${gc(b, "AC")}<td class="num"><b>${amt(b.ACR)}</b></td>${gc(b, "ACR")}<td class="num">${amt(b.cum_ACR)}</td>${showF ? `<td class="num">${b.funnels == null ? '<span class="muted">—</span>' : cnt(b.funnels)}</td>` : ""}</tr>`).join("") || '<tr><td colspan="12" class="muted">자료 없음</td></tr>'}</tbody></table></div>
       <p class="desc" style="margin-top:6px">${g === "Y" ? "YoY = (올해 − 전년) ÷ 전년" : `${CMP_NAME[g]} = (이번 기간 − 직전 기간) ÷ 직전 기간, 전년동기 YoY = (이번 기간 − 전년 같은 기간) ÷ 전년 같은 기간`}. 비교 기간 자료가 없거나 0 이하, 조회기간이 기간 일부만 포함하거나 기준월 이후가 섞인 진행 중 기간이면 "—"로 표시합니다.${g !== "M" && !opts.sumF ? " 고유 Funnel 건수는 기간 합산이 불가해 월별에서만 표시합니다." : ""}${g !== "M" ? " 행 클릭(목록)은 월별 보기에서 사용할 수 있습니다." : ""}</p>`;
   }
+  // 통일 산식 표시용: R → R 증감(RC), A+C+R → A + C + R 증감(ACRN). 계산은 엔진 값(RC·ACRN)을 그대로 씀
+  const netRows = (arr) => (arr || []).map((m) => Object.assign({}, m, { Rre: m.R, R: m.RC != null ? m.RC : m.R, ACR: m.ACRN != null ? m.ACRN : m.ACR,
+    cum_ACR: m.cum_ACRN != null ? m.cum_ACRN : m.cum_ACR, cum: m.cum ? Object.assign({}, m.cum, { R: m.cum.RC != null ? m.cum.RC : m.cum.R, ACR: m.cum.ACRN != null ? m.cum.ACRN : m.cum.ACR }) : m.cum }));
   const poolOf = (arr) => { const o = {}; arr.forEach((b) => { o[b.key] = b; }); return o; };
 
   function acrMonthlyChart(id, monthly, series, onClick) {
@@ -414,34 +417,34 @@
       const exn = Object.values(tk.excluded || {}).reduce((x, y) => x + y, 0);
       const rNote = S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간";
       const pSel = S.f.products.length || S.f.product_group !== "all";
-      // R. 증감매출 = 재계약 증감 × 계약기간 + 해지 감소 × 계약기간, A+C+R 수주 = A + C + R. 증감매출
+      // R 증감 = 재계약 증감 × 계약기간 + 해지 감소 × 계약기간, A+C+R 수주 = A + C + R 증감
       const cr = tk.churn_ref || { amount: 0, count: 0, excluded: 0 }, rf0 = tk.r_ref || { new_total: 0, prev_total: 0 };
       const rdT = pSel ? tk.R : rf0.new_total - rf0.prev_total, rChgT = rdT + cr.amount, acrT = tk.A + tk.C + rChgT;
-      h += `<section class="ov-sec"><div class="ov-h"><h3>ACR 수주(${tk.year}년) ${info(`확정 건(A·C=Win, R=재계약완료)의 계약 전체 기간 매출을 수주년월에 합산 · 수주년월 ${tk.year}-01~${tk.year}-12 · A+C+R 수주 = A + C + R. 증감매출(재계약 증감 + 해지 감소, 계약기간 기준) · R. 재계약(${rNote})은 참고용으로 합계 미포함${exn ? ` · 계약기간 누락 등 ${exn}건 제외` : ""} · 연도는 ACR 수주(${tk.year}년) 화면에서 변경`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
+      h += `<section class="ov-sec"><div class="ov-h"><h3>ACR 수주(${tk.year}년) ${info(`확정 건(A·C=Win, R=재계약완료)의 계약 전체 기간 매출을 수주년월에 합산 · 수주년월 ${tk.year}-01~${tk.year}-12 · A+C+R 수주 = A + C + R 증감(재계약 증감 + 해지 감소, 계약기간 기준) · R. 재계약(${rNote})은 참고용으로 합계 미포함${exn ? ` · 계약기간 누락 등 ${exn}건 제외` : ""} · 연도는 ACR 수주(${tk.year}년) 화면에서 변경`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
       <div class="strip six">
         ${kpiCard("A+C+R 수주", amt(acrT), `${row(`Funnel ${cnt(tk.funnels_A + tk.funnels_C)}건 (A+C)`, '<span class="badge" title="원본에 목표·전년 자료 없음">목표 · 자료 없음</span>')}<span class="row"><span>A+C ${amt(tk.AC)} + R 증감 ${amt(rChgT)}</span></span><div class="mini" aria-hidden="true"><span style="width:${wOf(tk.A, tk.AC)}%;background:var(--series-a)"></span><span style="width:${wOf(tk.C, tk.AC)}%;background:var(--series-c)"></span></div>${row(`A ${pctOf(tk.A, tk.AC)} · C ${pctOf(tk.C, tk.AC)}`, "A+C 구성비")}`, "hero", tdk())}
         ${kpiCard("A. 수주", amt(tk.A), row(`${cnt(tk.funnels_A)}건`, `<span title="A+C 중 비중">${pctOf(tk.A, tk.AC)}</span>`), "a", tdk({ acr_type: ["A"] }))}
         ${kpiCard("C. 수주", amt(tk.C), row(`${cnt(tk.funnels_C)}건`, `<span title="A+C 중 비중">${pctOf(tk.C, tk.AC)}</span>`), "c", tdk({ acr_type: ["C"] }))}
-        ${kpiCard("R. 재계약", amt(tk.R), row(`${cnt(tk.funnels_R)}건`, '<span class="muted" title="A+C+R 수주에는 R. 증감매출을 더함">합계 미포함</span>'), "r", tdk({ acr_type: ["R"] }))}
-        ${kpiCard("R. 증감매출", amt(rChgT), `<span class="row"><span>재계약 ${amt(rdT)}</span></span><span class="row"><span>해지 ${amt(cr.amount)} · ${cnt(cr.count)}건</span></span><span class="row"><span class="muted">A+C+R에 포함</span></span>`, "neg", { status: ["해지확정"], period: "win_ym" })}
+        ${kpiCard("R. 재계약", amt(tk.R), row(`${cnt(tk.funnels_R)}건`, '<span class="muted" title="A+C+R에는 R 증감을 더함">합계 미포함</span>'), "r", tdk({ acr_type: ["R"] }))}
+        ${kpiCard("R 증감", amt(rChgT), `<span class="row"><span>재계약 ${amt(rdT)}</span></span><span class="row"><span>해지 ${amt(cr.amount)} · ${cnt(cr.count)}건</span></span><span class="row"><span class="muted">A+C+R에 포함</span></span>`, "neg", { status: ["해지확정"], period: "win_ym" })}
         ${kpiCard(`${tk.year}년 수주(A+C)`, amt(tk.AC), row(`${cnt(tk.funnels_A + tk.funnels_C)}건`, ""), "", tdk({ acr_type: ["A", "C"] }))}
       </div></section>`;
     }
     // ① 핵심 KPI — 2줄: 해당기간 기여매출(조회기간 매출 발생분), R = 재계약 후 월매출(리텐션)
-    // A+C+R 기여매출 = A 기여매출 + C 기여매출 + R. 증감매출(재계약 증감 + 해지 감소). 상품 선택 시 R 증감 = 상품 슬롯 증감
+    // A+C+R 기여매출 = A 기여매출 + C 기여매출 + R 증감(재계약 증감 + 해지 감소). 상품 선택 시 R 증감 = 상품 슬롯 증감
     const chX = k.churn_acr || { amount: 0, funnels: 0 };
     const rdX = rt.amount === null ? a.R : rt.amount - rt.prev_amount;
     const rChg = rdX + chX.amount, acrNet = a.A + a.C + rChg;
-    const rMeta = `${row(`${cnt(a.funnels_R)}건`, '<span class="muted" title="A+C+R 기여매출에는 R. 증감매출을 더함">합계 미포함</span>')}${rt.amount === null ? "" : `<span class="row"><span title="재계약 전 월매출 기준 유지분 → 증감">증감 ${amt(rt.amount - rt.prev_amount)}</span></span>`}`;
-    h += `<section class="ov-sec"><div class="ov-h"><h3>ACR(기여매출) <span class="h-period">${esc(S.f.ym_from)}~${esc(S.f.ym_to)}</span> ${info(`확정 ACR 중 조회기간에 매출이 발생하는 부분(매출발생년월 기준) · ${ml} · A+C+R 기여매출 = A + C + R. 증감매출(재계약 증감 + 해지 감소). R 기여매출(재계약 후 월매출)은 참고용으로 합계 미포함${rt.amount === null ? " · 상품 선택 시 R은 재계약 증감 기준" : ""}`)}</h3><span class="unit">단위 ${esc(unitName())} · 막대 안 선 = 월별 추이</span></div>
+    const rMeta = `${row(`${cnt(a.funnels_R)}건`, '<span class="muted" title="A+C+R에는 R 증감을 더함">합계 미포함</span>')}${rt.amount === null ? "" : `<span class="row"><span title="재계약 전 월매출 기준 유지분 → 증감">증감 ${amt(rt.amount - rt.prev_amount)}</span></span>`}`;
+    h += `<section class="ov-sec"><div class="ov-h"><h3>ACR(기여매출) <span class="h-period">${esc(S.f.ym_from)}~${esc(S.f.ym_to)}</span> ${info(`확정 ACR 중 조회기간에 매출이 발생하는 부분(매출발생년월 기준) · ${ml} · A+C+R 기여매출 = A + C + R 증감(재계약 증감 + 해지 감소). R 재계약(재계약 후 월매출)은 참고용으로 합계 미포함${rt.amount === null ? " · 상품 선택 시 R은 재계약 증감 기준" : ""}`)}</h3><span class="unit">단위 ${esc(unitName())} · 막대 안 선 = 월별 추이</span></div>
     <div class="strip six">
       ${kpiCard("A+C+R 기여매출", amt(acrNet), `${row(`고유 Funnel ${cnt(a.funnels)}건`, '<span class="badge" title="원본에 목표·전년 자료 없음">목표 · 자료 없음</span>')}<span class="row"><span>A+C ${amt(a.AC)} + R 증감 ${amt(rChg)}</span></span><div class="mini" aria-hidden="true"><span style="width:${wOf(a.A, a.AC)}%;background:var(--series-a)"></span><span style="width:${wOf(a.C, a.AC)}%;background:var(--series-c)"></span></div>${row(`A ${pctOf(a.A, a.AC)} · C ${pctOf(a.C, a.AC)}`, "A+C 구성비")}`, "hero", { scope: "acr" })}
       ${kpiCard("A 기여매출", amt(a.A), row(`${cnt(a.funnels_A)}건`, `<span title="A+C 중 비중">${pctOf(a.A, a.AC)}</span>`) + spark("A", "var(--series-a)"), "a", { scope: "acr", acr_type: ["A"] })}
       ${kpiCard("C 기여매출", amt(a.C), row(`${cnt(a.funnels_C)}건`, `<span title="A+C 중 비중">${pctOf(a.C, a.AC)}</span>`) + spark("C", "var(--series-c)"), "c", { scope: "acr", acr_type: ["C"] })}
-      ${kpiCard("R 기여매출", amt(a.R), rMeta + spark("R", "var(--series-r)"), "r", { scope: "acr", acr_type: ["R"] })}
+      ${kpiCard("R 재계약", amt(a.R), rMeta + spark("R", "var(--series-r)"), "r", { scope: "acr", acr_type: ["R"] })}
       ${(() => { const ch0 = k.churn_acr || { amount: 0, funnels: 0 };
         const rd0 = rdX;  // 재계약 증감(변경 − 기존, 상품 선택 시 상품 슬롯 증감)
-        return kpiCard("R. 증감매출", amt(rd0 + ch0.amount), `<span class="row"><span>재계약 ${amt(rd0)}</span></span><span class="row"><span>해지 ${amt(ch0.amount)} · ${cnt(ch0.funnels)}건</span></span><span class="row"><span class="muted">A+C+R에 포함</span></span>`, "neg", { status: ["해지확정"], period: "rev_ym" }); })()}
+        return kpiCard("R 증감", amt(rd0 + ch0.amount), `<span class="row"><span>재계약 ${amt(rd0)}</span></span><span class="row"><span>해지 ${amt(ch0.amount)} · ${cnt(ch0.funnels)}건</span></span><span class="row"><span class="muted">A+C+R에 포함</span></span>`, "neg", { status: ["해지확정"], period: "rev_ym" }); })()}
       ${kpiCard("A+C 기여매출", amt(a.AC), row(`${cnt(a.funnels_A + a.funnels_C)}건`, ""), "", { scope: "acr", acr_type: ["A", "C"] })}
     </div></section>`;
     // ③ 확인 필요 — 음수·위험 신호를 한 곳에 모음(값은 기존 계산 그대로)
@@ -449,10 +452,10 @@
     const chEx = Object.values(ch.excluded || {}).reduce((x, y) => x + y, 0);
     const rd = rt.amount === null ? a.R : rt.amount - rt.prev_amount;  // R 증감액
     const exAcr = Object.values(d.acr_excluded || {}).reduce((x, y) => x + y, 0);
-    const ovRows = aggPeriods(d.acr_monthly, perOf(), false);
+    const ovRows = aggPeriods(netRows(d.acr_monthly), perOf(), false);
     const warns = ((j.dataset || {}).warnings || []).length;
     const risks = [
-      ["hi", "리텐션 재계약 및 해지 감소 매출", `R 증감 ${amt(rd)} + 해지 ${amt(ch.amount)} · 해지확정 ${cnt(ch.funnels)}건${chEx ? ` (계산 제외 ${cnt(chEx)}건)` : ""} · A+C+R에 미포함`, amt(rd + ch.amount), rd + ch.amount < 0, `data-drill='${esc(JSON.stringify({ status: ["해지확정"], period: "rev_ym" }))}'`],
+      ["hi", "R 증감 (재계약 증감 + 해지 감소)", `재계약 증감 ${amt(rd)} + 해지 감소 ${amt(ch.amount)} · 해지확정 ${cnt(ch.funnels)}건${chEx ? ` (계산 제외 ${cnt(chEx)}건)` : ""} · A+C+R에 포함`, amt(rd + ch.amount), rd + ch.amount < 0, `data-drill='${esc(JSON.stringify({ status: ["해지확정"], period: "rev_ym" }))}'`],
       ["hi", "우선 확인 Funnel (높음)", `확인 필요 고유 Funnel ${cnt(k.check_count)}건 중 높음 등급`, `${cnt(k.check_level1)}건`, false, 'data-goto="priority"'],
       ["md", "수주 예정월 경과", "진행 중 A/C·R 중 수주 예정월이 지난 건", `${cnt(d.overdue_count)}건`, false, `data-drill='${esc(JSON.stringify({ scope: "in_progress", bucket: "예정월 경과" }))}'`],
       ["md", "계산에서 제외된 확정 건", d.acr_excluded ? Object.keys(d.acr_excluded).map(esc).join(", ") || "해당 없음" : "해당 없음", `${cnt(exAcr)}건`, false, `data-drill='${esc(JSON.stringify({ scope: "acr_excluded" }))}'`],
@@ -591,22 +594,22 @@
     const t = d.totals, ser = S.ui.acrSeries;
     const term = d.mode === "term";
     const lbl = term ? "기간 합계(월별 추정값 합)" : "매출개시월 기준 합계";
-    const orgRows = S.f.level === "am" ? d.by_am : d.by_team;
-    const pRows = aggPeriods(d.monthly, perOf(), false), pPool = poolOf(pRows);
+    const orgRows = netRows(S.f.level === "am" ? d.by_am : d.by_team);
+    const pRows = aggPeriods(netRows(d.monthly), perOf(), false), pPool = poolOf(pRows);
     // 누적매출 = 조회기간 합계(기준·기간을 카드 아래에 표기)
     const kb = esc(`${lbl} · ${S.f.ym_from}~${S.f.ym_to}`);
     let h = `<div class="notice info"><b>${esc(d.mode_label)}</b> — ${esc(d.basis["주의"])}</div>
     <div class="grid kpis">
       ${(() => { const rc = d.r_change || {}, rt2 = rc.retention || { amount: null }, ch2 = rc.churn || { amount: 0 };
-        const rChg2 = (rt2.amount === null ? t.R : rt2.amount - rt2.prev_amount) + ch2.amount;  // R. 증감매출
+        const rChg2 = (rt2.amount === null ? t.R : rt2.amount - rt2.prev_amount) + ch2.amount;  // R 증감
         return kpiCard("A+C+R. 기여매출", amt(t.A + t.C + rChg2), `A ${amt(t.A)} + C ${amt(t.C)} + R 증감 ${amt(rChg2)} · 고유 Funnel ${cnt(t.funnels)}건<br>${kb}`, "hero", { scope: "acr" }); })()}
       ${kpiCard("A. 기여매출", amt(t.A), `Funnel ${cnt(t.funnels_A)}건<br>${kb}`, "a", { scope: "acr", acr_type: ["A"] })}
       ${kpiCard("C. 기여매출", amt(t.C), `Funnel ${cnt(t.funnels_C)}건<br>${kb}`, "c", { scope: "acr", acr_type: ["C"] })}
-      ${kpiCard("R. 기여매출", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감" : "재계약 후 월매출"}) · A+C+R 미포함<br>${kb}`, "r", { scope: "acr", acr_type: ["R"] })}
+      ${kpiCard("R. 재계약", amt(t.R), `Funnel ${cnt(t.funnels_R)}건 (${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감" : "재계약 후 월매출"}) · A+C+R 미포함<br>${kb}`, "r", { scope: "acr", acr_type: ["R"] })}
       ${(() => { const rc = d.r_change || {}, rt = rc.retention || { amount: null }, ch = rc.churn || { amount: 0, funnels: 0, excluded: {} };
         const exn = Object.values(ch.excluded || {}).reduce((x, y) => x + y, 0);
         const rd = rt.amount === null ? t.R : rt.amount - rt.prev_amount;  // 재계약 증감(변경 − 기존, 상품 선택 시 상품 슬롯 증감)
-        return kpiCard("R. 증감매출", amt(rd + ch.amount), `재계약 증감 ${amt(rd)} + 해지 감소 ${amt(ch.amount)}<br>해지확정 ${cnt(ch.funnels)}건${exn ? ` · 계산 제외 ${cnt(exn)}건` : ""} · A+C+R에 포함<br>${kb}`, "neg", { status: ["해지확정"], period: "rev_ym" }); })()}
+        return kpiCard("R. 증감", amt(rd + ch.amount), `재계약 증감 ${amt(rd)} + 해지 감소 ${amt(ch.amount)}<br>해지확정 ${cnt(ch.funnels)}건${exn ? ` · 계산 제외 ${cnt(exn)}건` : ""} · A+C+R에 포함<br>${kb}`, "neg", { status: ["해지확정"], period: "rev_ym" }); })()}
       ${kpiCard("A+C. 기여매출", amt(t.AC), `Funnel ${cnt(t.funnels_A + t.funnels_C)}건<br>${kb}`, "", { scope: "acr", acr_type: ["A", "C"] })}
       ${kpiCard("고유 Funnel 건수", cnt(t.funnels) + "건", "월별 반복 반영 횟수 아님", "", { scope: "acr" })}
     </div>
@@ -622,7 +625,7 @@
     </div>
     <div class="card" style="margin-top:14px"><div class="card-head"><h3>기간별 표</h3><span class="muted">${term ? "기간 합계" : "합계"} A+C+R ${amt(t.ACR)} · 고유 Funnel ${cnt(t.funnels)}건</span></div>${periodTable(pRows, pPool, { first: "기간", drill: (x) => ({ scope: "acr", ym: x.ym }), fLabel: "고유 Funnel" })}</div>
     <div class="card" style="margin-top:14px"><h3>조직별 표 (${S.f.level === "am" ? "AM" : "팀"})</h3><p class="desc">집계 수준 ‘AM’ 선택 시 AM별 · 조직별 합계는 담당 전체와 일치</p>
-      <div class="table-wrap" style="max-height:520px"><table class="t"><thead><tr><th>${S.f.level === "am" ? "AM(팀)" : "팀"}</th><th class="num">A</th><th class="num">C</th><th class="num">R</th><th class="num">A+C</th><th class="num">A+C+R</th><th class="num">고유 Funnel</th><th class="num">R 음수 건수</th><th class="num">R 음수 금액</th></tr></thead>
+      <div class="table-wrap" style="max-height:520px"><table class="t"><thead><tr><th>${S.f.level === "am" ? "AM(팀)" : "팀"}</th><th class="num">A</th><th class="num">C</th><th class="num">R 증감</th><th class="num">A+C</th><th class="num">A+C+R</th><th class="num">고유 Funnel</th><th class="num">R 음수 건수</th><th class="num">R 음수 금액</th></tr></thead>
       <tbody>${orgRows.map((r) => `<tr class="clickable" data-drill='${esc(JSON.stringify(S.f.level === "am" ? { scope: "acr", am_key: r.key } : { scope: "acr", team: r.key }))}'><td>${esc(r.am ? `${r.am} (${r.team})` : r.team)}</td><td class="num">${amt(r.A)}</td><td class="num">${amt(r.C)}</td><td class="num">${amt(r.R)}</td><td class="num">${amt(r.AC)}</td><td class="num"><b>${amt(r.ACR)}</b></td><td class="num">${cnt(r.funnels)}</td><td class="num">${cnt(r.r_neg_count)}</td><td class="num">${amt(r.r_neg_amount)}</td></tr>`).join("") || '<tr><td colspan="9" class="muted">자료 없음</td></tr>'}</tbody></table></div></div>
     ${basisBlock(d.basis)}`;
     $("view").innerHTML = h;
@@ -632,14 +635,14 @@
     chart("cumChart", { type: "line", data: { labels: pRows.map((m) => m.label), datasets: cumDs },
       options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false }, plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: tooltipAmt } } }, scales: { y: { title: { display: true, text: `누적 금액 (${unitName()})` }, grid: zeroGrid }, x: { grid: { display: false } } } } });
     const orgBar = (id, rows, labelFn, horizontal) => {
-      const dsets = ["A", "C", "R"].map((k) => ({ label: k, data: rows.map((r) => conv(r[k])), backgroundColor: COLORS[k], borderRadius: 2, maxBarThickness: 16 }));
+      const dsets = ["A", "C", "R"].map((k) => ({ label: SERIES_LABEL[k], data: rows.map((r) => conv(r[k])), backgroundColor: COLORS[k], borderRadius: 2, maxBarThickness: 16 }));
       chart(id, { type: "bar", data: { labels: rows.map(labelFn), datasets: dsets },
         options: { indexAxis: horizontal ? "y" : "x", maintainAspectRatio: false, plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtNum(horizontal ? ctx.parsed.x : ctx.parsed.y).replace(/<[^>]+>/g, "")}` } } },
           scales: horizontal ? { x: { title: { display: true, text: unitName() }, grid: zeroGrid }, y: { grid: { display: false }, ticks: { autoSkip: false } } } : { y: { title: { display: true, text: unitName() }, grid: zeroGrid }, x: { grid: { display: false } } },
           onClick: (e, els) => { if (els.length) { const r = rows[els[0].index]; openDetail(r.am ? { scope: "acr", am_key: r.key } : { scope: "acr", team: r.key }); } } } });
     };
-    orgBar("teamChart", d.by_team, (r) => r.team, false);
-    orgBar("amChart", d.by_am.slice(0, 20), (r) => `${r.am} (${r.team})`, true);
+    orgBar("teamChart", netRows(d.by_team), (r) => r.team, false);
+    orgBar("amChart", netRows(d.by_am).slice(0, 20), (r) => `${r.am} (${r.team})`, true);
     document.querySelectorAll("#serSel input").forEach((i) => i.addEventListener("change", () => {
       S.ui.acrSeries = Array.from(document.querySelectorAll("#serSel input:checked")).map((x) => x.value);
       store.set("ui", S.ui); render();
@@ -659,11 +662,14 @@
     const drill = (extra) => esc(JSON.stringify(dObj(extra)));
     const sm = d.summary;
     // 월별 ACR 수주 증감액(Pre-sales) — 가능성 5개 묶음(겹치지 않음) 막대 + 합계 선
-    const PSG = [["30%이하", ["30%이하"], "--ps-1"], ["30%이상", ["30%이상", "40%이상"], "--ps-2"], ["50%이상", ["50%이상", "60%이상"], "--ps-3"],
+    // 가능성 구간 4색(주황 제외): 30%이하 적 · 30~69% 노랑 · 70~89% 파랑 · 90~100% 녹색
+    const PSG = [["30%이하", ["30%이하"], "--ps-1"], ["30~69%", ["30%이상", "40%이상", "50%이상", "60%이상"], "--ps-3"],
       ["70%이상", ["70%이상", "80%이상"], "--ps-4"], ["90%이상", ["90%이상", "100%이상"], "--ps-5"]];
     const pct_ = ["ALL", "A", "C", "R"].includes(S.ui.psChartType) ? S.ui.psChartType : "ALL";
     const cTypes = pct_ === "ALL" ? ["A", "C", "R"] : [pct_];
-    const psSer = Array.isArray(S.ui.psSeries) ? S.ui.psSeries : PSG.map((g) => g[0]).concat(["합계"]);
+    let psSer = Array.isArray(S.ui.psSeries) ? S.ui.psSeries.slice() : PSG.map((g) => g[0]).concat(["합계"]);
+    // 이전 5구간 선택(30%이상·50%이상)을 새 구간(30~69%)으로 이어받음
+    if ((psSer.includes("30%이상") || psSer.includes("50%이상")) && !psSer.includes("30~69%")) psSer.push("30~69%");
     const mons = d.types.A.monthly.map((m) => ({ ym: m.ym, label: m.label }));
     const gsum = (i, bands) => cTypes.reduce((a, t) => a + bands.reduce((x, b) => x + (d.types[t].monthly[i].bands[b] || 0), 0), 0);
     const gData = PSG.map(([lb, bands]) => mons.map((m, i) => gsum(i, bands)));
@@ -674,7 +680,7 @@
           <label><input type="checkbox" value="합계" ${psSer.includes("합계") ? "checked" : ""}><i style="background:${css("--ps-6", "#7c3aed")}"></i>합계</label></div></div>
       <div class="toolbar" style="margin:4px 0 6px"><span class="seg-light" id="psTypeSel">${[["ALL", "A+C+R"], ["A", "A"], ["C", "C"], ["R", "R"]].map(([k, l]) => `<button type="button" data-v="${k}" class="${k === pct_ ? "on" : ""}">${l}</button>`).join("")}</span>
         <span class="muted">진행 중(Pre Sales·제안완료) · 매출발생년월 기준 · 막대=가능성 구간, 선=합계 · 단위 ${esc(unitName())} · 클릭 → 해당 월·구간 Funnel</span></div>
-      <p class="desc">30%이하=0~29%, 30%이상=30~49%, 50%이상=50~69%, 70%이상=70~89%, 90%이상=90~100%.${unk ? ` 가능성 미확인 ${fmtNum(conv(unk)).replace(/<[^>]+>/g, "")}은 차트에서 제외.` : ""}</p>
+      <p class="desc">30%이하=0~29%, 30~69%=30~69%, 70%이상=70~89%, 90%이상=90~100%.${unk ? ` 가능성 미확인 ${fmtNum(conv(unk)).replace(/<[^>]+>/g, "")}은 차트에서 제외.` : ""}</p>
       <div class="chart-box tall"><canvas id="psMonthChart"></canvas></div></div>
     <div style="height:14px"></div>`;
     h += `<div class="tabs" role="tablist">${["A", "C", "R"].map((k) => `<button data-pstab="${k}" class="${k === tab ? "on" : ""}" type="button" role="tab">${k} 매출 <span class="muted">${cnt(sm[k].count)}건 · ${amt(sm[k].monthly)}</span></button>`).join("")}</div>
@@ -757,19 +763,19 @@
     let prevMonthly = [];
     try { const jp = await api("/view/total", { filters: Object.assign({}, S.f, { total_year: y - 1 }) }); prevMonthly = (jp.data && jp.data.monthly) || []; } catch (e) { prevMonthly = []; }
     const baseYm = Number(String(S.f.base_date || "").slice(0, 7).replace("-", "")) || null;
-    const tRows = aggPeriods(d.monthly, perOf(), true, baseYm), tPool = poolOf(aggPeriods(prevMonthly, perOf(), true, baseYm).concat(tRows));
+    const tRows = aggPeriods(netRows(d.monthly), perOf(), true, baseYm), tPool = poolOf(aggPeriods(netRows(prevMonthly), perOf(), true, baseYm).concat(tRows));
     // 메뉴·제목에 집계연도 표시
     $("pageTitle").textContent = `ACR 수주(${y}년)`;
     document.querySelectorAll('[data-page="total"]').forEach((b) => { b.textContent = `ACR 수주(${y}년)`; });
     const years = Array.from(new Set((S.meta.options.years || []).concat([y]))).sort((a, b) => a - b);
     const kb = esc(`수주년월 ${y}-01~${y}-12 · 계약기간매출 합계`);
     const dk = (extra) => Object.assign({ scope: "total" }, extra || {});
-    const orgRows = S.f.level === "am" ? d.by_am : d.by_team;
+    const orgRows = netRows(S.f.level === "am" ? d.by_am : d.by_team);
     let h = `<div class="toolbar"><span class="muted">집계연도</span><span class="seg-light" id="tyearSel">${years.map((yy) => `<button type="button" data-v="${yy}" class="${yy === y ? "on" : ""}">${yy}년</button>`).join("")}</span>
         <span class="muted">확정 건(A·C=Win, R=재계약완료)의 계약 전체 기간 매출을 수주월에 합산 · 단위 ${esc(unitName())}</span></div>
     <div class="grid kpis">
       ${(() => { const cr = d.churn_ref || { amount: 0 }; const pSel = S.f.products.length || S.f.product_group !== "all";
-        const rChg = (pSel ? t.R : rf.new_total - rf.prev_total) + cr.amount;  // R. 증감매출
+        const rChg = (pSel ? t.R : rf.new_total - rf.prev_total) + cr.amount;  // R 증감
         return kpiCard("A+C+R. 매출", amt(t.A + t.C + rChg), `A ${amt(t.A)} + C ${amt(t.C)} + R 증감 ${amt(rChg)}<br>Funnel ${cnt(t.funnels_A + t.funnels_C)}건(A+C)<br>${kb}`, "hero", dk()); })()}
       ${kpiCard("A. 수주", amt(t.A), `Funnel ${cnt(t.funnels_A)}건<br>${kb}`, "a", dk({ acr_type: ["A"] }))}
       ${kpiCard("C. 수주", amt(t.C), `Funnel ${cnt(t.funnels_C)}건<br>${kb}`, "c", dk({ acr_type: ["C"] }))}
@@ -777,7 +783,7 @@
       ${(() => { const cr = d.churn_ref || { amount: 0, count: 0, excluded: 0 };
         const pSel = S.f.products.length || S.f.product_group !== "all";
         const rd = pSel ? t.R : rf.new_total - rf.prev_total;  // 재계약 증감 × 계약기간(상품 선택 시 슬롯 증감 × 계약기간)
-        return kpiCard("R. 증감매출", amt(rd + cr.amount), `재계약 증감 ${amt(rd)} + 해지 감소 ${amt(cr.amount)}<br>해지확정 ${cnt(cr.count)}건${cr.excluded ? ` · 계산 제외 ${cnt(cr.excluded)}건` : ""} · A+C+R에 포함<br>${kb}`, "neg", { status: ["해지확정"], period: "win_ym" }); })()}
+        return kpiCard("R. 증감", amt(rd + cr.amount), `재계약 증감 ${amt(rd)} + 해지 감소 ${amt(cr.amount)}<br>해지확정 ${cnt(cr.count)}건${cr.excluded ? ` · 계산 제외 ${cnt(cr.excluded)}건` : ""} · A+C+R에 포함<br>${kb}`, "neg", { status: ["해지확정"], period: "win_ym" }); })()}
       ${kpiCard(`${y}년 수주(A+C)`, amt(t.AC), `Funnel ${cnt(t.funnels_A + t.funnels_C)}건<br>${kb}`, "", dk({ acr_type: ["A", "C"] }))}
     </div>
     ${Object.keys(d.excluded).length ? `<div class="notice warn">집계에서 제외: ${Object.entries(d.excluded).map(([k, v]) => `${esc(k)} ${v}건`).join(", ")}</div>` : ""}
@@ -793,9 +799,9 @@
           <tr><td>증감 (재계약 후 − 기존, 계약기간 합계)</td><td class="num">${amt(rf.new_total - rf.prev_total)}</td></tr></tbody></table></div>
         <p class="desc" style="margin-top:6px">R. 재계약은 재계약으로 확보한 매출(변경매출)의 계약기간 합계이며 A+C+R에 포함됩니다. 증감은 기존 계약 대비 늘거나 줄어든 금액입니다. 상품 선택 시에는 R이 상품별 증감 기준이라 위 표와 다를 수 있습니다.</p></div>
     <div class="card" style="margin-top:14px"><h3>조직별 (${S.f.level === "am" ? "AM" : "팀"})</h3><p class="desc">사이드바 ‘집계 수준’을 AM으로 바꾸면 AM별 · 조직별 합계 = 담당 전체</p>
-      <div class="table-wrap" style="max-height:520px"><table class="t"><thead><tr><th>${S.f.level === "am" ? "AM(팀)" : "팀"}</th><th class="num">A</th><th class="num">C</th><th class="num">R</th><th class="num">A+C</th><th class="num">A+C+R</th><th class="num">건수</th><th class="num" title="변경매출 &lt; 기존매출">R 감액 건수</th></tr></thead>
+      <div class="table-wrap" style="max-height:520px"><table class="t"><thead><tr><th>${S.f.level === "am" ? "AM(팀)" : "팀"}</th><th class="num">A</th><th class="num">C</th><th class="num">R 증감</th><th class="num">A+C</th><th class="num">A+C+R</th><th class="num">건수</th><th class="num" title="변경매출 &lt; 기존매출">R 감액 건수</th></tr></thead>
       <tbody>${orgRows.map((r) => `<tr class="clickable" data-drill='${esc(JSON.stringify(dk(S.f.level === "am" ? { am_key: r.key } : { team: r.key })))}'><td>${esc(r.am ? `${r.am} (${r.team})` : r.team)}</td><td class="num">${amt(r.A)}</td><td class="num">${amt(r.C)}</td><td class="num">${amt(r.R)}</td><td class="num">${amt(r.AC)}</td><td class="num"><b>${amt(r.ACR)}</b></td><td class="num">${cnt(r.funnels)}</td><td class="num">${cnt(r.r_neg_count)}</td></tr>`).join("") || '<tr><td colspan="8" class="muted">자료 없음</td></tr>'}</tbody>
-      <tfoot><tr><td>담당 합계</td><td class="num">${amt(t.A)}</td><td class="num">${amt(t.C)}</td><td class="num">${amt(t.R)}</td><td class="num">${amt(t.AC)}</td><td class="num">${amt(t.ACR)}</td><td class="num">${cnt(t.funnels)}</td><td></td></tr></tfoot></table></div></div>
+      <tfoot><tr><td>담당 합계</td><td class="num">${amt(t.A)}</td><td class="num">${amt(t.C)}</td><td class="num">${amt(t.RC)}</td><td class="num">${amt(t.AC)}</td><td class="num">${amt(t.ACRN)}</td><td class="num">${cnt(t.funnels)}</td><td></td></tr></tfoot></table></div></div>
     ${basisBlock(d.basis)}`;
     $("view").innerHTML = h;
     bindPeriodToolbar("totPer");
@@ -816,12 +822,12 @@
     const sum = (k) => d.rows.reduce((a, r) => a + (r[k] || 0), 0);
     let h = `<div class="notice info">집계 수준: <b>${isAm ? "AM" : "팀"}</b> (사이드바 ‘집계 수준’에서 AM 선택 시 AM별). 매출 순위와 확인 과제를 함께 보며, 목표·보유고객 자료가 없어 자동 성과등급은 만들지 않습니다.</div>
     <div class="card"><div class="table-wrap" style="max-height:640px"><table class="t"><thead><tr>
-      <th>${isAm ? "AM(팀)" : "팀"}</th><th class="num" title="조회기간 확정 A/C 월매출 증감액 합계">A/C 기여매출</th><th class="num" title="재계약완료 건의 재계약 후 월매출(변경매출) 합계">R매출(리텐션)</th><th class="num" title="A/C 기여매출 + R매출(리텐션)">A+C+R 기여매출</th><th class="num">진행 중 A/C</th><th class="num" title="현재상황 Pre Sales·제안완료인 A/C의 계약기간매출 합계">Pre Sales/제안완료 계약기간 매출</th><th class="num">예정 임박</th><th class="num">예정월 경과</th>
+      <th>${isAm ? "AM(팀)" : "팀"}</th><th class="num" title="조회기간 확정 A/C 월매출 증감액 합계">A/C 기여매출</th><th class="num" title="재계약완료 건의 재계약 후 월매출(변경매출) 합계 · A+C+R 미포함">R 재계약</th><th class="num" title="재계약 증감 + 해지 감소">R 증감</th><th class="num" title="A/C 기여매출 + R 증감">A+C+R 기여매출</th><th class="num">진행 중 A/C</th><th class="num" title="현재상황 Pre Sales·제안완료인 A/C의 계약기간매출 합계">Pre Sales/제안완료 계약기간 매출</th><th class="num">예정 임박</th><th class="num">예정월 경과</th>
       <th class="num">Win 건수</th><th class="num">Win 계약기간매출</th><th class="num">진행 중 재계약</th><th class="num">재계약 기존 월매출</th><th class="num">재계약 감액(완료)</th><th class="num">감액 예상(진행)</th>
       <th class="num">해지확정</th><th class="num">장기 미갱신</th><th class="num">갱신일 미입력</th><th class="num">필수정보 누락·오류</th><th class="num">확인 Funnel(높음)</th></tr></thead>
       <tbody>${d.rows.map((r) => `<tr><td>${esc(isAm ? `${r.am} (${r.team})` : r.team)}</td>
         <td class="num"><span class="link" data-drill='${esc(dk(r, { scope: "acr", acr_type: ["A", "C"] }))}'>${amt(r.acr_ac)}</span></td>
-        <td class="num"><span class="link" data-drill='${esc(dk(r, { scope: "acr", acr_type: ["R"] }))}'>${amt(r.acr_r)}</span></td><td class="num"><b>${amt(r.acr_acr)}</b></td>
+        <td class="num"><span class="link" data-drill='${esc(dk(r, { scope: "acr", acr_type: ["R"] }))}'>${amt(r.acr_r)}</span></td><td class="num">${amt(r.acr_rc)}</td><td class="num"><b>${amt(r.acr_acr)}</b></td>
         ${C(r, r.prog_ac_count, { scope: "in_progress", acr_type: ["A", "C"] })}<td class="num">${amt(r.prog_ac_amount)}</td>
         ${C(r, r.imminent, { scope: "in_progress", imminent: true })}${C(r, r.overdue, { scope: "in_progress", bucket: "예정월 경과" })}
         ${C(r, r.win_count, { acr_type: ["A", "C"], status: ["Win"], period: "win_ym" })}<td class="num">${amt(r.win_amount)}</td>
@@ -832,7 +838,7 @@
         ${C(r, r.stale, { scope: "checks", code: "STALE" })}${C(r, r.update_missing, { scope: "checks", code: "UPDATE_MISSING" })}
         ${C(r, r.missing_info, { scope: "quality" })}
         <td class="num"><span class="link" data-drill='${esc(dk(r, { scope: "checks" }))}'>${cnt(r.check_funnels)}</span> <span class="muted">(${cnt(r.check_level1)})</span></td></tr>`).join("")}</tbody>
-      <tfoot><tr><td>합계</td><td class="num">${amt(sum("acr_ac"))}</td><td class="num">${amt(sum("acr_r"))}</td><td class="num"><b>${amt(sum("acr_acr"))}</b></td><td class="num">${cnt(sum("prog_ac_count"))}</td><td class="num">${amt(sum("prog_ac_amount"))}</td><td class="num">${cnt(sum("imminent"))}</td><td class="num">${cnt(sum("overdue"))}</td><td class="num">${cnt(sum("win_count"))}</td><td class="num">${amt(sum("win_amount"))}</td><td class="num">${cnt(sum("prog_r_count"))}</td><td class="num">${amt(sum("prog_r_prev"))}</td><td class="num">${cnt(sum("renewal_decrease_done"))}</td><td class="num">${cnt(sum("renewal_decrease_expected"))}</td><td class="num">${cnt(sum("churn"))}</td><td class="num">${cnt(sum("stale"))}</td><td class="num">${cnt(sum("update_missing"))}</td><td class="num">${cnt(sum("missing_info"))}</td><td class="num">${cnt(sum("check_funnels"))}</td></tr></tfoot></table></div>
+      <tfoot><tr><td>합계</td><td class="num">${amt(sum("acr_ac"))}</td><td class="num">${amt(sum("acr_r"))}</td><td class="num">${amt(sum("acr_rc"))}</td><td class="num"><b>${amt(sum("acr_acr"))}</b></td><td class="num">${cnt(sum("prog_ac_count"))}</td><td class="num">${amt(sum("prog_ac_amount"))}</td><td class="num">${cnt(sum("imminent"))}</td><td class="num">${cnt(sum("overdue"))}</td><td class="num">${cnt(sum("win_count"))}</td><td class="num">${amt(sum("win_amount"))}</td><td class="num">${cnt(sum("prog_r_count"))}</td><td class="num">${amt(sum("prog_r_prev"))}</td><td class="num">${cnt(sum("renewal_decrease_done"))}</td><td class="num">${cnt(sum("renewal_decrease_expected"))}</td><td class="num">${cnt(sum("churn"))}</td><td class="num">${cnt(sum("stale"))}</td><td class="num">${cnt(sum("update_missing"))}</td><td class="num">${cnt(sum("missing_info"))}</td><td class="num">${cnt(sum("check_funnels"))}</td></tr></tfoot></table></div>
       <p class="desc" style="margin-top:6px">숫자를 클릭하면 해당 조건의 Funnel 목록으로 이동합니다. ‘확인 Funnel’ 괄호 안은 높음 등급 건수.</p></div>
     ${basisBlock(d.basis)}${rulesBlock(d.rules)}`;
     $("view").innerHTML = h;
@@ -923,11 +929,11 @@
     if (tab === "customer") {
       body = `${d.customer_warning ? `<div class="notice neg"><b>원본 확인 필요</b> — ${esc(d.customer_warning)}</div>` : ""}<div class="notice warn">고객사 <b>표시명 기준</b> 집계입니다. 마스킹된 이름이 같아도 같은 고객으로 단정하지 않으며, 고객 코드가 없어 고유·신규 고객 수와 유지율은 산출하지 않습니다.</div>
         <div class="toolbar"><input type="text" id="custQ" placeholder="고객사 표시명 검색"><span class="muted">표시명 ${cnt(d.customer_count_display)}개 (상위 200 표시, Funnel 수 순)</span></div>
-        <div class="table-wrap" style="max-height:600px"><table class="t" id="custTable"><thead><tr><th>고객사(표시명)</th><th>팀</th><th class="num">Funnel</th><th class="num">진행 중</th><th class="num">확정 ACR(매출개시월, 월매출합계)</th><th class="num">해지확정</th></tr></thead>
+        <div class="table-wrap" style="max-height:600px"><table class="t" id="custTable"><thead><tr><th>고객사(표시명)</th><th>팀</th><th class="num">Funnel</th><th class="num">진행 중</th><th class="num" title="A·C 매출 + R 증감(재계약 증감 + 해지 감소)">A+C+R(통일 산식)</th><th class="num">해지확정</th></tr></thead>
         <tbody>${d.customers.map((c) => `<tr class="clickable" data-drill='${esc(JSON.stringify({ customer: c.customer }))}' data-name="${esc(c.customer)}"><td>${esc(c.customer)}</td><td>${esc(c.teams)}</td><td class="num">${cnt(c.funnels)}</td><td class="num">${cnt(c.in_progress)}</td><td class="num">${amt(c.acr)}</td><td class="num">${cnt(c.churn)}</td></tr>`).join("")}</tbody></table></div>`;
     } else if (tab === "product") {
       body = `<div class="notice info">상품1~5와 월매출1~5를 짝으로 처리합니다. ACR은 해당 상품 슬롯의 월매출만 합산(Funnel 전체금액 반복 합산 없음). 계약기간매출은 ‘해당 상품을 보유한 Funnel 전체금액’이며 고유 Funnel당 1회 반영. 상품별 월매출 합계 ≠ 월매출합계 건: <span class="link" data-drill='${esc(JSON.stringify({ scope: "checks", code: "AMOUNT_MISMATCH" }))}'>${cnt(d.product_diff_count)}건</span></div>
-        <div class="table-wrap" style="max-height:600px"><table class="t"><thead><tr><th>상품</th><th class="num">보유 Funnel</th><th class="num" title="확정 건 중 해당 상품 슬롯의 월매출만 합산(매출개시월 기준)">A 기여매출(상품별)</th><th class="num" title="확정 건 중 해당 상품 슬롯의 월매출만 합산(매출개시월 기준)">C 기여매출(상품별)</th><th class="num" title="확정 건 중 해당 상품 슬롯의 월매출만 합산(매출개시월 기준)">R 기여매출(상품별)</th><th class="num" title="확정 건 중 해당 상품 슬롯의 월매출만 합산(매출개시월 기준)">A+C+R 기여매출(상품별)</th><th class="num">ACR Funnel</th><th class="num">진행 중 A/C</th><th class="num">진행 중 계약기간매출(Funnel 전체)</th></tr></thead>
+        <div class="table-wrap" style="max-height:600px"><table class="t"><thead><tr><th>상품</th><th class="num">보유 Funnel</th><th class="num" title="확정 건 중 해당 상품 슬롯의 월매출만 합산(매출개시월 기준)">A 기여매출(상품별)</th><th class="num" title="확정 건 중 해당 상품 슬롯의 월매출만 합산(매출개시월 기준)">C 기여매출(상품별)</th><th class="num" title="확정 건 중 해당 상품 슬롯의 월매출만 합산(매출개시월 기준)">R 증감(상품별)</th><th class="num" title="확정 건 중 해당 상품 슬롯의 월매출만 합산(매출개시월 기준)">A+C+R 기여매출(상품별)</th><th class="num">ACR Funnel</th><th class="num">진행 중 A/C</th><th class="num">진행 중 계약기간매출(Funnel 전체)</th></tr></thead>
         <tbody>${d.products.map((p) => `<tr class="clickable" data-drill='${esc(JSON.stringify({ product: p.product }))}'><td>${esc(p.product)}</td><td class="num">${cnt(p.funnels)}</td><td class="num">${amt(p.acr_A)}</td><td class="num">${amt(p.acr_C)}</td><td class="num">${amt(p.acr_R)}</td><td class="num"><b>${amt(p.acr_ACR)}</b></td><td class="num">${cnt(p.acr_funnels)}</td><td class="num">${cnt(p.prog_ac_count)}</td><td class="num">${amt(p.prog_ac_contract_amt)}</td></tr>`).join("")}</tbody></table></div>`;
     } else if (tab === "bid") {
       body = `<div class="notice info">같은 입찰공고번호의 Funnel을 묶어 보여줄 뿐 중복으로 처리·삭제하지 않습니다. 입찰 마감일은 원본에 없어 표시하지 않습니다. 나라장터 API 연동은 향후 개선사항입니다.</div>

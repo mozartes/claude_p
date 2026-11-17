@@ -431,23 +431,35 @@
     if (!types.length) types = ["A", "C", "R"];
     let [con, basis] = contributions(df, mode, from, to, products);
     con = con.filter((x) => types.includes(x.acr_type));
-    const cum = { A: 0, C: 0, R: 0, AC: 0, ACR: 0 };
-    const byYm = groupBy(con, (x) => x.ym);
+    // R 증감(RC) = 재계약 증감(R 행의 delta) + 해지 감소(해지확정, R과 같은 규칙). A+C+R(ACRN) = A + C + RC (2026-11 통일 산식)
+    let chCon = [];
+    if (types.includes("R")) {
+      const sub = df.filter((r) => r.status === "해지확정").map((r) => Object.assign({}, r, { status: CFG.ACR_CONFIRMED_STATUS[r.acr_type], new_monthly: r.monthly }));
+      if (sub.length) chCon = contributions(sub, mode, from, to, products)[0].filter((x) => x.acr_type === "R");
+    }
+    const rcOf = (g, gch) => g.reduce((a, x) => a + (x.acr_type === "R" ? x.delta : 0), 0) + gch.reduce((a, x) => a + x.amount, 0);
+    const net = (s, g, gch) => { s.RC = rcOf(g, gch); s.ACRN = s.A + s.C + s.RC; return s; };
+    const cum = { A: 0, C: 0, R: 0, AC: 0, ACR: 0, RC: 0, ACRN: 0 };
+    const byYm = groupBy(con, (x) => x.ym), chByYm = groupBy(chCon, (x) => x.ym);
     const monthly = ymRange(from, to).map((ym) => {
       const g = byYm.get(ym) || [];
-      const s = typeSums(g);
-      SERIES.forEach((k) => { cum[k] += s[k]; });
+      const s = net(typeSums(g), g, chByYm.get(ym) || []);
+      Object.keys(cum).forEach((k) => { cum[k] += s[k]; });
       return Object.assign({ ym, label: ymLabel(ym) }, s, { funnels: uniq(g.map((x) => x.row)), cum: Object.assign({}, cum) });
     });
-    const totals = Object.assign(typeSums(con), { funnels: uniq(con.map((x) => x.row)) });
+    const totals = Object.assign(net(typeSums(con), con, chCon), { churn_funnels: uniq(chCon.map((x) => x.row)), funnels: uniq(con.map((x) => x.row)) });
     ["A", "C", "R"].forEach((t) => { totals["funnels_" + t] = uniq(con.filter((x) => x.acr_type === t).map((x) => x.row)); });
     const org = (key, labels) => {
       const rows = [];
-      groupBy(con, (x) => x[key]).forEach((g, k) => {
+      const gm = groupBy(con, (x) => x[key]), cm = groupBy(chCon, (x) => x[key]);
+      const keys = Array.from(new Set(Array.from(gm.keys()).concat(Array.from(cm.keys())))).filter((k) => k !== null && k !== undefined).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      keys.forEach((k) => {
+        const g = gm.get(k) || [], gch = cm.get(k) || [];
         const rneg = g.filter((x) => x.acr_type === "R" && x.delta < 0);
         const rec = { key: k };
-        labels.forEach((l) => { rec[l] = g[0][l]; });
-        rows.push(Object.assign(rec, typeSums(g), { funnels: uniq(g.map((x) => x.row)), r_neg_count: uniq(rneg.map((x) => x.row)), r_neg_amount: rneg.reduce((a, x) => a + x.delta, 0) }));
+        const first = g[0] || gch[0];
+        labels.forEach((l) => { rec[l] = first[l]; });
+        rows.push(Object.assign(rec, net(typeSums(g), g, gch), { funnels: uniq(g.map((x) => x.row)), r_neg_count: uniq(rneg.map((x) => x.row)), r_neg_amount: rneg.reduce((a, x) => a + x.delta, 0) }));
       });
       return rows.sort((a, b) => b.ACR - a.ACR);
     };
@@ -672,7 +684,7 @@
       "상품 카테고리": CFG.PRODUCT_GROUPS[p.product_group] + (p.product_group !== "all" ? " — 전용회선 + 전용회선외 = 상품별 월매출 합계(월매출합계와 다른 행은 데이터 품질에 표시)" : ""),
       "R. 증감매출": "재계약 증감(재계약 후 − 기존, 계약기간 반영) + 해지확정 감소액(월매출합계 = −기존매출, R과 같은 기준). A+C+R 합계에 넣지 않음",
       "R 해석": p.products.length ? "상품 선택: R = 선택 상품 슬롯 금액(재계약 증감). 변경매출은 상품별 값이 없어 리텐션 매출 산출 불가"
-          : "R = 재계약 후 월매출(변경매출, 리텐션 매출). A+C+R = A+C 기여매출 + R매출. 증감액은 R매출 − 기존매출",
+          : "R 재계약 = 재계약 후 월매출(변경매출, 참고). R 증감 = 재계약 증감(변경 − 기존) + 해지 감소. A+C+R = A + C + R 증감(2026-11 통일 산식)",
       "누적": `선택기간 시작월(${ymLabel(p.ym_from)})부터 누적`,
       "Funnel 건수": "월별 반복 반영 횟수가 아닌 고유 Funnel 수",
       "주의": p.mode === "term" ? "계약기간 반영값은 현재 입력 상태·일정 기반 추정이며 청구·회계 실적이 아님" : "해당 월에 시작되는 월매출 증감 규모이며 반복 청구 매출·회계 실적이 아님",
@@ -871,7 +883,7 @@
         imminent: g.filter((r) => isProg(r.status) && nn(r.win_ym) && r.win_ym >= p.base_ym && r.win_ym <= immHi).length,
         overdue: g.filter((r) => isProg(r.status) && lt(r.win_ym, p.base_ym)).length,
         win_count: win.length, win_amount: fsum(win.map((r) => r.contract_amt)),
-        acr_ac: o.AC || 0, acr_ac_funnels: o.funnels || 0, acr_r: (acrROrg[k] || {}).R || 0, acr_acr: (o.AC || 0) + ((acrROrg[k] || {}).R || 0), prog_r_count: pr.length, prog_r_prev: fsum(pr.map((r) => r.prev_monthly)),
+        acr_ac: o.AC || 0, acr_ac_funnels: o.funnels || 0, acr_r: (acrROrg[k] || {}).R || 0, acr_rc: (acrROrg[k] || {}).RC || 0, acr_acr: (o.AC || 0) + ((acrROrg[k] || {}).RC || 0), prog_r_count: pr.length, prog_r_prev: fsum(pr.map((r) => r.prev_monthly)),
         renewal_decrease_done: rdone.filter((r) => lt(r.monthly, 0)).length,
         renewal_decrease_expected: g.filter((r) => ck.get(r.row).codes.includes("RENEWAL_DECREASE")).length,
         churn: g.filter((r) => r.acr_type === "R" && r.status === "해지확정" && inPeriod(r.win_ym, p)).length,
@@ -906,8 +918,13 @@
     let types = (p.types || ["A", "C", "R"]).filter((t) => ["A", "C", "R"].includes(t));
     if (!types.length) types = ["A", "C", "R"];
     const rowAmt = new Map();
+    // A+C+R(통일 산식) = A·C 매출 + R 증감(R 행 증감 + 해지 감소)
     contributions(df, p.mode, p.ym_from, p.ym_to, null)[0].filter((x) => types.includes(x.acr_type))
-      .forEach((x) => rowAmt.set(x.row, (rowAmt.get(x.row) || 0) + x.amount));
+      .forEach((x) => rowAmt.set(x.row, (rowAmt.get(x.row) || 0) + (x.acr_type === "R" ? x.delta : x.amount)));
+    if (types.includes("R")) {
+      const sub = df.filter((r) => r.status === "해지확정").map((r) => Object.assign({}, r, { status: CFG.ACR_CONFIRMED_STATUS[r.acr_type], new_monthly: r.monthly }));
+      if (sub.length) contributions(sub, p.mode, p.ym_from, p.ym_to, null)[0].filter((x) => x.acr_type === "R").forEach((x) => rowAmt.set(x.row, (rowAmt.get(x.row) || 0) + x.amount));
+    }
     const cust = [];
     groupBy(df, (r) => r.customer === null ? "(고객사 미입력)" : r.customer).forEach((g, name) => {
       const ra = g.filter((r) => rowAmt.has(r.row)).map((r) => rowAmt.get(r.row));
@@ -921,7 +938,7 @@
       const has = df.filter((r) => r.product_names.includes(nm));
       const a = computeAcr(has, p.mode, p.ym_from, p.ym_to, [nm], p.types);
       const pa = has.filter((r) => isProg(r.status) && (r.acr_type === "A" || r.acr_type === "C"));
-      return { product: nm, funnels: has.length, acr_A: a.totals.A, acr_C: a.totals.C, acr_R: a.totals.R, acr_ACR: a.totals.ACR,
+      return { product: nm, funnels: has.length, acr_A: a.totals.A, acr_C: a.totals.C, acr_R: a.totals.RC, acr_ACR: a.totals.ACRN,
         acr_funnels: a.totals.funnels, prog_ac_count: pa.length, prog_ac_contract_amt: fsum(pa.map((r) => r.contract_amt)) };
     });
     prod.sort((a, b) => b.funnels - a.funnels);
@@ -1044,6 +1061,17 @@
     return [g.filter((x) => x.amt !== null), excl];
   }
   // 해지확정(수주년월이 집계연도) 감소액 × 계약기간. R. 증감매출(재계약 증감 + 해지 감소)용. A+C+R 합계와 별도
+  function totalChurnRows(df, p) {
+    const lo = p.total_year * 100 + 1, hi = p.total_year * 100 + 12, sel = new Set(p.products);
+    const rows = []; let excluded = 0;
+    df.filter((r) => r.status === "해지확정" && r.win_ym !== null && r.win_ym >= lo && r.win_ym <= hi).forEach((r) => {
+      let a;
+      if (sel.size) { const [v, has] = productAmount(r.products, sel); if (!has) return; a = v; } else a = r.monthly;
+      if (a === null || a === undefined || Number.isNaN(a) || r.term === null) { excluded += 1; return; }
+      rows.push({ win_ym: r.win_ym, team: r.team, am_key: r.am_key, am: r.am, amt: a * r.term });
+    });
+    return [rows, excluded];
+  }
   function totalChurn(df, p) {
     const lo = p.total_year * 100 + 1, hi = p.total_year * 100 + 12, sel = new Set(p.products);
     let amount = 0, count = 0, excluded = 0;
@@ -1061,19 +1089,25 @@
     const [g, excl] = totalRows(df, p);
     const y = p.total_year;
     const sums = (x) => { let a = 0, c = 0, r = 0; x.forEach((e) => { if (e.r.acr_type === "A") a += e.amt; else if (e.r.acr_type === "C") c += e.amt; else if (e.r.acr_type === "R") r += e.amt; }); return { A: a, C: c, R: r, AC: a + c, ACR: a + c + r }; };
-    const totals = Object.assign(sums(g), { funnels: g.length });
+    // R 증감(RC) = 재계약 증감 × 계약기간 + 해지 감소 × 계약기간, A+C+R(ACRN) = A + C + RC
+    const [chf] = totalChurnRows(df, p);
+    const sumsN = (x, cx) => { const o = sums(x); const rc = x.reduce((a, e) => a + (e.r.acr_type === "R" ? (e.dlt || 0) : 0), 0) + cx.reduce((a, e) => a + e.amt, 0); o.RC = rc; o.ACRN = o.A + o.C + rc; return o; };
+    const totals = Object.assign(sumsN(g, chf), { funnels: g.length });
     ["A", "C", "R"].forEach((t) => { totals["funnels_" + t] = g.filter((e) => e.r.acr_type === t).length; });
-    let cum = 0;
+    let cum = 0, cumn = 0;
     const monthly = [];
     for (let m = 1; m <= 12; m++) {
-      const ym = y * 100 + m; const gm = g.filter((e) => e.r.win_ym === ym); const s = sums(gm); cum += s.ACR;
-      monthly.push(Object.assign({ ym, label: ymLabel(ym) }, s, { funnels: gm.length, cum_ACR: cum }));
+      const ym = y * 100 + m; const gm = g.filter((e) => e.r.win_ym === ym); const s = sumsN(gm, chf.filter((e) => e.win_ym === ym)); cum += s.ACR; cumn += s.ACRN;
+      monthly.push(Object.assign({ ym, label: ymLabel(ym) }, s, { funnels: gm.length, cum_ACR: cum, cum_ACRN: cumn }));
     }
     const org = (key, labels) => {
       const rows = [];
-      groupBy(g, (e) => e.r[key]).forEach((x, k) => {
-        const rec = { key: k }; labels.forEach((l) => { rec[l] = x[0].r[l]; });
-        rows.push(Object.assign(rec, sums(x), { funnels: x.length, r_neg_count: x.filter((e) => e.r.acr_type === "R" && e.dlt !== null && e.dlt < 0).length }));
+      const gm = groupBy(g, (e) => e.r[key]), cm = groupBy(chf, (e) => e[key]);
+      const keys = Array.from(new Set(Array.from(gm.keys()).concat(Array.from(cm.keys())))).filter((k) => k !== null && k !== undefined).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      keys.forEach((k) => {
+        const x = gm.get(k) || [], cx = cm.get(k) || [];
+        const rec = { key: k }; labels.forEach((l) => { rec[l] = x.length ? x[0].r[l] : cx[0][l]; });
+        rows.push(Object.assign(rec, sumsN(x, cx), { funnels: x.length, r_neg_count: x.filter((e) => e.r.acr_type === "R" && e.dlt !== null && e.dlt < 0).length }));
       });
       return rows.sort((a, b) => b.ACR - a.ACR);
     };

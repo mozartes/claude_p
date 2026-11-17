@@ -198,32 +198,55 @@ def compute_acr(df: pd.DataFrame, mode: str, ym_from: int, ym_to: int,
     con, basis = contributions(df, mode, ym_from, ym_to, products)
     con = con[con["acr_type"].isin(types)]
     months = ym_range(ym_from, ym_to)
+    # R 증감(RC) = 재계약 증감(R 행의 delta) + 해지 감소(해지확정, R과 같은 규칙). A+C+R(ACRN) = A + C + RC (2026-11 통일 산식)
+    ch_con = pd.DataFrame(columns=con.columns)
+    if "R" in types:
+        sub = df[df["status"] == "해지확정"].copy()
+        if len(sub):
+            sub["status"] = sub["acr_type"].map(C.ACR_CONFIRMED_STATUS)
+            sub["new_monthly"] = sub["monthly"]
+            ch_con, _ = contributions(sub, mode, ym_from, ym_to, products)
+            ch_con = ch_con[ch_con["acr_type"] == "R"]
+
+    def _rc(g: pd.DataFrame, gch: pd.DataFrame) -> float:
+        r = float(g.loc[g["acr_type"] == "R", "delta"].sum()) if len(g) else 0.0
+        return r + (float(gch["amount"].sum()) if len(gch) else 0.0)
 
     monthly_rows = []
-    cum = {k: 0.0 for k in SERIES}
+    cum = {k: 0.0 for k in SERIES + ["RC", "ACRN"]}
     for ym in months:
         g = con[con["ym"] == ym]
         sums = _type_sums(g)
-        for k in SERIES:
+        sums["RC"] = _rc(g, ch_con[ch_con["ym"] == ym] if len(ch_con) else ch_con)
+        sums["ACRN"] = sums["A"] + sums["C"] + sums["RC"]
+        for k in cum:
             cum[k] += sums[k]
         monthly_rows.append({
             "ym": ym, "label": ym_label(ym), **sums,
             "funnels": int(g["row"].nunique()),
-            "cum": {k: cum[k] for k in SERIES},
+            "cum": {k: cum[k] for k in cum},
         })
     totals = _type_sums(con)
+    totals["RC"] = _rc(con, ch_con)
+    totals["ACRN"] = totals["A"] + totals["C"] + totals["RC"]
+    totals["churn_funnels"] = int(ch_con["row"].nunique()) if len(ch_con) else 0
     totals["funnels"] = int(con["row"].nunique())
     for t in ("A", "C", "R"):
         totals[f"funnels_{t}"] = int(con.loc[con["acr_type"] == t, "row"].nunique())
 
     def org_table(key: str, label_cols: list[str]) -> list[dict]:
         rows = []
-        if con.empty:
+        if con.empty and ch_con.empty:
             return rows
-        for k, g in con.groupby(key):
+        keys = sorted(set(con[key].dropna()) | (set(ch_con[key].dropna()) if len(ch_con) else set()))
+        for k in keys:
+            g = con[con[key] == k]
+            gch = ch_con[ch_con[key] == k] if len(ch_con) else ch_con
             sums = _type_sums(g)
+            sums["RC"] = _rc(g, gch)
+            sums["ACRN"] = sums["A"] + sums["C"] + sums["RC"]
             rneg = g[(g["acr_type"] == "R") & (g["delta"] < 0)]
-            first = g.iloc[0]
+            first = g.iloc[0] if len(g) else gch.iloc[0]
             rows.append({
                 "key": k, **{c: first[c] for c in label_cols}, **sums,
                 "funnels": int(g["row"].nunique()),

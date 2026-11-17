@@ -27,7 +27,7 @@
     --text: #eef2f7; --text-2: #cfd6e1; --muted: #aab4c2;
     --primary: #2dd4bf; --primary-weak: #10302d; --on-primary: #06201d;
     --side-bg: #11161d; --side-ink: #cfd6e1; --side-head: #aab4c2; --side-input: #1b232e;
-    --series-a: #6b9cff; --series-c: #f59e42; --series-r: #b18cff; --series-ac: #2dd4bf; --series-total: #eef2f7;
+    --series-a: #4f86f0; --series-c: #cf7a22; --series-r: #9a6cf0; --series-ac: #2dd4bf; --series-total: #eef2f7;
     --a-soft: #172742; --a-ink: #a9c4ff; --c-soft: #33240f; --c-ink: #f8c58b; --r-soft: #261c3f; --r-ink: #d2bcff;
     --pb-1: #1d3a66; --pb-2: #2b5aa0; --pb-3: #4a80d8; --pb-4: #7ea8ef; --pb-5: #b9d0f8;
     --neg: #ff7b7b; --neg-bg: #3a1a1c; --neg-ink: #ffc9c9;
@@ -44,7 +44,7 @@
   --text: #eef2f7; --text-2: #cfd6e1; --muted: #aab4c2;
   --primary: #2dd4bf; --primary-weak: #10302d; --on-primary: #06201d;
   --side-bg: #11161d; --side-ink: #cfd6e1; --side-head: #aab4c2; --side-input: #1b232e;
-  --series-a: #6b9cff; --series-c: #f59e42; --series-r: #b18cff; --series-ac: #2dd4bf; --series-total: #eef2f7;
+  --series-a: #4f86f0; --series-c: #cf7a22; --series-r: #9a6cf0; --series-ac: #2dd4bf; --series-total: #eef2f7;
   --a-soft: #172742; --a-ink: #a9c4ff; --c-soft: #33240f; --c-ink: #f8c58b; --r-soft: #261c3f; --r-ink: #d2bcff;
   --pb-1: #1d3a66; --pb-2: #2b5aa0; --pb-3: #4a80d8; --pb-4: #7ea8ef; --pb-5: #b9d0f8;
   --neg: #ff7b7b; --neg-bg: #3a1a1c; --neg-ink: #ffc9c9;
@@ -319,7 +319,7 @@ details.per-table > summary { cursor: pointer; font-size: 13px; color: var(--tex
   .strip.six .kpi.hero, .strip.six .kpi:not(.hero) { grid-column: auto; }
 }
 
-/* Pre-sales 가능성 구간 색: 낮음→높음 = 적색·주황·노랑·파랑·녹색, 합계 선 = 보라 */
-:root { --ps-1: #dc2626; --ps-2: #ea7a0c; --ps-3: #eab308; --ps-4: #2563eb; --ps-5: #16a34a; --ps-6: #7c3aed; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ps-1: #f87171; --ps-2: #fb923c; --ps-3: #facc15; --ps-4: #60a5fa; --ps-5: #4ade80; --ps-6: #c084fc; } }
-:root[data-theme="dark"] { --ps-1: #f87171; --ps-2: #fb923c; --ps-3: #facc15; --ps-4: #60a5fa; --ps-5: #4ade80; --ps-6: #c084fc; }
+/* Pre-sales 가능성 구간 4색(주황 제외, 색 검증 통과): 적·노랑·파랑·녹색, 합계 선 = 보라 */
+:root { --ps-1: #dc2626; --ps-2: #ca8a04; --ps-3: #ca8a04; --ps-4: #2563eb; --ps-5: #16a34a; --ps-6: #7c3aed; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ps-1: #ef4444; --ps-2: #d4a20e; --ps-3: #d4a20e; --ps-4: #3b82f6; --ps-5: #22a35a; --ps-6: #c084fc; } }
+:root[data-theme="dark"] { --ps-1: #ef4444; --ps-2: #d4a20e; --ps-3: #d4a20e; --ps-4: #3b82f6; --ps-5: #22a35a; --ps-6: #c084fc; }
