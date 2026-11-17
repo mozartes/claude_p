@@ -350,3 +350,14 @@ table.core-team:not(.show-all) :is(th, td):nth-child(n+10):not(:last-child) { di
 .tabset > .tabs { margin-bottom: 8px; }
 .tabset .tab-p > .card, .tabset .tab-p > .grid > .card { border: 0; padding: 4px 0 0; background: transparent; }
 .tabset .tab-p > .grid { margin-top: 0 !important; }
+
+/* 내 실적 바로가기 */
+.me-wrap { display: inline-flex; gap: 0; }
+.me-btn { font-weight: 600; border-color: var(--primary); color: var(--primary); }
+.me-btn.on { background: var(--primary); color: var(--on-primary); }
+.me-wrap .me-edit:not([hidden]) { margin-left: -1px; color: var(--text-2); }
+.me-wrap .me-btn:has(+ .me-edit:not([hidden])) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.me-wrap .me-edit { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.me-list { max-height: 52vh; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
+.me-grp { flex-basis: 100%; font-size: 13px; font-weight: 600; color: var(--text-2); margin-top: 8px; }
+.me-pick.on { border-color: var(--primary); color: var(--primary); font-weight: 600; }

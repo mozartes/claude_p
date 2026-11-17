@@ -115,6 +115,7 @@
     $("teamCount").textContent = S.f.teams.length ? `${S.f.teams.length}개 선택` : "전체";
     $("amCount").textContent = S.f.ams.length ? `${S.f.ams.length}명 선택` : "전체";
     const gl = { all: "전체(월매출합계)", leased: "전용회선 전체(상품 월매출)", non_leased: "전용회선외 전체(상품 월매출)" }[S.f.product_group || "all"];
+    updateMeBtn();
     $("prodCount").textContent = S.f.products.length ? `${S.f.products.length}개 선택(상품 월매출)` : gl;
   }
   function readFilters() {
@@ -1126,6 +1127,61 @@
   }
   function closeModal() { $("modal").classList.remove("open"); $("modalBg").classList.remove("open"); }
 
+  // ------------------------------------------------------------ 내 실적 바로가기
+  // 내 이름(AM 키)은 이 브라우저(localStorage)에만 저장 · 외부 전송 없음
+  function meKey() {
+    const k = store.get("me", "");
+    return k && S.meta && S.meta.options.ams.some((a) => a.key === k) ? k : "";
+  }
+  function meOn() { const k = meKey(); return !!k && S.f.ams.length === 1 && S.f.ams[0] === k; }
+  function updateMeBtn() {
+    const b = $("meBtn"); if (!b) return;
+    const k = meKey(), a = k ? S.meta.options.ams.find((x) => x.key === k) : null;
+    b.textContent = a ? (meOn() ? `내 실적 · ${a.am} ✓` : `내 실적 · ${a.am}`) : "내 실적";
+    b.classList.toggle("on", meOn());
+    b.title = a ? (meOn() ? "다시 누르면 이전 선택(전체 등)으로 돌아갑니다" : `${a.team} ${a.am} 실적만 보기`) : "처음 한 번 내 이름을 고르면 다음부터 한 번에 내 실적만 봅니다";
+    const e = $("meEdit"); if (e) e.hidden = !a;
+  }
+  function applyMe(on) {
+    const k = meKey();
+    if (on && k) {
+      if (!meOn()) store.set("mePrev", { teams: S.f.teams, ams: S.f.ams });
+      S.f.teams = []; S.f.ams = [k];
+    } else {
+      const p = store.get("mePrev", null) || { teams: [], ams: [] };
+      S.f.teams = (p.teams || []).filter((t) => S.meta.options.teams.includes(t));
+      S.f.ams = (p.ams || []).filter((x) => x !== k && S.meta.options.ams.some((a) => a.key === x));
+    }
+    $("amSearch").value = "";
+    renderFilterInputs(); store.set("filters", S.f); render();
+  }
+  function openMePicker() {
+    $("modal").classList.add("open"); $("modalBg").classList.add("open");
+    const cur = store.get("me", "");
+    const draw = (q) => {
+      let h = "", grp = null;
+      S.meta.options.ams.filter((a) => !q || a.am.includes(q) || a.team.includes(q)).forEach((a) => {
+        if (a.team !== grp) { grp = a.team; h += `<div class="me-grp">${esc(grp)}</div>`; }
+        h += `<button type="button" class="btn small me-pick${a.key === cur ? " on" : ""}" data-me="${esc(a.key)}">${esc(a.am)}</button>`;
+      });
+      $("meList").innerHTML = h || '<p class="muted">해당 AM 없음</p>';
+    };
+    $("modalBody").innerHTML = `<h3 style="margin-top:0">내 실적 바로가기 · 내 이름 고르기</h3>
+      <p class="desc">한 번 고르면 다음부터 상단 <b>내 실적</b> 버튼 한 번으로 모든 화면이 내 실적만 보여 줍니다. 이름은 이 브라우저에만 저장되며 외부로 보내지 않습니다.</p>
+      <div class="side-row" style="margin:8px 0"><input type="text" id="meSearch" placeholder="이름 또는 팀 검색" style="width:100%"></div>
+      <div id="meList" class="me-list"></div>
+      ${cur ? '<p style="margin-top:12px"><button type="button" class="btn small" id="meForget">저장된 이름 지우기</button></p>' : ""}`;
+    draw("");
+    $("meSearch").addEventListener("input", (e) => draw(e.target.value.trim()));
+    $("meSearch").focus();
+    $("meList").addEventListener("click", (e) => {
+      const p = e.target.closest("[data-me]"); if (!p) return;
+      store.set("me", p.dataset.me); closeModal(); applyMe(true);
+    });
+    const fg = $("meForget");
+    if (fg) fg.addEventListener("click", () => { const was = meOn(); store.set("me", ""); closeModal(); if (was) applyMe(false); else updateMeBtn(); });
+  }
+
   // ------------------------------------------------------------ 라우팅
   const PAGES = { overview: pageOverview, funnel: pageFunnel, renewal: pageRenewal, acr: pageAcr, presales: pagePresales, total: pageTotal, team: pageTeam, perf: pagePerf, insight: pageInsight, priority: pagePriority, detail: () => pageDetail(false), data: pageData };
   const BASIS_VIEW = { overview: "overview", funnel: "funnel", renewal: "renewal", acr: "acr", presales: "presales", total: "total", team: "team", perf: "perf", insight: "insight" };
@@ -1220,6 +1276,8 @@
     $("f_pgroup").addEventListener("change", (e) => { S.f.product_group = e.target.value; S.f.products = S.f.products.filter((x) => inGroup(x)); renderProductList(); updateCounts(); });
     $("teamClear").addEventListener("click", () => { S.f.teams = []; renderFilterInputs(); });
     $("amClear").addEventListener("click", () => { S.f.ams = []; renderAmList(); updateCounts(); });
+    $("meBtn").addEventListener("click", () => { if (!meKey()) openMePicker(); else applyMe(!meOn()); });
+    $("meEdit").addEventListener("click", openMePicker);
     $("prodClear").addEventListener("click", () => { S.f.products = []; renderProductList(); updateCounts(); });
     $("u_src").addEventListener("change", () => { $("u_disp").disabled = $("u_src").value === "unknown"; });
     $("f_search").addEventListener("keydown", (e) => { if (e.key === "Enter") { readFilters(); render(); } });
