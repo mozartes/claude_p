@@ -323,3 +323,24 @@ details.per-table > summary { cursor: pointer; font-size: 13px; color: var(--tex
 :root { --ps-1: #dc2626; --ps-2: #ca8a04; --ps-3: #ca8a04; --ps-4: #2563eb; --ps-5: #16a34a; --ps-6: #7c3aed; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ps-1: #ef4444; --ps-2: #d4a20e; --ps-3: #d4a20e; --ps-4: #3b82f6; --ps-5: #22a35a; --ps-6: #c084fc; } }
 :root[data-theme="dark"] { --ps-1: #ef4444; --ps-2: #d4a20e; --ps-3: #d4a20e; --ps-4: #3b82f6; --ps-5: #22a35a; --ps-6: #c084fc; }
+
+/* ---------- 시안 적용(2026-11): 5칸 줄·참고 줄·설명 2줄·큰 숫자 글꼴 ---------- */
+.strip.five { grid-template-columns: minmax(0, 2fr) repeat(4, minmax(0, 1fr)); }
+.strip.five .kpi.hero, .strip.five .kpi:not(.hero) { grid-column: auto; }
+@media (max-width: 1280px) { .strip.five { grid-template-columns: repeat(2, minmax(0, 1fr)); } .strip.five .kpi.hero { grid-column: span 2; } }
+@media (max-width: 560px) { .strip.five { grid-template-columns: minmax(0, 1fr); } .strip.five .kpi.hero { grid-column: auto; } }
+.ov-ref { margin: 8px 2px 0; font-size: 13px; color: var(--muted); }
+.ov-ref b { color: var(--text-2); font-weight: 600; }
+.ov-h h3 .h-period { margin-left: 6px; }
+/* 큰 숫자는 일반 글자 폭(표 숫자만 자릿수 고정폭) */
+.kpi .value { font-variant-numeric: normal; }
+/* 일반 카드 설명은 최대 2줄, 전체 문장은 툴팁 */
+#view .grid.kpis .kpi .meta { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+/* 상세 목록 탭 안의 카드는 테두리 없이 */
+.ovl .ovl-p > .card { border: 0; padding: 4px 0 0; background: transparent; }
+.ovl .tabs { margin: 8px 0 4px; }
+.ovl .tabs button.on { color: var(--primary); }
+
+/* 핵심 열만 기본 표시, '열 더 보기'로 펼침 */
+table.core-detail:not(.show-all) :is(th, td):is(:nth-child(3), :nth-child(12), :nth-child(n+15)) { display: none; }
+table.core-team:not(.show-all) :is(th, td):nth-child(n+10):not(:last-child) { display: none; }
