@@ -88,8 +88,8 @@
         <h3>검색 · ACR 기준</h3>
         <div class="side-row"><input type="text" id="f_search" placeholder="고객사 · Funnel번호"></div>
         <div class="side-row"><select id="f_mode">
-          <option value="term">계약기간 반영 (기본·매월 지속 반영)</option>
-          <option value="start">매출개시월만 (신규 증분)</option>
+          <option value="start">매출개시월 (기본·그 달에 시작된 신규 매출)</option>
+          <option value="term">계약기간 반영 (매월 지속 반영)</option>
         </select></div>
         <details class="side-more">
           <summary>보조 필터 (기본 미적용)</summary>
@@ -121,7 +121,7 @@
             <option>원</option><option>천원</option><option>백만원</option><option>억원</option>
           </select></div>
           <div class="side-row"><label for="u_dec">소수점</label><select id="u_dec">
-            <option value="0">0자리</option><option value="1">1자리</option><option value="2" selected>2자리</option><option value="3">3자리</option>
+            <option value="0" selected>0자리</option><option value="1">1자리</option><option value="2">2자리</option><option value="3">3자리</option>
           </select></div>
           <div class="side-note" id="unitNote">원본 단위는 서버 설정(SOURCE_UNIT)을 따릅니다. 표시 단위만 바꿀 수 있습니다.</div>
         </details>

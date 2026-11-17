@@ -24,7 +24,7 @@
   const S = {
     meta: null, page: "overview", charts: [], last: null,
     f: null, // filters
-    ui: { srcUnit: "unknown", dispUnit: "백만원", dec: 1, acrSeries: ["A", "C", "R", "ACR"], insightTab: "customer" },
+    ui: { srcUnit: "unknown", dispUnit: "백만원", dec: 0, acrSeries: ["A", "C", "R", "ACR"], insightTab: "customer" },
     detail: { drill: { period: "rev_ym" }, page: 1, sort: "row", desc: false, q: "", size: 50 },
   };
 
@@ -89,7 +89,7 @@
     const d = S.meta.defaults;
     return {
       base_date: d.base_date, ym_from: d.ym_from, ym_to: d.ym_to, level: "all", teams: [], ams: [],
-      types: ["A", "C", "R"], products: [], product_group: "all", search: "", mode: "term",
+      types: ["A", "C", "R"], products: [], product_group: "all", search: "", mode: "start",
       excl_midlarge: false, excl_rmr: false, confirmed_only: false, th: Object.assign({}, d.th), _dv: d.version, _mv: 2,
     };
   }
@@ -448,7 +448,7 @@
     const chX = k.churn_acr || { amount: 0, funnels: 0 };
     const rdX = rt.amount === null ? a.R : rt.amount - rt.prev_amount;
     const rChg = rdX + chX.amount, acrNet = a.A + a.C + rChg;
-    h += `<section class="ov-sec"><div class="ov-h"><h3>ACR 기여매출 ${sub(`${esc(S.f.ym_from)}~${esc(S.f.ym_to)} 실제 발생분`)} ${info(`확정 ACR 중 조회기간에 매출이 발생하는 부분(매출발생년월 기준) · ${ml} · A+C+R = A + C + R 증감(재계약 증감 + 해지 감소)${rt.amount === null ? " · 상품 선택 시 R은 재계약 증감 기준" : ""}`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
+    h += `<section class="ov-sec"><div class="ov-h"><h3>ACR 기여매출 ${sub(`${esc(S.f.ym_from)}~${esc(S.f.ym_to)} ${S.f.mode === "term" ? "실제 발생분(계약기간 반영)" : "신규 발생분(매출개시월)"}`)} ${info(`${S.f.mode === "term" ? "확정 ACR 중 조회기간에 매출이 발생하는 부분(계약기간 동안 매월 반영)" : "확정 ACR 중 매출발생년월이 조회기간 안인 건의 월매출(그 달에 새로 시작된 매출만, 다음 달부터는 미반영 · 사이드바 ‘ACR 기준’에서 계약기간 반영으로 전환 가능)"} · ${ml} · A+C+R = A + C + R 증감(재계약 증감 + 해지 감소)${rt.amount === null ? " · 상품 선택 시 R은 재계약 증감 기준" : ""}`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
     <div class="strip five">
       ${kpiCard("A+C+R 기여매출", amt(acrNet), heroMeta(a, rChg, `고유 ${cnt(a.funnels)}건`), "hero", { scope: "acr" })}
       ${kpiCard("A 기여매출", amt(a.A), row(`${cnt(a.funnels_A)}건`, `A+C 중 ${pctOf(a.A, a.AC)}`), "a", { scope: "acr", acr_type: ["A"] })}
@@ -1381,7 +1381,8 @@
     // 기본 기간이 바뀌면(버전 불일치) 저장된 화면의 조회기간을 새 기본값으로 교체
     if (saved && saved._dv !== S.meta.defaults.version) { delete saved.ym_from; delete saved.ym_to; }
     // ACR 기준 기본값 변경(매출개시월 → 계약기간 반영): 이전에 저장된 기준은 한 번 초기화
-    if (saved && saved._mv !== 2) { saved.mode = "term"; saved._mv = 2; }
+    // 2026-11: 기여매출 기본 기준을 매출개시월(그 달에 시작된 신규 매출)로 변경 — 이전 저장 기준은 한 번 초기화
+    if (saved && saved._mv !== 3) { saved.mode = "start"; saved._mv = 3; }
     if (!keepFilters) S.f = saved ? Object.assign(def, saved, { th: Object.assign({}, def.th, saved.th || {}) }) : def;
     S.f._dv = S.meta.defaults.version;
     // 사라진 팀·AM·상품 선택 정리
@@ -1392,6 +1393,8 @@
     if (!S.meta.options.product_groups || !S.meta.options.product_groups[S.f.product_group]) S.f.product_group = "all";
     const ui = store.get("ui", null);
     if (ui) Object.assign(S.ui, ui);
+    // 2026-11: 금액은 소수점 없이 표시(10,852.34 → 10,852) — 이전 저장 설정은 한 번 0자리로
+    if (S.ui._decv !== 1) { S.ui.dec = 0; S.ui._decv = 1; }
     if (unitLocked()) S.ui.srcUnit = S.meta.unit.source_unit; // 확정 단위는 저장된 화면 설정보다 우선
     if (!UNIT_WON[S.ui.dispUnit]) S.ui.dispUnit = "백만원";
     renderFilterInputs();

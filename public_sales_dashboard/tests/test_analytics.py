@@ -320,11 +320,21 @@ def test_new_check_rules(make_ds, params):
     assert A.RULE_MAP["STALE"][1] == 3 and A.RULE_MAP["STALE_LONG"][1] == 1
 
 
-def test_default_mode_term(make_ds):
-    """기본 ACR 기준 = 계약기간 반영: 1월 개시 건은 계약기간 동안 매월 이어서 반영"""
+def test_default_mode_start(make_ds):
+    """기본 ACR 기준 = 매출개시월(2026-11 변경): 월별 값은 그 달에 매출이 시작된 건만"""
     import analytics as A
     ds = make_ds([row(monthly=68.49, rev=202601, term=24), row(monthly=1.21, rev=202602, term=24)])
     p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12"})
+    assert p.mode == "start"
+    m = {x["ym"]: x["A"] for x in A.acr_view(ds, p)["monthly"]}
+    assert m[202601] == 68.49 and abs(m[202602] - 1.21) < 1e-9 and m.get(202612, 0) == 0
+
+
+def test_mode_term(make_ds):
+    """계약기간 반영(선택): 1월 개시 건은 계약기간 동안 매월 이어서 반영"""
+    import analytics as A
+    ds = make_ds([row(monthly=68.49, rev=202601, term=24), row(monthly=1.21, rev=202602, term=24)])
+    p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12", "mode": "term"})
     assert p.mode == "term"
     m = {x["ym"]: x["A"] for x in A.acr_view(ds, p)["monthly"]}
     assert m[202601] == 68.49 and abs(m[202602] - 69.70) < 1e-9 and abs(m[202612] - 69.70) < 1e-9
@@ -338,7 +348,7 @@ def test_r_plus_churn_separate(make_ds):
     ds = make_ds([row(type="Ret.", status="재계약완료", monthly=-2, prev=10, new=8, rev=202603, term=12),
                   row(type="Ret.", status="해지확정", monthly=-5, rev=202606, term=12),
                   row(type="Ret.", status="해지확정", monthly=-1, rev=202606, term=None)])  # 계약기간 누락 → 제외
-    p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12"})
+    p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12", "mode": "term"})
     k = A.overview_view(ds, p)["kpi"]
     assert k["retention"]["amount"] - k["retention"]["prev_amount"] == -2 * 10  # R 증감 = (8 − 10) × 10개월
     assert k["churn_acr"]["amount"] == -5 * 7 and k["churn_acr"]["funnels"] == 1
@@ -350,7 +360,7 @@ def test_retention_revenue(make_ds):
     import analytics as A
     ds = make_ds([row(type="Ret.", status="재계약완료", monthly=-2, 기존매출=10, 변경매출=8, rev=202603, term=12),
                   row(type="Ret.", status="해지확정", monthly=-5, 기존매출=5, 변경매출=0, rev=202606, term=12)])
-    p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12"})
+    p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12", "mode": "term"})
     k = A.overview_view(ds, p)["kpi"]
     assert k["acr"]["R"] == 80  # R = 변경매출 8 × 10개월
     assert k["retention"]["amount"] == 80 and k["retention"]["prev_amount"] == 100 and k["retention"]["funnels"] == 1
@@ -362,7 +372,7 @@ def test_acr_r_change(make_ds):
     import analytics as A
     ds = make_ds([row(type="Ret.", status="재계약완료", monthly=-2, prev=10, new=8, rev=202603, term=12),
                   row(type="Ret.", status="해지확정", monthly=-5, prev=5, new=0, rev=202606, term=12)])
-    p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12"})
+    p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12", "mode": "term"})
     rc = A.acr_view(ds, p)["r_change"]
     assert rc["retention"]["amount"] - rc["retention"]["prev_amount"] == -20 and rc["churn"]["amount"] == -35
     k = A.overview_view(ds, p)["kpi"]

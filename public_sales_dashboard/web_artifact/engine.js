@@ -505,7 +505,7 @@
       ym_from: from, ym_to: to, level: ["all", "team", "am"].includes(d.level) ? d.level : "all",
       teams: listOf(d.teams), ams: listOf(d.ams), types, products: listOf(d.products), user_products: listOf(d.products),
       product_group: CFG.PRODUCT_GROUPS[d.product_group] ? d.product_group : "all",
-      search: String(d.search || "").trim().slice(0, 100), mode: MODES[d.mode] ? d.mode : "term",
+      search: String(d.search || "").trim().slice(0, 100), mode: MODES[d.mode] ? d.mode : "start",
       excl_midlarge: !!d.excl_midlarge, excl_rmr: !!d.excl_rmr, confirmed_only: !!d.confirmed_only, th,
       total_year: (() => { const ty = parseInt(String(d.total_year), 10); return String(ty) === String(d.total_year).trim() && ty >= 1990 && ty <= 2100 ? ty : y; })(),
     };

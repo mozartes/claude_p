@@ -73,7 +73,7 @@ def params():
     import analytics as A
 
     def _p(**kw):
-        # 단건 금액 검증용으로 매출개시월 기준(start)을 명시. 기본값(term)은 test_default_mode_term에서 검증
+        # 단건 금액 검증용으로 매출개시월 기준(start, 기본값)을 명시
         d = {"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12", "mode": "start"}
         d.update(kw)
         return A.parse_params(d)
