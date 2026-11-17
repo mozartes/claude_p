@@ -361,3 +361,9 @@ table.core-team:not(.show-all) :is(th, td):nth-child(n+10):not(:last-child) { di
 .me-list { max-height: 52vh; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; }
 .me-grp { flex-basis: 100%; font-size: 13px; font-weight: 600; color: var(--text-2); margin-top: 8px; }
 .me-pick.on { border-color: var(--primary); color: var(--primary); font-weight: 600; }
+
+/* 우리 팀 실적(팀장용) */
+.myteam-bar { flex-wrap: wrap; gap: 8px; align-items: center; }
+.myteam-name { font-size: 17px; font-weight: 700; color: var(--primary); border: 2px solid var(--primary); border-radius: 8px; padding: 3px 12px; }
+.tm-bar { display: inline-block; width: 90px; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; vertical-align: middle; }
+.tm-bar > span { display: block; height: 100%; background: var(--primary); }

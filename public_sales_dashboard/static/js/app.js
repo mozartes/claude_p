@@ -11,7 +11,7 @@
   const UNIT_WON = { "원": 1, "천원": 1e3, "백만원": 1e6, "억원": 1e8 };
   const PAGE_TITLES = {
     overview: "종합 현황", funnel: "수주·Funnel 관리", renewal: "재계약·해지 관리", acr: "ACR 수주(기여매출)", presales: "ACR 수주(Pre-sales)", total: "ACR 수주(2026년)",
-    team: "팀·AM 관리", perf: "AM 성과·활동 점검", insight: "고객·상품·입찰 분석", priority: "우선 확인할 Funnel", detail: "상세 목록", data: "데이터 관리",
+    myteam: "우리 팀 실적", team: "팀·AM 관리", perf: "AM 성과·활동 점검", insight: "고객·상품·입찰 분석", priority: "우선 확인할 Funnel", detail: "상세 목록", data: "데이터 관리",
   };
 
   const S = {
@@ -829,6 +829,95 @@
     $("view").innerHTML = h;
   }
 
+  // ------------------------------------------------------------ 페이지: 우리 팀 실적(팀장용)
+  // 팀 이름은 이 브라우저(localStorage)에만 저장 · 계산은 기존 ACR 수주(연도)·팀·AM 관리 화면 계산을 그대로 사용
+  function myTeam() { const t = store.get("myTeam", ""); return t && S.meta.options.teams.includes(t) ? t : ""; }
+  function teamPicker(cur) {
+    return `<div class="card"><h3>우리 팀 고르기</h3><p class="desc">한 번 고르면 다음부터 이 메뉴를 열 때 바로 팀 실적이 나옵니다. 팀 이름은 이 브라우저에만 저장되며 외부로 보내지 않습니다.</p>
+      <div class="me-list" style="margin-top:10px">${S.meta.options.teams.map((t) => `<button type="button" class="btn small me-pick${t === cur ? " on" : ""}" data-myteam="${esc(t)}">${esc(t)}</button>`).join("")}</div></div>`;
+  }
+  function bindTeamPicker() {
+    document.querySelectorAll("[data-myteam]").forEach((b) => b.addEventListener("click", () => { store.set("myTeam", b.dataset.myteam); store.set("myTeamPick", false); render(); }));
+  }
+  async function pageMyTeam() {
+    const tm = myTeam();
+    if (!tm || store.get("myTeamPick", false)) { setHeader(null); $("view").innerHTML = teamPicker(tm); bindTeamPicker(); return; }
+    // 사이드바 필터를 우리 팀으로 맞춤(이전 선택은 보관 → '전체로 되돌리기')
+    if (!(S.f.teams.length === 1 && S.f.teams[0] === tm && !S.f.ams.length)) {
+      store.set("teamPrev", { teams: S.f.teams, ams: S.f.ams });
+      S.f.teams = [tm]; S.f.ams = []; $("amSearch").value = ""; renderFilterInputs(); store.set("filters", S.f);
+    }
+    const fA = Object.assign({}, S.f, { level: "am" });
+    const [jt, jm] = await Promise.all([api("/view/total", { filters: fA }), api("/view/team", { filters: fA })]);
+    setHeader(jt);
+    const d = jt.data, m = jm.data;
+    if (d.empty) { $("view").innerHTML = emptyState(); return; }
+    const t = d.totals, y = d.year, rf = d.r_ref;
+    const pSel = S.f.products.length || S.f.product_group !== "all";
+    const cr = d.churn_ref || { amount: 0, count: 0 };
+    const rd = pSel ? t.R : rf.new_total - rf.prev_total, rc = rd + cr.amount, acrT = t.A + t.C + rc;
+    const msum = (k) => (m.rows || []).reduce((x, r) => x + (r[k] || 0), 0);
+    // AM별: ACR 수주(연도) + 기여매출·진행 현황 결합(AM 키 기준)
+    const tot = {}; netRows(d.by_am).forEach((r) => { tot[r.key] = r; });
+    const keys = Array.from(new Set(Object.keys(tot).concat((m.rows || []).map((r) => r.key))));
+    const mm = {}; (m.rows || []).forEach((r) => { mm[r.key] = r; });
+    const rows = keys.map((k) => {
+      const a = tot[k] || {}, b = mm[k] || {};
+      return { key: k, am: a.am || b.am || k.split("|")[1] || k, A: a.A || 0, C: a.C || 0, AC: a.AC || 0, RC: a.R || 0, ACR: a.ACR || 0, n: (a.funnels_A || 0) + (a.funnels_C || 0),
+        acr_acr: b.acr_acr || 0, prog: b.prog_ac_count || 0, progAmt: b.prog_ac_amount || 0, overdue: b.overdue || 0, churn: b.churn || 0, chk: b.check_funnels || 0, chk1: b.check_level1 || 0, dec: b.renewal_decrease_expected || 0 };
+    }).sort((x, z) => z.ACR - x.ACR);
+    const sumR = (k) => rows.reduce((x, r) => x + r[k], 0);
+    const maxAcr = Math.max(0, ...rows.map((r) => r.ACR));
+    const dkT = (extra) => Object.assign({ scope: "total" }, extra || {});
+    const lk = (v, drill, isAmt) => `<span class="link" data-drill='${esc(JSON.stringify(drill))}'>${isAmt ? amt(v) : cnt(v)}</span>`;
+    const years = Array.from(new Set((S.meta.options.years || []).concat([y]))).sort((a, b) => a - b);
+    const sub = (s) => `<span class="h-period">${s}</span>`;
+    let h = `<div class="toolbar myteam-bar"><span class="myteam-name">${esc(tm)}</span><span class="muted">AM ${cnt(rows.length)}명</span>
+        <button type="button" class="btn small" id="mtChange">팀 변경</button><button type="button" class="btn small" id="mtReset">전체로 되돌리기</button>
+        <span class="muted">집계연도</span><span class="seg-light" id="mtYear">${years.map((yy) => `<button type="button" data-v="${yy}" class="${yy === y ? "on" : ""}">${yy}년</button>`).join("")}</span></div>
+      <div class="notice info">왼쪽 필터의 팀이 <b>${esc(tm)}</b>(으)로 설정되어 다른 메뉴도 우리 팀 기준으로 보입니다. 전체를 보려면 ‘전체로 되돌리기’.</div>
+      <section class="ov-sec"><div class="ov-h"><h3>ACR 수주 ${sub(`${y}년 수주 · 계약 전체 기간`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
+      <div class="strip five">
+        ${kpiCard("A+C+R 수주", amt(acrT), `<span class="row"><span>A+C ${amt(t.AC)} + R 증감 ${amt(rc)}</span></span>`, "hero", dkT())}
+        ${kpiCard("A 수주", amt(t.A), `<span class="row"><span>${cnt(t.funnels_A)}건</span></span>`, "a", dkT({ acr_type: ["A"] }))}
+        ${kpiCard("C 수주", amt(t.C), `<span class="row"><span>${cnt(t.funnels_C)}건</span></span>`, "c", dkT({ acr_type: ["C"] }))}
+        ${kpiCard("R 증감", amt(rc), `<span class="row"><span>재계약 ${amt(rd)}</span></span><span class="row"><span>해지 ${amt(cr.amount)} · ${cnt(cr.count)}건</span></span>`, "neg", { status: ["해지확정"], period: "win_ym" })}
+        ${kpiCard(`${y}년 수주(A+C)`, amt(t.AC), `<span class="row"><span>${cnt(t.funnels_A + t.funnels_C)}건</span></span>`, "", dkT({ acr_type: ["A", "C"] }))}
+      </div></section>
+      <section class="ov-sec"><div class="ov-h"><h3>기여매출 · 진행 현황 ${sub(`${esc(S.f.ym_from)}~${esc(S.f.ym_to)}`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
+      <div class="grid kpis">
+        ${kpiCard("A+C+R 기여매출", amt(msum("acr_acr")), `A/C ${amt(msum("acr_ac"))} + R 증감 ${amt(msum("acr_rc"))}`, "hero", { scope: "acr" })}
+        ${kpiCard("진행 중 A/C", cnt(msum("prog_ac_count")) + "건", `계약기간매출 ${amt(msum("prog_ac_amount"))}`, "", { scope: "in_progress", acr_type: ["A", "C"] })}
+        ${kpiCard("예정월 경과", cnt(msum("overdue")) + "건", "수주 일정·단계 확인", "warn", { scope: "in_progress", bucket: "예정월 경과" })}
+        ${kpiCard("해지확정", cnt(msum("churn")) + "건", "수주년월 기간 내", "neg", { acr_type: ["R"], status: ["해지확정"], period: "win_ym" })}
+        ${kpiCard("확인 Funnel", cnt(msum("check_funnels")) + "건", `높음 ${cnt(msum("check_level1"))}건`, "warn", { scope: "checks" })}
+      </div></section>
+      <div class="card" style="margin-top:16px"><div class="card-head"><h3>AM별 실적 (${esc(tm)})</h3><span class="muted">A+C+R 수주 큰 순 · 숫자 클릭 → 해당 Funnel 목록</span></div>
+      <div class="table-wrap" style="max-height:640px"><table class="t myteam-t"><thead><tr><th>AM</th><th class="num">A+C+R 수주(${y})</th><th>팀 내 비중</th><th class="num">A+C 수주</th><th class="num">R 증감</th><th class="num">A+C+R 기여매출</th><th class="num">진행 중 A/C</th><th class="num">예정월 경과</th><th class="num">감액 예상</th><th class="num">해지확정</th><th class="num">확인 Funnel(높음)</th></tr></thead>
+      <tbody>${rows.map((r) => { const ak = { am_key: r.key }; const share = acrT > 0 ? r.ACR / acrT * 100 : 0;
+        return `<tr><td><span class="link" data-drill='${esc(JSON.stringify(Object.assign({ scope: "total" }, ak)))}'>${esc(r.am)}</span></td>
+        <td class="num"><b>${lk(r.ACR, dkT(ak), true)}</b></td>
+        <td><span class="tm-bar"><span style="width:${maxAcr > 0 && r.ACR > 0 ? (r.ACR / maxAcr * 100).toFixed(1) : 0}%"></span></span> <span class="muted">${acrT > 0 ? share.toFixed(1) + "%" : "—"}</span></td>
+        <td class="num">${lk(r.AC, dkT(Object.assign({ acr_type: ["A", "C"] }, ak)), true)}</td><td class="num">${amt(r.RC)}</td>
+        <td class="num">${lk(r.acr_acr, Object.assign({ scope: "acr" }, ak), true)}</td>
+        <td class="num">${lk(r.prog, Object.assign({ scope: "in_progress", acr_type: ["A", "C"] }, ak))}</td>
+        <td class="num">${r.overdue ? lk(r.overdue, Object.assign({ scope: "in_progress", bucket: "예정월 경과" }, ak)) : "0"}</td>
+        <td class="num">${r.dec ? lk(r.dec, Object.assign({ scope: "checks", code: "RENEWAL_DECREASE" }, ak)) : "0"}</td>
+        <td class="num">${r.churn ? lk(r.churn, Object.assign({ acr_type: ["R"], status: ["해지확정"], period: "win_ym" }, ak)) : "0"}</td>
+        <td class="num">${lk(r.chk, Object.assign({ scope: "checks" }, ak))} <span class="muted">(${cnt(r.chk1)})</span></td></tr>`; }).join("") || '<tr><td colspan="11" class="muted">자료 없음</td></tr>'}</tbody>
+      <tfoot><tr><td>팀 합계</td><td class="num"><b>${amt(sumR("ACR"))}</b></td><td></td><td class="num">${amt(sumR("AC"))}</td><td class="num">${amt(sumR("RC"))}</td><td class="num">${amt(sumR("acr_acr"))}</td><td class="num">${cnt(sumR("prog"))}</td><td class="num">${cnt(sumR("overdue"))}</td><td class="num">${cnt(sumR("dec"))}</td><td class="num">${cnt(sumR("churn"))}</td><td class="num">${cnt(sumR("chk"))} <span class="muted">(${cnt(sumR("chk1"))})</span></td></tr></tfoot></table></div>
+      <p class="desc" style="margin-top:6px">A+C+R 수주 = A + C + R 증감(재계약 증감 + 해지 감소, 계약기간 기준) · ACR 수주(${y}년) 화면과 같은 계산 · 기여매출·진행 현황은 팀·AM 관리 화면과 같은 계산(조회기간 ${esc(S.f.ym_from)}~${esc(S.f.ym_to)}).</p></div>`;
+    $("view").innerHTML = h;
+    $("mtChange").addEventListener("click", () => { store.set("myTeamPick", true); render(); });
+    $("mtReset").addEventListener("click", () => {
+      const p = store.get("teamPrev", null) || { teams: [], ams: [] };
+      S.f.teams = (p.teams || []).filter((x) => x !== tm && S.meta.options.teams.includes(x));
+      S.f.ams = (p.ams || []).filter((x) => S.meta.options.ams.some((a) => a.key === x));
+      renderFilterInputs(); store.set("filters", S.f); go("overview");
+    });
+    document.querySelectorAll("#mtYear button").forEach((b) => b.addEventListener("click", () => { S.f.total_year = Number(b.dataset.v); store.set("filters", S.f); render(); }));
+  }
+
   // ------------------------------------------------------------ 페이지: AM 성과·활동 점검
   async function pagePerf() {
     const j = await api("/view/perf", { filters: S.f });
@@ -1183,8 +1272,8 @@
   }
 
   // ------------------------------------------------------------ 라우팅
-  const PAGES = { overview: pageOverview, funnel: pageFunnel, renewal: pageRenewal, acr: pageAcr, presales: pagePresales, total: pageTotal, team: pageTeam, perf: pagePerf, insight: pageInsight, priority: pagePriority, detail: () => pageDetail(false), data: pageData };
-  const BASIS_VIEW = { overview: "overview", funnel: "funnel", renewal: "renewal", acr: "acr", presales: "presales", total: "total", team: "team", perf: "perf", insight: "insight" };
+  const PAGES = { overview: pageOverview, funnel: pageFunnel, renewal: pageRenewal, acr: pageAcr, presales: pagePresales, total: pageTotal, team: pageTeam, myteam: pageMyTeam, perf: pagePerf, insight: pageInsight, priority: pagePriority, detail: () => pageDetail(false), data: pageData };
+  const BASIS_VIEW = { overview: "overview", funnel: "funnel", renewal: "renewal", acr: "acr", presales: "presales", total: "total", team: "team", myteam: "team", perf: "perf", insight: "insight" };
   function go(page) {
     S.page = page;
     document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
