@@ -344,3 +344,9 @@ details.per-table > summary { cursor: pointer; font-size: 13px; color: var(--tex
 /* 핵심 열만 기본 표시, '열 더 보기'로 펼침 */
 table.core-detail:not(.show-all) :is(th, td):is(:nth-child(3), :nth-child(12), :nth-child(n+15)) { display: none; }
 table.core-team:not(.show-all) :is(th, td):nth-child(n+10):not(:last-child) { display: none; }
+
+/* 탭 묶음: 패널 안 카드는 테두리 없이 */
+.tabset { padding-top: 6px; }
+.tabset > .tabs { margin-bottom: 8px; }
+.tabset .tab-p > .card, .tabset .tab-p > .grid > .card { border: 0; padding: 4px 0 0; background: transparent; }
+.tabset .tab-p > .grid { margin-top: 0 !important; }

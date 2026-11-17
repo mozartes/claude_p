@@ -361,6 +361,13 @@
     cum_ACR: m.cum_ACRN != null ? m.cum_ACRN : m.cum_ACR, cum: m.cum ? Object.assign({}, m.cum, { R: m.cum.RC != null ? m.cum.RC : m.cum.R, ACR: m.cum.ACRN != null ? m.cum.ACRN : m.cum.ACR }) : m.cum }));
   const poolOf = (arr) => { const o = {}; arr.forEach((b) => { o[b.key] = b; }); return o; };
 
+  // 탭 묶음(화면별 선택 기억): 아래쪽 표·차트를 탭 1개로 접어 화면 길이를 줄임
+  function tabsBlock(id, items) {
+    const sel = ((S.ui.tabsBy || {})[id]) || items[0][0];
+    const cur = items.some((x) => x[0] === sel) ? sel : items[0][0];
+    return `<div class="card tabset" style="margin-top:16px"><div class="tabs" role="tablist">${items.map(([k, l]) => `<button type="button" data-tabgrp="${id}" data-tk="${k}" class="${k === cur ? "on" : ""}" aria-selected="${k === cur}">${l}</button>`).join("")}</div>`
+      + items.map(([k, , html]) => `<div class="tab-p" data-tabgrp="${id}" data-tk="${k}" ${k === cur ? "" : "hidden"}>${html}</div>`).join("") + "</div>";
+  }
   function acrMonthlyChart(id, monthly, series, onClick) {
     const labels = monthly.map((m) => m.label);
     const ds = [];
@@ -505,15 +512,13 @@
     if (d.empty) { $("view").innerHTML = emptyState(); return; }
     const o = d.outcome, wt = d.weighted_total;
     let h = `<div class="grid kpis">${d.schedule.map((s) => kpiCard(`진행 중 A/C · ${s.bucket}`, cnt(s.count) + "건", `계약기간매출 ${amt(s.amount.total)}`, s.bucket === "예정월 경과" ? "neg" : (s.bucket === "예정월 미입력" ? "warn" : ""), { scope: "in_progress", acr_type: ["A", "C"], bucket: s.bucket })).join("")}</div>
-      <div class="grid cols-2" style="margin-top:14px">
-      <div class="card"><h3>① 현재 단계 분포 (A/C)</h3><p class="desc">수주년월 기간 내 현재 상태 · 과거 단계 이력이 없어 전환율·체류기간은 산출하지 않음</p>
+    ${tabsBlock("fn", [["stage", "① 단계 분포", `<div class="card"><h3>① 현재 단계 분포 (A/C)</h3><p class="desc">수주년월 기간 내 현재 상태 · 과거 단계 이력이 없어 전환율·체류기간은 산출하지 않음</p>
         <div class="chart-box short"><canvas id="stageChart"></canvas></div>
         <div class="table-wrap" style="margin-top:8px"><table class="t"><thead><tr><th>단계</th><th class="num">건수</th><th class="num">계약기간매출</th></tr></thead>
         <tbody>${d.stage.map((s) => `<tr class="clickable" data-drill='${esc(JSON.stringify({ acr_type: ["A", "C"], status: [s.status], period: "win_ym" }))}'><td>${esc(s.status)}</td><td class="num">${cnt(s.count)}</td><td class="num">${amt(s.amount)}</td></tr>`).join("")}</tbody></table></div>
         <p class="desc" style="margin-top:10px"><b>R 단계</b> (월매출합계 = 재계약 증감)</p>
         <div class="table-wrap"><table class="t"><thead><tr><th>단계</th><th class="num">건수</th><th class="num">기존 월매출</th><th class="num">변경 월매출</th><th class="num">월매출 증감</th></tr></thead>
-        <tbody>${d.stage_r.map((s) => `<tr class="clickable" data-drill='${esc(JSON.stringify({ acr_type: ["R"], status: [s.status], period: "win_ym" }))}'><td>${esc(s.status)}</td><td class="num">${cnt(s.count)}</td><td class="num">${amt(s.prev)}</td><td class="num">${amt(s.new)}</td><td class="num">${amt(s.monthly)}</td></tr>`).join("")}</tbody></table></div></div>
-      <div class="card"><h3>③ 확인 필요 조건</h3><p class="desc">자동 오류 확정·수정이 아니라 확인 대상 표시입니다.</p>
+        <tbody>${d.stage_r.map((s) => `<tr class="clickable" data-drill='${esc(JSON.stringify({ acr_type: ["R"], status: [s.status], period: "win_ym" }))}'><td>${esc(s.status)}</td><td class="num">${cnt(s.count)}</td><td class="num">${amt(s.prev)}</td><td class="num">${amt(s.new)}</td><td class="num">${amt(s.monthly)}</td></tr>`).join("")}</tbody></table></div></div>`], ["check", "③ 확인 조건 · ⑤ 종결 결과", `<div class="card"><h3>③ 확인 필요 조건</h3><p class="desc">자동 오류 확정·수정이 아니라 확인 대상 표시입니다.</p>
         <div class="table-wrap"><table class="t"><thead><tr><th>조건</th><th>권장 행동</th><th class="num">건수</th></tr></thead>
         <tbody>${d.check_counts.map((c) => `<tr class="clickable" data-drill='${esc(JSON.stringify({ scope: "checks", acr_type: ["A", "C"], code: c.code }))}'><td>${esc(c.label)}</td><td class="wrap">${esc(c.action)}</td><td class="num">${cnt(c.count)}</td></tr>`).join("")}</tbody></table></div>
         <h3 style="margin-top:16px">⑤ 종결 결과 (A/C, 수주년월 기준 현재 종결상태)</h3>
@@ -521,15 +526,11 @@
         <tbody><tr><td>A+C</td><td class="num">${cnt(o.win)}</td><td class="num">${cnt(o.lose)}</td><td class="num">${cnt(o.drop)}</td><td class="num">${pct(o.win_rate)}</td></tr>
         ${o.by_type.map((t) => `<tr><td>${typeTag(t.type)}</td><td class="num">${cnt(t.win)}</td><td class="num">${cnt(t.lose)}</td><td class="num">${cnt(t.drop)}</td><td class="num">${pct(t.win_rate)}</td></tr>`).join("")}
         <tr><td class="muted">계약기간매출</td><td class="num">${amt(o.win_amount)}</td><td class="num">${amt(o.lose_amount)}</td><td class="num">${amt(o.drop_amount)}</td><td></td></tr></tbody></table></div>
-        <p class="desc" style="margin-top:6px">수주율 = Win/(Win+Lose), Drop은 분모 제외 · 분모 0이면 산출 불가 · 과거 시점 수주율 아님</p></div>
-    </div>
-    <div class="card" style="margin-top:14px"><h3>④ 수주 가능성 (진행 중 A/C)</h3>
+        <p class="desc" style="margin-top:6px">수주율 = Win/(Win+Lose), Drop은 분모 제외 · 분모 0이면 산출 불가 · 과거 시점 수주율 아님</p></div>`], ["prob", "④ 수주 가능성", `<div class="card"><h3>④ 수주 가능성 (진행 중 A/C)</h3>
       <p class="desc">‘수주(재계약)가능성’의 명시적 0~100% 값만 사용, 변환 실패는 미확인. 가중 추정 = 계약기간매출 × 입력 가능성 — 통계적 예측이 아닌 입력값 기반 참고치이며 원본 ‘수주가능매출’과 동일시하지 않음.</p>
       <div class="table-wrap"><table class="t"><thead><tr><th>가능성 구간</th><th class="num">건수</th><th class="num">계약기간매출 합계</th><th class="num">양수 건</th><th class="num">0 건</th><th class="num">음수 건(금액)</th><th class="num">참고용 가중 추정</th></tr></thead>
       <tbody>${d.prob_bins.map((b) => `<tr class="clickable" data-drill='${esc(JSON.stringify({ scope: "in_progress", acr_type: ["A", "C"], prob_bin: b.bin }))}'><td>${esc(b.bin)}</td><td class="num">${cnt(b.count)}</td><td class="num">${amt(b.amount.total)}</td><td class="num">${cnt(b.amount.pos_count)}</td><td class="num">${cnt(b.amount.zero_count)}</td><td class="num">${cnt(b.amount.neg_count)} (${amt(b.amount.negative)})</td><td class="num">${b.bin === "미확인" ? '<span class="muted">산출 불가</span>' : amt(b.weighted)}</td></tr>`).join("")}</tbody>
-      <tfoot><tr><td colspan="6">가중 추정 합계 — 양수 / 음수 (상계하지 않음) · 포함 ${wt.included}건, 제외 ${wt.excluded}건</td><td class="num">${amt(wt.positive)} / ${amt(wt.negative)}</td></tr></tfoot></table></div></div>
-    <div class="grid cols-3" style="margin-top:14px"><div class="card">${reasonTable(d.reasons.win, "Win 승패사유")}</div><div class="card">${reasonTable(d.reasons.lose, "Lose 승패사유")}</div><div class="card">${reasonTable(d.reasons.drop, "Drop 세부사유")}</div></div>
-    <div class="card" style="margin-top:14px"><h3>확인 필요 Funnel (A/C, 상위 50)</h3>${funnelTable(d.checks, { priority: true, maxH: 520 })}</div>
+      <tfoot><tr><td colspan="6">가중 추정 합계 — 양수 / 음수 (상계하지 않음) · 포함 ${wt.included}건, 제외 ${wt.excluded}건</td><td class="num">${amt(wt.positive)} / ${amt(wt.negative)}</td></tr></tfoot></table></div></div>`], ["reason", "승패·Drop 사유", `<div class="grid cols-3"><div class="card">${reasonTable(d.reasons.win, "Win 승패사유")}</div><div class="card">${reasonTable(d.reasons.lose, "Lose 승패사유")}</div><div class="card">${reasonTable(d.reasons.drop, "Drop 세부사유")}</div></div>`], ["list", "확인 필요 Funnel 50", `<div class="card"><h3>확인 필요 Funnel (A/C, 상위 50)</h3>${funnelTable(d.checks, { priority: true, maxH: 520 })}</div>`]])}
     ${basisBlock(d.basis)}${rulesBlock(d.rules)}`;
     $("view").innerHTML = h;
     chart("stageChart", {
@@ -617,15 +618,12 @@
       <div class="legend" id="serSel">${["A", "C", "R", "AC", "ACR"].map((k) => `<label><input type="checkbox" value="${k}" ${ser.includes(k) ? "checked" : ""}><i style="background:${COLORS[k]}"></i>${SERIES_LABEL[k]}</label>`).join("")}</div></div>
       <p class="desc">막대=A·C·R, 선=합산 · 단위 ${esc(unitName())} · 0 기준선 아래는 감액 · 월별 보기에서 클릭 → 해당 월 Funnel</p>
       <div class="chart-box tall"><canvas id="acrChart"></canvas></div></div>
-    <div class="card" style="margin-top:14px"><h3>누적 (${esc(d.basis["누적"])})</h3><p class="desc">월별 금액과 축을 분리한 별도 차트 · 단위 ${esc(unitName())}</p><div class="chart-box"><canvas id="cumChart"></canvas></div></div>
-    <div class="grid cols-2" style="margin-top:14px">
+    ${tabsBlock("acr", [["period", "기간별 표", `<div class="card"><div class="card-head"><h3>기간별 표</h3><span class="muted">${term ? "기간 합계" : "합계"} A+C+R ${amt(t.ACR)} · 고유 Funnel ${cnt(t.funnels)}건</span></div>${periodTable(pRows, pPool, { first: "기간", drill: (x) => ({ scope: "acr", ym: x.ym }), fLabel: "고유 Funnel" })}</div>`], ["org", "조직별 표", `<div class="card"><h3>조직별 표 (${S.f.level === "am" ? "AM" : "팀"})</h3><p class="desc">집계 수준 ‘AM’ 선택 시 AM별 · 조직별 합계는 담당 전체와 일치</p>
+      <div class="table-wrap" style="max-height:520px"><table class="t"><thead><tr><th>${S.f.level === "am" ? "AM(팀)" : "팀"}</th><th class="num">A</th><th class="num">C</th><th class="num">R 증감</th><th class="num">A+C</th><th class="num">A+C+R</th><th class="num">고유 Funnel</th><th class="num">R 음수 건수</th><th class="num">R 음수 금액</th></tr></thead>
+      <tbody>${orgRows.map((r) => `<tr class="clickable" data-drill='${esc(JSON.stringify(S.f.level === "am" ? { scope: "acr", am_key: r.key } : { scope: "acr", team: r.key }))}'><td>${esc(r.am ? `${r.am} (${r.team})` : r.team)}</td><td class="num">${amt(r.A)}</td><td class="num">${amt(r.C)}</td><td class="num">${amt(r.R)}</td><td class="num">${amt(r.AC)}</td><td class="num"><b>${amt(r.ACR)}</b></td><td class="num">${cnt(r.funnels)}</td><td class="num">${cnt(r.r_neg_count)}</td><td class="num">${amt(r.r_neg_amount)}</td></tr>`).join("") || '<tr><td colspan="9" class="muted">자료 없음</td></tr>'}</tbody></table></div></div>`], ["cmp", "팀·AM 비교 차트", `<div class="grid cols-2">
       <div class="card"><h3>팀별 비교</h3><p class="desc">${esc(lbl)} · 단위 ${esc(unitName())}</p><div class="chart-box"><canvas id="teamChart"></canvas></div></div>
       <div class="card"><h3>AM별 비교 (A+C+R 상위 20)</h3><p class="desc">${esc(lbl)}</p><div class="chart-box tall"><canvas id="amChart"></canvas></div></div>
-    </div>
-    <div class="card" style="margin-top:14px"><div class="card-head"><h3>기간별 표</h3><span class="muted">${term ? "기간 합계" : "합계"} A+C+R ${amt(t.ACR)} · 고유 Funnel ${cnt(t.funnels)}건</span></div>${periodTable(pRows, pPool, { first: "기간", drill: (x) => ({ scope: "acr", ym: x.ym }), fLabel: "고유 Funnel" })}</div>
-    <div class="card" style="margin-top:14px"><h3>조직별 표 (${S.f.level === "am" ? "AM" : "팀"})</h3><p class="desc">집계 수준 ‘AM’ 선택 시 AM별 · 조직별 합계는 담당 전체와 일치</p>
-      <div class="table-wrap" style="max-height:520px"><table class="t"><thead><tr><th>${S.f.level === "am" ? "AM(팀)" : "팀"}</th><th class="num">A</th><th class="num">C</th><th class="num">R 증감</th><th class="num">A+C</th><th class="num">A+C+R</th><th class="num">고유 Funnel</th><th class="num">R 음수 건수</th><th class="num">R 음수 금액</th></tr></thead>
-      <tbody>${orgRows.map((r) => `<tr class="clickable" data-drill='${esc(JSON.stringify(S.f.level === "am" ? { scope: "acr", am_key: r.key } : { scope: "acr", team: r.key }))}'><td>${esc(r.am ? `${r.am} (${r.team})` : r.team)}</td><td class="num">${amt(r.A)}</td><td class="num">${amt(r.C)}</td><td class="num">${amt(r.R)}</td><td class="num">${amt(r.AC)}</td><td class="num"><b>${amt(r.ACR)}</b></td><td class="num">${cnt(r.funnels)}</td><td class="num">${cnt(r.r_neg_count)}</td><td class="num">${amt(r.r_neg_amount)}</td></tr>`).join("") || '<tr><td colspan="9" class="muted">자료 없음</td></tr>'}</tbody></table></div></div>
+    </div>`], ["cum", "누적 차트", `<div class="card"><h3>누적 (${esc(d.basis["누적"])})</h3><p class="desc">월별 금액과 축을 분리한 별도 차트 · 단위 ${esc(unitName())}</p><div class="chart-box"><canvas id="cumChart"></canvas></div></div>`]])}
     ${basisBlock(d.basis)}`;
     $("view").innerHTML = h;
     bindPeriodToolbar("acrPer");
@@ -1298,6 +1296,15 @@
       new MutationObserver(() => { refreshColors(); render(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     } catch (e) { /* noop */ }
     $("view").addEventListener("click", (e) => {
+      const tb = e.target.closest("button[data-tabgrp]");
+      if (tb) {
+        const g = tb.dataset.tabgrp, k = tb.dataset.tk;
+        S.ui.tabsBy = Object.assign({}, S.ui.tabsBy, { [g]: k }); store.set("ui", S.ui);
+        document.querySelectorAll(`button[data-tabgrp="${g}"]`).forEach((x) => { x.classList.toggle("on", x === tb); x.setAttribute("aria-selected", String(x === tb)); });
+        document.querySelectorAll(`.tab-p[data-tabgrp="${g}"]`).forEach((x) => { x.hidden = x.dataset.tk !== k; });
+        window.dispatchEvent(new Event("resize"));  // 숨겨져 있던 차트 크기 맞춤
+        return;
+      }
       const b = e.target.closest("[data-colmore]"); if (!b) return;
       const t = document.getElementById(b.dataset.colmore); if (!t) return;
       t.classList.toggle("show-all"); b.textContent = t.classList.contains("show-all") ? "핵심 열만" : "열 더 보기";
