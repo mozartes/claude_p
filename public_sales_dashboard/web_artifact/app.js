@@ -372,8 +372,8 @@
   function acrMonthlyChart(id, monthly, series, onClick, ref) {
     const labels = monthly.map((m) => m.label);
     const ds = [];
-    // ref: 같은 기간의 계약기간 반영 A+C+R(그 기간에 실제 발생하는 매출 전체) 점선 — 막대는 신규 발생분
-    if (ref) ds.push({ type: "line", label: ref.label, key: null, data: ref.rows.map((m) => conv(m.ACR)), borderColor: css("--text-2", "#64748b"), backgroundColor: css("--text-2", "#64748b"), borderDash: [5, 4], borderWidth: 2, pointRadius: 2, tension: 0, order: 0, stack: "ref" });
+    // ref: 같은 기간의 계약기간 반영 A+C+R(그 기간에 실제 발생하는 매출 전체) 굵은 녹색 실선 — 막대는 신규 발생분
+    if (ref) ds.push({ type: "line", label: ref.label, key: null, data: ref.rows.map((m) => conv(m.ACR)), borderColor: css("--ok", "#15803d"), backgroundColor: css("--ok", "#15803d"), borderWidth: 4, pointRadius: 3, tension: 0, order: 0, stack: "ref" });
     ["A", "C", "R"].forEach((k) => { if (series.includes(k)) ds.push({ type: "bar", label: SERIES_LABEL[k], key: k, data: monthly.map((m) => conv(m[k])), backgroundColor: COLORS[k], borderRadius: 3, maxBarThickness: 18, order: 2, stack: "bars" }); });
     ["AC", "ACR"].forEach((k) => { if (series.includes(k)) ds.push({ type: "line", label: SERIES_LABEL[k], key: k, data: monthly.map((m) => conv(m[k])), borderColor: COLORS[k], backgroundColor: COLORS[k], borderWidth: 2, pointRadius: 3, tension: 0, order: 1, stack: "line_" + k }); });
     return chart(id, {
@@ -468,7 +468,7 @@
     const termOv = S.f.mode === "term";
     const newMonthly = termOv ? (((await api("/view/acr", { filters: Object.assign({}, S.f, { mode: "start" }) })).data || {}).monthly || []) : d.acr_monthly;
     const ovRows = aggPeriods(netRows(newMonthly), perOf(), false);
-    const ovRef = termOv ? { label: "A+C+R 매출(계약기간 반영)", rows: aggPeriods(netRows(d.acr_monthly), perOf(), false) } : null;
+    const ovRef = termOv ? { label: "A+C+R 매출(누적)", rows: aggPeriods(netRows(d.acr_monthly), perOf(), false) } : null;
     const warns = ((j.dataset || {}).warnings || []).length;
     const risks = [
       ["hi", "R 증감 (재계약 증감 + 해지 감소)", `재계약 증감 ${amt(rd)} + 해지 감소 ${amt(ch.amount)} · 해지확정 ${cnt(ch.funnels)}건${chEx ? ` (계산 제외 ${cnt(chEx)}건)` : ""} · A+C+R에 포함`, amt(rd + ch.amount), rd + ch.amount < 0, `data-drill='${esc(JSON.stringify({ status: ["해지확정"], period: "rev_ym" }))}'`],
@@ -479,7 +479,7 @@
     ];
     const riskCount = risks.filter((x, i) => (i === 0 ? x[4] : !/^0건$/.test(String(x[3]).replace(/<[^>]+>/g, "")))).length;
     h += `<section class="ov-sec ov-split">
-      <div class="card"><div class="card-head"><h3>② 기간별 신규 발생 매출 ${info(`막대 A·C·R 증감·선 A+C+R = 그 기간에 매출이 새로 시작된 건(매출발생년월 기준)${termOv ? " · 점선 = 그 기간에 실제 발생하는 매출 전체(계약기간 반영, 위 카드 합계와 같은 기준)" : ""} · 0 기준선 아래는 감액 · 월별 보기에서 클릭 → 그 달에 매출이 시작된 Funnel`)}</h3>${periodToolbar("ovPer")}</div>
+      <div class="card"><div class="card-head"><h3>② 기간별 신규 발생 매출 ${info(`막대 A·C·R 증감·선 A+C+R = 그 기간에 매출이 새로 시작된 건(매출발생년월 기준)${termOv ? " · 굵은 녹색 선 A+C+R 매출(누적) = 그 기간에 실제 발생하는 매출 전체(이전에 시작해 계약기간이 남은 건 포함, 위 카드 합계와 같은 기준)" : ""} · 0 기준선 아래는 감액 · 월별 보기에서 클릭 → 그 달에 매출이 시작된 Funnel`)}</h3>${periodToolbar("ovPer")}</div>
         <div class="chart-box"><canvas id="ovChart"></canvas></div>
         <details class="per-table" ${perOf() !== "M" ? "open" : ""}><summary>기간별 표 · ${perOf() === "Y" ? "YoY" : `${CMP_NAME[perOf()]} · 전년동기 YoY`} 증감률</summary>${termOv ? '<p class="desc">신규 발생분(그 기간에 매출이 시작된 건) · 기간 합은 위 카드(계약기간 반영 합계)와 다름</p>' : ""}${periodTable(ovRows, poolOf(ovRows), { drill: (x) => ({ scope: "acr", rev_month: x.ym }), maxH: 300, fLabel: "고유 Funnel" })}</details></div>
       <div class="card"><div class="card-head"><h3>③ 확인 필요</h3><span class="muted">${riskCount}건</span></div>
@@ -615,7 +615,7 @@
     const newM = term ? (((await api("/view/acr", { filters: Object.assign({}, S.f, { mode: "start" }) })).data || {}).monthly || []) : d.monthly;
     const pRows = aggPeriods(netRows(newM), perOf(), false), pPool = poolOf(pRows);
     const cRows = aggPeriods(netRows(d.monthly), perOf(), false);
-    const acrRef = term ? { label: "A+C+R 매출(계약기간 반영)", rows: cRows } : null;
+    const acrRef = term ? { label: "A+C+R 매출(누적)", rows: cRows } : null;
     // 누적매출 = 조회기간 합계(기준·기간을 카드 아래에 표기)
     const kb = esc(`${lbl} · ${S.f.ym_from}~${S.f.ym_to}`);
     // 시안(2026-11): Hero(A+C+R) + A · C · R 증감 · A+C 5장, 설명 2줄, 기준은 섹션 머리 1줄, R 재계약은 참고 줄
@@ -635,7 +635,7 @@
     ${Object.keys(d.excluded).length ? `<div class="notice warn">확정 조건이지만 이 지표에서 제외: ${Object.entries(d.excluded).map(([r, n]) => `${esc(r)} ${n}건`).join(", ")} <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr_excluded" }))}'>목록 보기</span></div>` : ""}
     <div class="card" style="margin-top:14px"><div class="card-head"><h3>${(PERIODS.find((x) => x[0] === perOf()) || PERIODS[0])[1]} 신규 발생 매출</h3>${periodToolbar("acrPer")}
       <div class="legend" id="serSel">${["A", "C", "R", "AC", "ACR"].map((k) => `<label><input type="checkbox" value="${k}" ${ser.includes(k) ? "checked" : ""}><i style="background:${COLORS[k]}"></i>${SERIES_LABEL[k]}</label>`).join("")}</div></div>
-      <p class="desc">막대=A·C·R, 선=합산 · 그 기간에 매출이 새로 시작된 건${term ? " · 점선=그 기간에 실제 발생하는 매출 전체(계약기간 반영, 카드 합계 기준)" : ""} · 단위 ${esc(unitName())} · 월별 보기에서 클릭 → 그 달에 매출이 시작된 Funnel</p>
+      <p class="desc">막대=A·C·R, 선=합산 · 그 기간에 매출이 새로 시작된 건${term ? " · 굵은 녹색 선=A+C+R 매출(누적): 그 기간에 실제 발생하는 매출 전체(카드 합계 기준)" : ""} · 단위 ${esc(unitName())} · 월별 보기에서 클릭 → 그 달에 매출이 시작된 Funnel</p>
       <div class="chart-box tall"><canvas id="acrChart"></canvas></div></div>
     ${tabsBlock("acr", [["period", "기간별 표", `<div class="card"><div class="card-head"><h3>기간별 표</h3><span class="muted">신규 발생분${term ? " · 기간 합은 카드(계약기간 반영 합계)와 다름" : ""}</span></div>${periodTable(pRows, pPool, { first: "기간", drill: (x) => ({ scope: "acr", rev_month: x.ym }), fLabel: "고유 Funnel" })}</div>`], ["org", "조직별 표", `<div class="card"><h3>조직별 표 (${S.f.level === "am" ? "AM" : "팀"})</h3><p class="desc">집계 수준 ‘AM’ 선택 시 AM별 · 조직별 합계는 담당 전체와 일치</p>
       <div class="table-wrap" style="max-height:520px"><table class="t"><thead><tr><th>${S.f.level === "am" ? "AM(팀)" : "팀"}</th><th class="num">A</th><th class="num">C</th><th class="num">R 증감</th><th class="num">A+C</th><th class="num">A+C+R</th><th class="num">고유 Funnel</th><th class="num">R 음수 건수</th><th class="num">R 음수 금액</th></tr></thead>
