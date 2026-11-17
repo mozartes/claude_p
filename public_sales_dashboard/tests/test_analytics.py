@@ -406,3 +406,15 @@ def test_total_churn_ref(make_ds, params):
                   row(type="Ret.", status="해지확정", win=202501, monthly=-9, term=12)])
     v = A.total_view(ds, params(base_date="2026-11-04"))
     assert v["churn_ref"] == {"amount": -60.0, "count": 1, "excluded": 1}
+
+
+def test_funnel_sched_period(make_ds, params):
+    """진행 중 A/C (기간 중) = 수주 예정월이 조회기간 시작월~종료월, 기간 이후 = 종료월 다음 달부터"""
+    ds = make_ds([row(fid="P1", status="Pre Sales", win=202603), row(fid="P2", status="제안완료", win=202612),
+                  row(fid="P3", status="Pre Sales", win=202701), row(fid="P4", status="Pre Sales", win=None),
+                  row(fid="W1", status="Win", win=202606)])
+    p = params(base_date="2026-11-01")
+    sp = A.funnel_view(ds, p)["sched_period"]
+    assert sp["in"]["count"] == 2 and sp["in"]["overdue"] == 1 and sp["after"]["count"] == 1
+    d = A.detail_view(ds, p, {"scope": "in_progress", "acr_type": ["A", "C"], "after_period": True}, 1, 50, "row", False, "")
+    assert d["total"] == 1

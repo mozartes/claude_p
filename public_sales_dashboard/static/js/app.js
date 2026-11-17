@@ -485,7 +485,15 @@
     const d = j.data;
     if (d.empty) { $("view").innerHTML = emptyState(); return; }
     const o = d.outcome, wt = d.weighted_total;
-    let h = `<div class="grid kpis">${d.schedule.map((s) => kpiCard(`진행 중 A/C · ${s.bucket}`, cnt(s.count) + "건", `계약기간매출 ${amt(s.amount.total)}`, s.bucket === "예정월 경과" ? "neg" : (s.bucket === "예정월 미입력" ? "warn" : ""), { scope: "in_progress", acr_type: ["A", "C"], bucket: s.bucket })).join("")}</div>
+    // 진행 중 A/C 일정 카드: 기간 중(조회기간 시작월~종료월) · 예정월 경과 · 예정월 미입력
+    const sp = d.sched_period, ymL = (v) => `${String(v).slice(0, 4)}-${String(v).slice(4)}`;
+    const sb = (k) => d.schedule.find((s) => s.bucket === k) || { count: 0, amount: { total: 0 } };
+    const pAC = { scope: "in_progress", acr_type: ["A", "C"] };
+    let h = `<div class="grid kpis">
+      ${kpiCard(`진행 중 A/C (기간 중)`, cnt(sp.in.count) + "건", `계약기간매출 ${amt(sp.in.amount.total)}<br>${ymL(sp.ym_from)}~${ymL(sp.ym_to)}${sp.in.overdue ? ` (경과 ${cnt(sp.in.overdue)}건 포함)` : ""}`, "", Object.assign({ period: "win_ym" }, pAC))}
+      ${kpiCard("진행 중 A/C · 예정월 경과", cnt(sb("예정월 경과").count) + "건", `기준월 이전 · 계약기간매출 ${amt(sb("예정월 경과").amount.total)}`, "neg", Object.assign({ bucket: "예정월 경과" }, pAC))}
+      ${kpiCard("진행 중 A/C · 예정월 미입력", cnt(sb("예정월 미입력").count) + "건", `계약기간매출 ${amt(sb("예정월 미입력").amount.total)}`, "warn", Object.assign({ bucket: "예정월 미입력" }, pAC))}
+    </div>
     ${tabsBlock("fn", [["stage", "① 단계 분포", `<div class="card"><h3>① 현재 단계 분포 (A/C)</h3><p class="desc">수주년월 기간 내 현재 상태 · 과거 단계 이력이 없어 전환율·체류기간은 산출하지 않음</p>
         <div class="chart-box short"><canvas id="stageChart"></canvas></div>
         <div class="table-wrap" style="margin-top:8px"><table class="t"><thead><tr><th>단계</th><th class="num">건수</th><th class="num">계약기간매출</th></tr></thead>
@@ -1285,7 +1293,7 @@
     window.scrollTo(0, 0);
   }
   // 메뉴별 핵심 카드 강조(종합 현황은 화면 코드에서 직접 지정). 라벨 앞부분으로 찾고, 없으면 첫 카드
-  const HERO_LABEL = { funnel: "진행 중 A/C · 이번 달", renewal: "재계약완료", acr: "A+C. 기여매출", presales: "A. 예상매출",
+  const HERO_LABEL = { funnel: "진행 중 A/C (기간 중)", renewal: "재계약완료", acr: "A+C. 기여매출", presales: "A. 예상매출",
     total: /^\d{4}년 수주\(A\+C\)/, perf: "수주율", data: "원본 건수" };
   function applyHero() {
     const v = $("view"); v.dataset.page = S.page;
@@ -1298,7 +1306,7 @@
     // 재계약·해지 관리: 나머지 카드 이름도 서로 다른 연한 색 박스(재계약완료는 강조 카드)
     const BOX_MAP = {
       renewal: [["진행 중 재계약", "ok"], ["재계약 매출 증감률", "info"], ["해지확정", "neg"]],
-      funnel: [["진행 중 A/C · 다음 달", "sky"], ["진행 중 A/C · 이후", "violet"], ["진행 중 A/C · 예정월 경과", "neg"], ["진행 중 A/C · 예정월 미입력", "warn"]],
+      funnel: [ ["진행 중 A/C · 예정월 경과", "neg"], ["진행 중 A/C · 예정월 미입력", "warn"]],
     };
     if (BOX_MAP[S.page]) {
       const RB = BOX_MAP[S.page];

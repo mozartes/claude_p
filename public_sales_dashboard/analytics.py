@@ -631,6 +631,15 @@ def funnel_view(ds: Dataset, p: Params) -> dict:
     for k in BUCKETS:
         g = prog_ac[b == k]
         sched.append({"bucket": k, "count": int(len(g)), "amount": amount_split(g["contract_amt"])})
+    # 진행 중 A/C 기간 중(수주 예정월이 조회기간 시작월~종료월) / 기간 이후(종료월 다음 달부터)
+    wy = prog_ac["win_ym"]
+    inp = in_period(wy, p)
+    aft = (wy.notna() & (wy > p.ym_to)).fillna(False).astype(bool)
+    gp, ga = prog_ac[inp], prog_ac[aft]
+    sched_period = {"ym_from": p.ym_from, "ym_to": p.ym_to,
+                    "in": {"count": int(len(gp)), "amount": amount_split(gp["contract_amt"]),
+                           "overdue": int((gp["win_ym"] < p.base_ym).sum())},
+                    "after": {"count": int(len(ga)), "amount": amount_split(ga["contract_amt"])}}
     # ③ 확인 필요(진행 중 A/C + Win 일정 특이)
     ck = checks_with_rows(ac, p)
     fcodes = ["OVERDUE", "PROPOSAL_IMMINENT", "HIGH_PROB_PRESALES", "LARGE_STALE", "STALE_LONG", "PROB_DROP",
@@ -678,7 +687,7 @@ def funnel_view(ds: Dataset, p: Params) -> dict:
         "drop": reason_table(closed.loc[closed["status"] == "Drop", "drop_reason"]),
     }
     return {
-        "stage": stage, "stage_r": stage_r, "schedule": sched, "check_counts": code_counts,
+        "stage": stage, "stage_r": stage_r, "schedule": sched, "sched_period": sched_period, "check_counts": code_counts,
         "checks": priority_rows(ac, p, ck, limit=50, codes=fcodes),
         "prob_bins": bins, "weighted_total": weighted_total, "outcome": outcome, "reasons": reasons,
         "basis": {
@@ -1266,7 +1275,7 @@ def perf_view(ds: Dataset, p: Params) -> dict:
 # ================================================================ 상세 목록(드릴다운)
 
 DRILL_KEYS = {"scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "win_month", "win_year", "reg_type", "lose_overconf", "code", "team", "am_key", "ym", "product",
-              "customer", "bid_no", "prob_bin", "period", "change", "level", "min_contract"}
+              "customer", "bid_no", "prob_bin", "period", "change", "level", "min_contract", "after_period"}
 
 
 def drill_rows(ds: Dataset, p: Params, drill: dict | None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str]:
@@ -1376,6 +1385,9 @@ def drill_rows(ds: Dataset, p: Params, drill: dict | None) -> tuple[pd.DataFrame
     if drill.get("period") in ("win_ym", "rev_ym"):
         m &= in_period(df[drill["period"]], p)
         desc.append(("수주년월" if drill["period"] == "win_ym" else "매출발생년월") + " 기간 내")
+    if drill.get("after_period"):
+        m &= (df["win_ym"].notna() & (df["win_ym"] > p.ym_to)).fillna(False).astype(bool)
+        desc.append(f"수주년월 {R.ym_label(p.ym_to)} 이후")
     if drill.get("change"):
         ch = drill["change"]
         mm = df["monthly"]

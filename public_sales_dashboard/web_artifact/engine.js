@@ -783,6 +783,11 @@
     const stageR = ["Pre Sales", "제안완료", "재계약완료", "해지확정"].map((s) => { const g = rp.filter((r) => r.status === s); return { status: s, count: g.length, prev: fsum(g.map((r) => r.prev_monthly)), new: fsum(g.map((r) => r.new_monthly)), monthly: fsum(g.map((r) => r.monthly)) }; });
     const progAc = ac.filter((r) => isProg(r.status));
     const sched = BUCKETS.map((k) => { const g = progAc.filter((r) => bucketOf(r.win_ym, p) === k); return { bucket: k, count: g.length, amount: amountSplit(g.map((r) => r.contract_amt)) }; });
+    // 진행 중 A/C 기간 중(수주 예정월이 조회기간 시작월~종료월) / 기간 이후(종료월 다음 달부터)
+    const gp = progAc.filter((r) => inPeriod(r.win_ym, p)), ga = progAc.filter((r) => nn(r.win_ym) && r.win_ym > p.ym_to);
+    const schedPeriod = { ym_from: p.ym_from, ym_to: p.ym_to,
+      in: { count: gp.length, amount: amountSplit(gp.map((r) => r.contract_amt)), overdue: gp.filter((r) => r.win_ym < p.base_ym).length },
+      after: { count: ga.length, amount: amountSplit(ga.map((r) => r.contract_amt)) } };
     const ck = computeChecks(ac, p);
     const fcodes = ["OVERDUE", "PROPOSAL_IMMINENT", "HIGH_PROB_PRESALES", "LARGE_STALE", "STALE_LONG", "PROB_DROP", "LONG_STAY", "REV_BEFORE_WIN", "WIN_NO_REV", "WIN_FUTURE_REV"];
     const codeCounts = fcodes.map((c) => ({ code: c, label: RULE_MAP[c][2], action: RULE_MAP[c][3], count: ac.filter((r) => ck.get(r.row).codes.includes(c)).length }));
@@ -808,7 +813,7 @@
       by_type: ["A", "C"].map((t) => { const g = closed.filter((r) => r.acr_type === t); const tw = st(g, "Win").length, tl = st(g, "Lose").length; return { type: t, win: tw, lose: tl, drop: st(g, "Drop").length, win_rate: tw + tl ? tw / (tw + tl) : null }; }),
     };
     return {
-      stage, stage_r: stageR, schedule: sched, check_counts: codeCounts, checks: priorityRows(ac, p, ck, 50, fcodes),
+      stage, stage_r: stageR, schedule: sched, sched_period: schedPeriod, check_counts: codeCounts, checks: priorityRows(ac, p, ck, 50, fcodes),
       prob_bins: bins, weighted_total: weightedTotal, outcome,
       reasons: { win: reasonTable(st(closed, "Win").map((r) => r.winloss_reason)), lose: reasonTable(st(closed, "Lose").map((r) => r.winloss_reason)), drop: reasonTable(st(closed, "Drop").map((r) => r.drop_reason)) },
       basis: {
@@ -1206,7 +1211,7 @@
   }
 
   // ================================================================ 상세 목록(드릴다운)
-  const DRILL_KEYS = ["scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "win_month", "win_year", "reg_type", "lose_overconf", "code", "team", "am_key", "ym", "product", "customer", "bid_no", "prob_bin", "period", "change", "level", "min_contract"];
+  const DRILL_KEYS = ["scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "win_month", "win_year", "reg_type", "lose_overconf", "code", "team", "am_key", "ym", "product", "customer", "bid_no", "prob_bin", "period", "change", "level", "min_contract", "after_period"];
   function drillRows(ds, p, drill) {
     const d = {};
     Object.entries(drill || {}).forEach(([k, v]) => { if (DRILL_KEYS.includes(k) && v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)) d[k] = v; });
@@ -1250,6 +1255,7 @@
     if (d.prob_band) { const bs = listOf(d.prob_band); rows = rows.filter((r) => bs.includes(psBin(r.prob))); desc.push("가능성 구간=" + bs.join("/")); }
     if (d.win_year) { const wy = Number(d.win_year); rows = rows.filter((r) => nn(r.win_ym) && r.win_ym >= wy * 100 + 1 && r.win_ym <= wy * 100 + 12); desc.push(`수주년월 ${wy}년`); }
     if (d.reg_type) { rows = rows.filter((r) => r.reg_type === d.reg_type); desc.push(`등록 구분=${d.reg_type}`); }
+    if (d.after_period) { rows = rows.filter((r) => nn(r.win_ym) && r.win_ym > p.ym_to); desc.push(`수주년월 ${ymLabel(p.ym_to)} 이후`); }
     if (d.min_contract) { const thr = rateMinContract(); rows = rows.filter((r) => gte(r.contract_amt, thr)); desc.push("계약기간매출 100만원 이상"); }
     if (d.lose_overconf) { rows = rows.filter((r) => gte(r.hist_maxp_open, 70)); desc.push("이력상 가능성 70% 이상"); }
     if (d.win_month) { const wm = Number(d.win_month); rows = rows.filter((r) => r.win_ym === wm); desc.push(`수주년월=${ymLabel(wm)}`); }
