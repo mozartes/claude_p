@@ -307,6 +307,25 @@ def test_perf_rates_and_sample(make_ds, params):
     assert t2["AC"]["simple"]["ok"] and t2["AC"]["pre"]["ok"]
 
 
+def test_rate_min_contract(make_ds, params):
+    """수주율·경유 수주율: 계약기간매출 100만원(=1 백만원) 미만·미입력 제외, 사전 등록률은 전체 Win 유지"""
+    rows = _edge_hist_rows() + [
+        row(fid="W_SMALL", status="Win", win=202606, contract=0.5, hist="30%(하상)(2026/03/01),100%(수주완료)(2026/06/02)"),
+        row(fid="L_SMALL", status="Lose", win=202606, contract=0.99),
+        row(fid="W_EDGE", status="Win", win=202606, contract=1.0, hist=None),
+    ]
+    ds = make_ds(rows)
+    ac = A.perf_view(ds, params(base_date="2026-11-08", total_year=2026))["total"]["AC"]
+    assert (ac["win"], ac["lose"], ac["drop"]) == (5, 2, 1)          # W_SMALL·L_SMALL 제외, 정확히 1.0은 포함
+    assert ac["simple"]["num"] == 5 and ac["simple"]["den"] == 8
+    assert ac["pre"]["num"] == 1 and ac["pre"]["den"] == 3
+    assert ac["small_excluded"] == 2
+    assert ac["reg"]["num"] == 2 and ac["reg"]["den"] == 4           # 사전 등록률은 100만원 미만 Win도 포함
+    p = params(base_date="2026-11-08", total_year=2026)
+    d = A.detail_view(ds, p, {"acr_type": ["A", "C"], "status": ["Win"], "win_year": 2026, "min_contract": True}, 1, 100, "row", False, "")
+    assert d["total"] == 5
+
+
 def test_new_check_rules(make_ds, params):
     ds = make_ds(_edge_hist_rows())
     p = params(base_date="2026-11-08")

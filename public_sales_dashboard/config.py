@@ -162,6 +162,8 @@ ACR_TYPE_LABEL = {"A": "A (Acq.)", "C": "C (Cul.)", "R": "R (Ret.)"}
 
 KNOWN_STATUSES = ["Pre Sales", "제안완료", "Win", "재계약완료", "해지확정", "Drop", "Lose"]
 IN_PROGRESS = {"Pre Sales", "제안완료"}
+# 수주율·Pre-sales 경유 수주율 대상: 계약기간매출 100만원 이상(원 기준, 원본 단위로 환산해 비교)
+RATE_MIN_CONTRACT_WON = 1_000_000
 
 # ACR 확정 집계 조건: 유형별 인정 상태
 ACR_CONFIRMED_STATUS = {"A": "Win", "C": "Win", "R": "재계약완료"}
