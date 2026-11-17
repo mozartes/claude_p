@@ -339,21 +339,23 @@ def test_new_check_rules(make_ds, params):
     assert A.RULE_MAP["STALE"][1] == 3 and A.RULE_MAP["STALE_LONG"][1] == 1
 
 
-def test_default_mode_start(make_ds):
-    """기본 ACR 기준 = 매출개시월(2026-11 변경): 월별 값은 그 달에 매출이 시작된 건만"""
+def test_mode_start(make_ds):
+    """매출개시월(선택, 월별 차트의 신규 발생분): 월별 값은 그 달에 매출이 시작된 건만"""
     import analytics as A
     ds = make_ds([row(monthly=68.49, rev=202601, term=24), row(monthly=1.21, rev=202602, term=24)])
-    p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12"})
+    p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12", "mode": "start"})
     assert p.mode == "start"
     m = {x["ym"]: x["A"] for x in A.acr_view(ds, p)["monthly"]}
     assert m[202601] == 68.49 and abs(m[202602] - 1.21) < 1e-9 and m.get(202612, 0) == 0
 
 
-def test_mode_term(make_ds):
-    """계약기간 반영(선택): 1월 개시 건은 계약기간 동안 매월 이어서 반영"""
+def test_default_mode_term(make_ds):
+    """기본 = 계약기간 반영(2026-11 재변경): 합계는 기간 안 개월 수 × 월매출(10월 개시 4.8 → 10~12월 14.4)"""
     import analytics as A
     ds = make_ds([row(monthly=68.49, rev=202601, term=24), row(monthly=1.21, rev=202602, term=24)])
-    p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12", "mode": "term"})
+    p = A.parse_params({"base_date": "2026-11-01", "ym_from": "2026-01", "ym_to": "2026-12"})
+    ds2 = make_ds([row(monthly=4.8, rev=202610, term=40, type="Cul.")])
+    assert abs(A.acr_view(ds2, p)["totals"]["C"] - 14.4) < 1e-9
     assert p.mode == "term"
     m = {x["ym"]: x["A"] for x in A.acr_view(ds, p)["monthly"]}
     assert m[202601] == 68.49 and abs(m[202602] - 69.70) < 1e-9 and abs(m[202612] - 69.70) < 1e-9

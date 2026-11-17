@@ -33,7 +33,7 @@ class Params:
     product_group: str = "all"
     user_products: list[str] = field(default_factory=list)
     search: str = ""
-    mode: str = "start"
+    mode: str = "term"
     excl_midlarge: bool = False
     excl_rmr: bool = False
     confirmed_only: bool = False
@@ -111,7 +111,7 @@ def parse_params(d: dict | None) -> Params:
         products=_list(d.get("products")), user_products=_list(d.get("products")),
         product_group=d.get("product_group") if d.get("product_group") in C.PRODUCT_GROUPS else "all",
         search=str(d.get("search") or "").strip()[:100],
-        mode=d.get("mode") if d.get("mode") in R.MODES else "start",
+        mode=d.get("mode") if d.get("mode") in R.MODES else "term",
         excl_midlarge=bool(d.get("excl_midlarge")), excl_rmr=bool(d.get("excl_rmr")),
         confirmed_only=bool(d.get("confirmed_only")), th=th, total_year=_year(d.get("total_year"), base.year),
     )
