@@ -367,3 +367,7 @@ table.core-team:not(.show-all) :is(th, td):nth-child(n+10):not(:last-child) { di
 .myteam-name { font-size: 17px; font-weight: 700; color: var(--primary); border: 2px solid var(--primary); border-radius: 8px; padding: 3px 12px; }
 .tm-bar { display: inline-block; width: 90px; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; vertical-align: middle; }
 .tm-bar > span { display: block; height: 100%; background: var(--primary); }
+
+/* 기여매출 구성: 신규 발생 + Recurring */
+.ov-ref.rec-line { margin-top: 2px; }
+.ov-ref.rec-line .rec-v { color: var(--ok); }

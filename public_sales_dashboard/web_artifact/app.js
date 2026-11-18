@@ -395,6 +395,19 @@
     });
   }
 
+  // 기여매출 구성: 신규 발생(계약 첫 달) + Recurring(둘째 달부터) = 계약기간 반영 합계. sv = 같은 조건의 매출개시월 기준 /view/acr
+  function netOfAcr(v) {
+    const t = v.totals, rc = v.r_change || {}, rt = rc.retention || { amount: null }, ch = rc.churn || { amount: 0 };
+    const rd = rt.amount === null ? t.R : rt.amount - rt.prev_amount, r = rd + ch.amount;
+    return { A: t.A, C: t.C, R: r, ACR: t.A + t.C + r };
+  }
+  function recurringLine(total, sv) {
+    if (!sv || sv.empty) return "";
+    const n = netOfAcr(sv), rec = { A: total.A - n.A, C: total.C - n.C, R: total.R - n.R, ACR: total.ACR - n.ACR };
+    const share = total.ACR ? ` (${(rec.ACR / total.ACR * 100).toFixed(1)}%)` : "";
+    return `<p class="ov-ref rec-line" title="신규 발생 = 조회기간에 매출이 시작된 계약의 첫 달 매출 · Recurring = 그 다음 달부터 계약기간 동안 이어지는 매출(조회기간 안) · 두 값의 합 = A+C+R 기여매출">구성 · <b>신규 발생</b>(첫 달) ${amt(n.ACR)} · <b>Recurring</b>(둘째 달부터) <b class="rec-v">${amt(rec.ACR)}</b>${share} <span class="muted">— Recurring A ${amt(rec.A)} · C ${amt(rec.C)} · R 증감 ${amt(rec.R)}</span></p>`;
+  }
+
   // ------------------------------------------------------------ 페이지: 종합 현황
   async function pageOverview() {
     const j = await api("/view/overview", { filters: S.f });
@@ -446,6 +459,8 @@
       </div>
       <p class="ov-ref">참고 · <b>R 재계약</b>(재계약 후 확보 매출, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify(tdk({ acr_type: ["R"] })))}'>${amt(tk.R)}</span> · ${cnt(tk.funnels_R)}건</p></section>`;
     }
+    // 매출개시월 기준 같은 계산(월별 신규 발생 차트·Recurring 구분용)
+    const svOv = S.f.mode === "term" ? (await api("/view/acr", { filters: Object.assign({}, S.f, { mode: "start" }) })).data : null;
     // ① 핵심 KPI — 2줄: ACR 기여매출(조회기간 실제 발생분)
     const chX = k.churn_acr || { amount: 0, funnels: 0 };
     const rdX = rt.amount === null ? a.R : rt.amount - rt.prev_amount;
@@ -458,7 +473,7 @@
       ${rcCard(rdX, chX.amount, chX.funnels, { status: ["해지확정"], period: "rev_ym" })}
       ${kpiCard("A+C 기여매출", amt(a.AC), row(`${cnt(a.funnels_A + a.funnels_C)}건`, ""), "", { scope: "acr", acr_type: ["A", "C"] })}
     </div>
-    <p class="ov-ref">참고 · <b>R 재계약</b>(재계약 후 확보 매출, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr", acr_type: ["R"] }))}'>${amt(a.R)}</span> · ${cnt(a.funnels_R)}건${rt.amount === null ? "" : ` · 재계약 전 ${amt(rt.prev_amount)}`}</p></section>`;
+    <p class="ov-ref">참고 · <b>R 재계약</b>(재계약 후 확보 매출, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr", acr_type: ["R"] }))}'>${amt(a.R)}</span> · ${cnt(a.funnels_R)}건${rt.amount === null ? "" : ` · 재계약 전 ${amt(rt.prev_amount)}`}</p>${recurringLine({ A: a.A, C: a.C, R: rChg, ACR: acrNet }, svOv)}</section>`;
     // ③ 확인 필요 — 음수·위험 신호를 한 곳에 모음(값은 기존 계산 그대로)
     const ch = k.churn_acr || { amount: 0, funnels: 0, excluded: {} };
     const chEx = Object.values(ch.excluded || {}).reduce((x, y) => x + y, 0);
@@ -466,7 +481,7 @@
     const exAcr = Object.values(d.acr_excluded || {}).reduce((x, y) => x + y, 0);
     // 월별 차트·기간별 표 = 신규 발생분(매출개시월). 계약기간 반영 기준이면 같은 계산을 매출개시월로 한 번 더 조회
     const termOv = S.f.mode === "term";
-    const newMonthly = termOv ? (((await api("/view/acr", { filters: Object.assign({}, S.f, { mode: "start" }) })).data || {}).monthly || []) : d.acr_monthly;
+    const newMonthly = termOv ? ((svOv || {}).monthly || []) : d.acr_monthly;
     const ovRows = aggPeriods(netRows(newMonthly), perOf(), false);
     const ovRef = termOv ? { label: "A+C+R 매출(월증가)", rows: aggPeriods(netRows(d.acr_monthly), perOf(), false) } : null;
     const warns = ((j.dataset || {}).warnings || []).length;
@@ -612,7 +627,8 @@
     const lbl = term ? "기간 합계(월별 추정값 합)" : "매출개시월 기준 합계";
     const orgRows = netRows(S.f.level === "am" ? d.by_am : d.by_team);
     // 월별 차트·기간별 표 = 신규 발생분(매출개시월). 카드·조직별 표·누적은 현재 기준(계약기간 반영) 합계
-    const newM = term ? (((await api("/view/acr", { filters: Object.assign({}, S.f, { mode: "start" }) })).data || {}).monthly || []) : d.monthly;
+    const svA = term ? (await api("/view/acr", { filters: Object.assign({}, S.f, { mode: "start" }) })).data : null;
+    const newM = term ? ((svA || {}).monthly || []) : d.monthly;
     const pRows = aggPeriods(netRows(newM), perOf(), false), pPool = poolOf(pRows);
     const cRows = aggPeriods(netRows(d.monthly), perOf(), false);
     const acrRef = term ? { label: "A+C+R 매출(월증가)", rows: cRows } : null;
@@ -631,7 +647,7 @@
       ${kpiCard("R. 증감", amt(rcA), `<span class="row"><span>재계약 ${amt(rdA)}</span></span><span class="row"><span>해지 ${amt(chA.amount)} · ${cnt(chA.funnels)}건</span></span>`, "neg", { status: ["해지확정"], period: "rev_ym" })}
       ${kpiCard("A+C. 기여매출", amt(t.AC), `<span class="row"><span>${cnt(t.funnels_A + t.funnels_C)}건</span></span>`, "", { scope: "acr", acr_type: ["A", "C"] })}
     </div>
-    <p class="ov-ref">참고 · <b>R 재계약</b>(${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감" : "재계약 후 월매출"}, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr", acr_type: ["R"] }))}'>${amt(t.R)}</span> · ${cnt(t.funnels_R)}건 · 고유 Funnel 수는 월별 반복 반영 횟수가 아님</p>
+    <p class="ov-ref">참고 · <b>R 재계약</b>(${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감" : "재계약 후 월매출"}, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr", acr_type: ["R"] }))}'>${amt(t.R)}</span> · ${cnt(t.funnels_R)}건 · 고유 Funnel 수는 월별 반복 반영 횟수가 아님</p>${recurringLine({ A: t.A, C: t.C, R: rcA, ACR: t.A + t.C + rcA }, svA)}
     ${Object.keys(d.excluded).length ? `<div class="notice warn">확정 조건이지만 이 지표에서 제외: ${Object.entries(d.excluded).map(([r, n]) => `${esc(r)} ${n}건`).join(", ")} <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr_excluded" }))}'>목록 보기</span></div>` : ""}
     <div class="card" style="margin-top:14px"><div class="card-head"><h3>${(PERIODS.find((x) => x[0] === perOf()) || PERIODS[0])[1]} 신규 발생 매출</h3>${periodToolbar("acrPer")}
       <div class="legend" id="serSel">${["A", "C", "R", "AC", "ACR"].map((k) => `<label><input type="checkbox" value="${k}" ${ser.includes(k) ? "checked" : ""}><i style="background:${COLORS[k]}"></i>${SERIES_LABEL[k]}</label>`).join("")}</div></div>
