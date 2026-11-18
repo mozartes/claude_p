@@ -446,6 +446,20 @@ def row_record(r: pd.Series, ck: dict | None = None, acr: dict | None = None) ->
 # ================================================================ 화면: ACR
 
 
+def one_time_contrib(df: pd.DataFrame, p: Params) -> dict:
+    """일회성 매출(추정): 계약기간 1개월인 확정 건의 조회기간 반영분. A·C = 금액, R = 재계약 증감, 해지 감소 포함.
+    원본에 일회성 구분 열이 없어 계약기간 1개월을 일회성으로 봄."""
+    con, _ = R.contributions(df, p.mode, p.ym_from, p.ym_to, p.products)
+    con = con[con["acr_type"].isin(p.types)]
+    one = con[con["row"].map(df["term"]).eq(1)] if len(con) else con
+    a = float(one.loc[one["acr_type"] == "A", "amount"].sum()) if len(one) else 0.0
+    c = float(one.loc[one["acr_type"] == "C", "amount"].sum()) if len(one) else 0.0
+    r = float(one.loc[one["acr_type"] == "R", "delta"].sum()) if len(one) else 0.0
+    ch = R.churn_contrib(df[df["term"].eq(1)], p.mode, p.ym_from, p.ym_to, p.products)
+    return {"A": a, "C": c, "R": r + ch["amount"], "ACR": a + c + r + ch["amount"],
+            "count": int(one["row"].nunique()) + int(ch["funnels"])}
+
+
 def acr_view(ds: Dataset, p: Params) -> dict:
     df = filter_df(ds, p)
     if df.empty:
@@ -454,6 +468,7 @@ def acr_view(ds: Dataset, p: Params) -> dict:
     # R. 증감매출 = 재계약 증감(변경−기존) + 해지확정 감소액(같은 ACR 기준). 종합 현황 관리 지표와 같은 계산
     res["r_change"] = {"retention": R.retention_contrib(df, p.mode, p.ym_from, p.ym_to, p.products),
                        "churn": R.churn_contrib(df, p.mode, p.ym_from, p.ym_to, p.products)}
+    res["one_time"] = one_time_contrib(df, p)
     res["basis"] = {
         "기간 기준": "매출발생년월" if p.mode == "start" else "매출발생년월부터 계약기간(월) 동안 매월 반영(시작월 포함)",
         "확정 조건": "A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",

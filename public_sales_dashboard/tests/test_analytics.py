@@ -420,3 +420,12 @@ def test_funnel_sched_period(make_ds, params):
     assert sp["in"]["count"] == 2 and sp["in"]["overdue"] == 1 and sp["after"]["count"] == 1
     d = A.detail_view(ds, p, {"scope": "in_progress", "acr_type": ["A", "C"], "after_period": True}, 1, 50, "row", False, "")
     assert d["total"] == 1
+
+
+def test_one_time_contrib(make_ds, params):
+    """일회성 = 계약기간 1개월 확정 건(조회기간 반영분). 반복 계약은 제외"""
+    ds = make_ds([row(fid="O1", monthly=50, rev=202605, term=1), row(fid="O2", monthly=7, rev=202611, term=1, type="Cul."),
+                  row(fid="M1", monthly=4.8, rev=202610, term=40, type="Cul."), row(fid="O3", monthly=9, rev=202512, term=1)])
+    p = params(base_date="2026-11-01", mode="term")
+    ot = A.acr_view(ds, p)["one_time"]
+    assert ot["A"] == 50 and ot["C"] == 7 and ot["ACR"] == 57 and ot["count"] == 2

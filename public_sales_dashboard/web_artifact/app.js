@@ -404,8 +404,14 @@
   function recurringLine(total, sv) {
     if (!sv || sv.empty) return "";
     const n = netOfAcr(sv), rec = { A: total.A - n.A, C: total.C - n.C, R: total.R - n.R, ACR: total.ACR - n.ACR };
-    const share = total.ACR ? ` (${(rec.ACR / total.ACR * 100).toFixed(1)}%)` : "";
-    return `<p class="ov-ref rec-line" title="신규 발생 = 조회기간에 매출이 시작된 계약의 첫 달 매출 · Recurring = 그 다음 달부터 계약기간 동안 이어지는 매출(조회기간 안) · 두 값의 합 = A+C+R 기여매출">구성 · <b>신규 발생</b>(첫 달) ${amt(n.ACR)} · <b>Recurring</b>(둘째 달부터) <b class="rec-v">${amt(rec.ACR)}</b>${share} <span class="muted">— Recurring A ${amt(rec.A)} · C ${amt(rec.C)} · R 증감 ${amt(rec.R)}</span></p>`;
+    const one = sv.one_time || { A: 0, C: 0, R: 0, ACR: 0, count: 0 };
+    const first = n.ACR - one.ACR;  // 반복 계약(계약기간 2개월 이상)의 첫 달
+    const sh = (v) => (total.ACR ? ` <span class="muted">(${(v / total.ACR * 100).toFixed(1)}%)</span>` : "");
+    return `<div class="ov-ref rec-line" title="일회성 = 계약기간 1개월인 확정 건(원본에 일회성 구분 열이 없어 계약기간으로 추정) · 신규 = 계약기간 2개월 이상 계약의 첫 달 매출 · Recurring = 그 다음 달부터 계약기간 동안 이어지는 매출(조회기간 안) · 세 값의 합 = A+C+R 기여매출">
+      <span class="rec-k">구성</span>
+      <span class="rec-c one"><b>일회성</b> ${amt(one.ACR)}${sh(one.ACR)} <span class="muted">${cnt(one.count)}건 · A ${amt(one.A)} · C ${amt(one.C)}</span></span>
+      <span class="rec-c new"><b>신규</b>(반복 계약 첫 달) ${amt(first)}${sh(first)}</span>
+      <span class="rec-c rec"><b>Recurring</b>(둘째 달부터) <b class="rec-v">${amt(rec.ACR)}</b>${sh(rec.ACR)} <span class="muted">A ${amt(rec.A)} · C ${amt(rec.C)} · R 증감 ${amt(rec.R)}</span></span></div>`;
   }
 
   // ------------------------------------------------------------ 페이지: 종합 현황
