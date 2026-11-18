@@ -422,10 +422,13 @@ def test_funnel_sched_period(make_ds, params):
     assert d["total"] == 1
 
 
-def test_one_time_contrib(make_ds, params):
-    """일회성 = 계약기간 1개월 확정 건(조회기간 반영분). 반복 계약은 제외"""
-    ds = make_ds([row(fid="O1", monthly=50, rev=202605, term=1), row(fid="O2", monthly=7, rev=202611, term=1, type="Cul."),
-                  row(fid="M1", monthly=4.8, rev=202610, term=40, type="Cul."), row(fid="O3", monthly=9, rev=202512, term=1)])
+def test_term_bands(make_ds, params):
+    """총 계약기간 구간: 1개월 / 2~11개월 / 12개월 이상(회사 Recurring 기준), 세 구간 합 = A+C 기여매출"""
+    ds = make_ds([row(fid="O1", monthly=50, rev=202605, term=1), row(fid="S1", monthly=10, rev=202611, term=6, type="Cul."),
+                  row(fid="L1", monthly=4.8, rev=202610, term=40, type="Cul."), row(fid="O3", monthly=9, rev=202512, term=1)])
     p = params(base_date="2026-11-01", mode="term")
-    ot = A.acr_view(ds, p)["one_time"]
-    assert ot["A"] == 50 and ot["C"] == 7 and ot["ACR"] == 57 and ot["count"] == 2
+    v = A.acr_view(ds, p)
+    tb = v["term_bands"]
+    assert tb["one"]["ACR"] == 50 and tb["one"]["count"] == 1
+    assert tb["short"]["C"] == 20 and abs(tb["long"]["C"] - 14.4) < 1e-9
+    assert abs(sum(b["ACR"] for b in tb.values()) - (v["totals"]["A"] + v["totals"]["C"])) < 1e-9

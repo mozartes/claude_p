@@ -672,14 +672,20 @@
   }
 
   // ================================================================ 화면: ACR
-  // 일회성 매출(추정): 계약기간 1개월인 확정 건의 조회기간 반영분. A·C = 금액, R = 재계약 증감, 해지 감소 포함
-  function oneTimeContrib(df, p) {
-    const term1 = new Set(df.filter((r) => r.term === 1).map((r) => r.row));
-    const con = contributions(df, p.mode, p.ym_from, p.ym_to, p.products)[0].filter((c) => p.types.includes(c.acr_type) && term1.has(c.row));
-    const s = (t, k) => con.filter((c) => c.acr_type === t).reduce((x, c) => x + c[k], 0);
-    const a = s("A", "amount"), c = s("C", "amount"), r = s("R", "delta");
-    const ch = churnContrib(df.filter((x) => x.term === 1), p.mode, p.ym_from, p.ym_to, p.products);
-    return { A: a, C: c, R: r + ch.amount, ACR: a + c + r + ch.amount, count: new Set(con.map((x) => x.row)).size + ch.funnels };
+  // 총 계약기간 구간별 기여매출(조회기간 반영분). 회사 기준 Recurring = 계약기간 12개월 이상. 세 구간 합 = A+C+R 기여매출
+  const TERM_BANDS = [["one", "일회성(1개월)", 1, 1], ["short", "단기(2~11개월)", 2, 11], ["long", "Recurring(12개월 이상)", 12, 1e6]];
+  function termBands(df, p) {
+    const termOf = new Map(df.map((r) => [r.row, r.term]));
+    const con = contributions(df, p.mode, p.ym_from, p.ym_to, p.products)[0].filter((c) => p.types.includes(c.acr_type));
+    const out = {};
+    TERM_BANDS.forEach(([key, label, lo, hi]) => {
+      const g = con.filter((c) => { const t = termOf.get(c.row); return t !== null && t !== undefined && t >= lo && t <= hi; });
+      const s = (t, k) => g.filter((c) => c.acr_type === t).reduce((x, c) => x + c[k], 0);
+      const a = s("A", "amount"), c = s("C", "amount"), r = s("R", "delta");
+      const ch = churnContrib(df.filter((x) => x.term !== null && x.term >= lo && x.term <= hi), p.mode, p.ym_from, p.ym_to, p.products);
+      out[key] = { label, A: a, C: c, R: r + ch.amount, ACR: a + c + r + ch.amount, count: new Set(g.map((x) => x.row)).size + ch.funnels };
+    });
+    return out;
   }
   function acrView(ds, p) {
     const df = filterDf(ds, p);
@@ -687,7 +693,7 @@
     const res = computeAcr(df, p.mode, p.ym_from, p.ym_to, p.products, p.types);
     // R. 증감매출 = 재계약 증감(변경−기존) + 해지확정 감소액(같은 ACR 기준). 종합 현황 관리 지표와 같은 계산
     res.r_change = { retention: retentionContrib(df, p.mode, p.ym_from, p.ym_to, p.products), churn: churnContrib(df, p.mode, p.ym_from, p.ym_to, p.products) };
-    res.one_time = oneTimeContrib(df, p);
+    res.term_bands = termBands(df, p);
     res.basis = {
       "기간 기준": p.mode === "start" ? "매출발생년월" : "매출발생년월부터 계약기간(월) 동안 매월 반영(시작월 포함)",
       "확정 조건": "A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
