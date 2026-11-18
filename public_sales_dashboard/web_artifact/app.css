@@ -380,3 +380,8 @@ table.core-team:not(.show-all) :is(th, td):nth-child(n+10):not(:last-child) { di
 
 /* 수주율 금액 기준 보조값 */
 .kpi .value .v-sub { font-size: 15px; font-weight: 600; color: var(--ok); margin-left: 6px; }
+
+/* 수주율: 금액(크게) · 건수(작게) */
+.kpi .value .v-amt { font-size: inherit; }
+.kpi .value .v-cnt { font-size: 13px; font-weight: 500; color: var(--text-2); margin-left: 8px; white-space: nowrap; }
+.kpi .value:has(.v-amt) { white-space: nowrap; }
