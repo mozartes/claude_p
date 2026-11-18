@@ -377,3 +377,6 @@ table.core-team:not(.show-all) :is(th, td):nth-child(n+10):not(:last-child) { di
 .rec-line .rec-c.one { border-left: 3px solid var(--warn, #ca8a04); }
 .rec-line .rec-c.new { border-left: 3px solid var(--primary); }
 .rec-line .rec-c.rec { border-left: 3px solid var(--ok); }
+
+/* 수주율 금액 기준 보조값 */
+.kpi .value .v-sub { font-size: 15px; font-weight: 600; color: var(--ok); margin-left: 6px; }

@@ -973,7 +973,7 @@
     const perfRow = (r, label, o) => `<tr><td>${label}</td>
       <td class="num">${lk(r.AC.win, dW(o))} <span class="muted">(사전 ${lk(r.AC.win_pre, dW(o, { reg_type: "사전" }))} / 사후 ${lk(r.AC.win_post, dW(o, { reg_type: "사후·당일" }))})</span></td>
       <td class="num">${lk(r.AC.lose, dS(o, "Lose"))}</td><td class="num">${lk(r.AC.drop, dS(o, "Drop"))}</td>
-      <td class="num">${fr(r.AC.simple)}</td><td class="num">${fr(r.AC.pre)}</td><td class="num">${fr(r.A.pre)}</td><td class="num">${fr(r.C.pre)}</td>
+      <td class="num">${fr(r.AC.simple)}</td><td class="num">${fa(r.AC.simple_amt)}</td><td class="num">${fr(r.AC.pre)}</td><td class="num">${fa(r.AC.pre_amt)}</td><td class="num">${fr(r.A.pre)}</td><td class="num">${fr(r.C.pre)}</td>
       <td class="num">${lk(r.r_done, dR(o, "재계약완료"))}</td><td class="num">${lk(r.r_churn, dR(o, "해지확정"))}</td>
       <td class="num">${fr(r.ret_cnt)}</td><td class="num">${fa(r.ret_amt)}</td><td class="num">${fa(r.chg_rate)}</td>
       <td class="wrap">${esc(r.churn_top || "-")}</td><td class="num">${fr(r.new_share)}</td></tr>`;
@@ -986,11 +986,11 @@
     const orgLabel = (r) => esc(r.am ? `${r.am} (${r.team})` : r.team);
     let h = `<div class="toolbar"><span class="muted">집계연도(성과)</span><span class="seg-light" id="pyearSel">${years.map((yy) => `<button type="button" data-v="${yy}" class="${yy === y ? "on" : ""}">${yy}년</button>`).join("")}</span>
         <span class="muted">집계 수준: ${isAm ? "AM" : "팀"} (사이드바에서 변경) · 비율 옆 괄호는 분자/분모 · 분모 ${mn}건 미만은 ‘표본 부족’</span></div>
-    <div class="notice info">점검용 비교이며 AM 평가 점수가 아닙니다. ‘사전/사후 등록’은 수주가능성 변경이력의 첫 기록일로 판단한 <b>추정</b>입니다. 수주율은 사업기회 소멸(Drop)을 분모에 포함하고, Pre-sales 경유 수주율은 제외합니다. 두 수주율은 <b>계약기간매출 100만원 이상</b> 건만 계산합니다(미만·미입력 A·C ${nf(t.AC.small_excluded)}건 제외).</div>
+    <div class="notice info">점검용 비교이며 AM 평가 점수가 아닙니다. ‘사전/사후 등록’은 수주가능성 변경이력의 첫 기록일로 판단한 <b>추정</b>입니다. 수주율은 사업기회 소멸(Drop)을 분모에 포함하고, Pre-sales 경유 수주율은 제외합니다. 두 수주율은 <b>계약기간매출 100만원 이상</b> 건만 계산하며(미만·미입력 A·C ${nf(t.AC.small_excluded)}건 제외), <b>건수 기준</b>과 <b>금액 기준</b>(계약기간매출 합계)을 함께 표시합니다.</div>
     <div class="grid kpis">
-      ${kpiCard("수주율 (A·C)", t.AC.simple.rate == null ? "-" : pct(t.AC.simple.rate), `Win ${nf(t.AC.win)} ÷ (Win+Lose+Drop ${nf(t.AC.win + t.AC.lose + t.AC.drop)})<br>A ${pct(t.A.simple.rate)} · C ${pct(t.C.simple.rate)}`, "", dW({}))}
-      ${kpiCard("Pre-sales 경유 수주율", t.AC.pre.rate == null ? "-" : pct(t.AC.pre.rate), `사전 Win ${nf(t.AC.win_pre)} ÷ (사전 Win+Lose ${nf(t.AC.pre.den)})<br>A ${pct(t.A.pre.rate)} · C ${pct(t.C.pre.rate)}`, "a", dW({}, { reg_type: "사전" }))}
-      ${kpiCard("사전 등록률", t.AC.reg.rate == null ? "-" : pct(t.AC.reg.rate), `사후·당일 등록 Win ${nf(t.AC.reg_post)}건${t.AC.reg_nohist ? ` · 이력 없음 ${nf(t.AC.reg_nohist)}건` : ""}`, "warn", dWall({}, { reg_type: "사후·당일" }))}
+      ${kpiCard("수주율 (A·C)", t.AC.simple.rate == null ? "-" : `${pct(t.AC.simple.rate)} <span class="v-sub">금액 ${pct(t.AC.simple_amt.rate)}</span>`, `${nf(t.AC.win)}÷${nf(t.AC.win + t.AC.lose + t.AC.drop)}건 · 금액 ${amt(t.AC.simple_amt.num)}÷${amt(t.AC.simple_amt.den)}<br>A ${pct(t.A.simple.rate)} · C ${pct(t.C.simple.rate)} (건수)`, "", dW({}))}
+      ${kpiCard("Pre-sales 경유 수주율", t.AC.pre.rate == null ? "-" : `${pct(t.AC.pre.rate)} <span class="v-sub">금액 ${pct(t.AC.pre_amt.rate)}</span>`, `${nf(t.AC.win_pre)}÷${nf(t.AC.pre.den)}건 · 금액 ${amt(t.AC.pre_amt.num)}÷${amt(t.AC.pre_amt.den)}<br>A ${pct(t.A.pre.rate)} · C ${pct(t.C.pre.rate)} (건수)`, "a", dW({}, { reg_type: "사전" }))}
+      ${kpiCard("사전 등록률 (수주 3개월 전)", t.AC.reg.rate == null ? "-" : pct(t.AC.reg.rate), `90일 전 등록 ${nf(t.AC.reg.num)}÷${nf(t.AC.reg.den)}건<br>90일 미만 ${nf(t.AC.reg_pre_short)} · 사후 ${nf(t.AC.reg_post)}${t.AC.reg_nohist ? ` · 이력 없음 ${nf(t.AC.reg_nohist)}` : ""}건`, "warn", dWall({}, { reg_type: "사전", lead_min: 90 }))}
       ${kpiCard("리텐션 성공률 (건수)", t.ret_cnt.rate == null ? "-" : pct(t.ret_cnt.rate), `재계약완료 ${nf(t.r_done)} · 해지 ${nf(t.r_churn)}`, "r", dR({}, "해지확정"))}
       ${kpiCard("리텐션 성공률 (금액)", t.ret_amt.rate == null ? "-" : pct(t.ret_amt.rate), `기존 ${amt(t.ret_amt.den)} → 재계약 후 ${amt(t.ret_amt.num)}<br>해지 사유 1위: ${esc(t.churn_top || "-")}`, "r", dR({}, "재계약완료"))}
       ${kpiCard("신규(A) 비중", t.new_share.rate == null ? "-" : pct(t.new_share.rate), `확정 A·C Win 건수 기준 · 월매출 기준 ${pct(t.new_share_amt.rate)}`, "a", Object.assign(dW({}), { acr_type: ["A"] }))}
@@ -998,18 +998,18 @@
       ${kpiCard("장기 미갱신 · 장기 체류", `${nf(t.stale_long)} · ${nf(t.long_stay)}건`, `저장 ${S.f.th.stale_long_days || 90}일 초과 · 최초 기록 ${S.f.th.long_stay_days || 365}일 초과(진행 중)`, "neg", { scope: "checks", code: ["STALE_LONG", "LONG_STAY"] })}
     </div>
     <div class="grid cols-2" style="margin-top:14px">
-      <div class="card"><h3>${isAm ? "AM" : "팀"}별 수주율 비교</h3><p class="desc">수주율 vs Pre-sales 경유 수주율 · 계약기간매출 100만원 이상 · 분모 ${mn}건 이상만 표시 · ${y}년 수주년월</p><div class="chart-box ${isAm ? "tall" : ""}"><canvas id="pfWinChart"></canvas></div></div>
+      <div class="card"><h3>${isAm ? "AM" : "팀"}별 수주율 비교</h3><p class="desc">수주율(건수·금액) vs Pre-sales 경유 수주율 · 계약기간매출 100만원 이상 · 분모 ${mn}건 이상만 표시 · ${y}년 수주년월</p><div class="chart-box ${isAm ? "tall" : ""}"><canvas id="pfWinChart"></canvas></div></div>
       <div class="card"><h3>${isAm ? "AM" : "팀"}별 리텐션 성공률</h3><p class="desc">건수 vs 금액 · 분모 ${mn}건 이상만 표시</p><div class="chart-box ${isAm ? "tall" : ""}"><canvas id="pfRetChart"></canvas></div></div>
     </div>
     <div class="card" style="margin-top:14px"><h3>성과: 수주율·리텐션 (${y}년 수주년월)</h3><p class="desc">숫자 클릭 → 해당 Funnel 목록</p>
       <div class="table-wrap" style="max-height:620px"><table class="t"><thead><tr><th>${isAm ? "AM(팀)" : "팀"}</th><th class="num" title="계약기간매출 100만원 이상">Win (사전/사후)</th><th class="num">Lose</th><th class="num">Drop</th>
-        <th class="num">수주율</th><th class="num">경유 수주율</th><th class="num">A 경유</th><th class="num">C 경유</th><th class="num">재계약완료</th><th class="num">해지</th>
+        <th class="num">수주율(건수)</th><th class="num" title="Win 계약기간매출 ÷ (Win+Lose+Drop) 계약기간매출">수주율(금액)</th><th class="num">경유 수주율(건수)</th><th class="num" title="사전 Win 계약기간매출 ÷ (사전 Win+Lose) 계약기간매출">경유(금액)</th><th class="num">A 경유</th><th class="num">C 경유</th><th class="num">재계약완료</th><th class="num">해지</th>
         <th class="num">리텐션(건수)</th><th class="num">리텐션(금액)</th><th class="num">재계약 매출 증감률</th><th>해지 사유 1위</th><th class="num">신규(A) 비중</th></tr></thead>
       <tbody>${d.rows.map((r) => perfRow(r, orgLabel(r), orgD(r))).join("")}</tbody>
       <tfoot>${perfRow(t, "담당 합계", {})}</tfoot></table></div></div>
     <div class="card" style="margin-top:14px"><h3>활동성</h3><p class="desc">진행 중·갱신·체류는 현재(기준일 ${esc(S.f.base_date || "")}) 기준, 사전 등록률·리드타임·정확도는 ${y}년 수주년월 기준</p>
       <div class="table-wrap" style="max-height:620px"><table class="t"><thead><tr><th>${isAm ? "AM(팀)" : "팀"}</th><th class="num">진행 중</th><th class="num">30일 내 갱신률</th><th class="num">장기 미갱신(${S.f.th.stale_long_days || 90}일)</th><th class="num">장기 체류</th>
-        <th class="num">사전 등록률</th><th class="num">리드타임(중앙값)</th><th class="num">Lose 중 가능성 70%↑</th></tr></thead>
+        <th class="num" title="수주 시점보다 90일(3개월) 이상 먼저 등록된 Win ÷ 이력 있는 Win">사전 등록률(3개월 전)</th><th class="num">리드타임(중앙값)</th><th class="num">Lose 중 가능성 70%↑</th></tr></thead>
       <tbody>${d.rows.map((r) => actRow(r, orgLabel(r), orgD(r))).join("")}</tbody>
       <tfoot>${actRow(t, "담당 합계", {})}</tfoot></table></div></div>
     ${basisBlock(d.basis)}`;
@@ -1020,7 +1020,7 @@
       data: { labels: rows.map((r) => (r.am ? `${r.am} (${r.team})` : r.team)), datasets: sets.map(([lb, fn, col]) => ({ label: lb, data: rows.map((r) => pctD(fn(r))), backgroundColor: col, borderRadius: 3, maxBarThickness: 22 })) },
       options: { indexAxis: isAm ? "y" : "x", maintainAspectRatio: false, plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${(isAm ? c.parsed.x : c.parsed.y)}%` } } },
         scales: isAm ? { x: { min: 0, max: 100, title: { display: true, text: "%" } }, y: { ticks: { autoSkip: false } } } : { y: { min: 0, max: 100, title: { display: true, text: "%" } }, x: { grid: { display: false } } } } });
-    barChart("pfWinChart", okRows((r) => r.AC.simple.ok || r.AC.pre.ok), [["수주율", (r) => r.AC.simple, css("--primary", "#0f766e")], ["Pre-sales 경유 수주율", (r) => r.AC.pre, css("--series-a", "#2563eb")]]);
+    barChart("pfWinChart", okRows((r) => r.AC.simple.ok || r.AC.pre.ok), [["수주율(건수)", (r) => r.AC.simple, css("--primary", "#0f766e")], ["수주율(금액)", (r) => r.AC.simple_amt, css("--ok", "#15803d")], ["Pre-sales 경유 수주율", (r) => r.AC.pre, css("--series-a", "#2563eb")]]);
     barChart("pfRetChart", okRows((r) => r.ret_cnt.ok), [["리텐션(건수)", (r) => r.ret_cnt, COLORS.R], ["리텐션(금액)", (r) => r.ret_amt, css("--muted", "#6b7280")]]);
     document.querySelectorAll("#pyearSel button").forEach((b) => b.addEventListener("click", () => { S.f.total_year = Number(b.dataset.v); store.set("filters", S.f); render(); }));
   }

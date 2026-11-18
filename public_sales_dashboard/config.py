@@ -164,6 +164,8 @@ KNOWN_STATUSES = ["Pre Sales", "제안완료", "Win", "재계약완료", "해지
 IN_PROGRESS = {"Pre Sales", "제안완료"}
 # 수주율·Pre-sales 경유 수주율 대상: 계약기간매출 100만원 이상(원 기준, 원본 단위로 환산해 비교)
 RATE_MIN_CONTRACT_WON = 1_000_000
+# 사전 등록률: 수주 시점(변경이력 100% 도달일, 없으면 확정일자)보다 90일(3개월) 이상 먼저 등록된 Win만 사전으로 셈
+REG_MIN_LEAD_DAYS = 90
 
 # ACR 확정 집계 조건: 유형별 인정 상태
 ACR_CONFIRMED_STATUS = {"A": "Win", "C": "Win", "R": "재계약완료"}

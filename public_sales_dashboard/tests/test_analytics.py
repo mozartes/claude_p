@@ -432,3 +432,15 @@ def test_term_bands(make_ds, params):
     assert tb["one"]["ACR"] == 50 and tb["one"]["count"] == 1
     assert tb["short"]["C"] == 20 and abs(tb["long"]["C"] - 14.4) < 1e-9
     assert abs(sum(b["ACR"] for b in tb.values()) - (v["totals"]["A"] + v["totals"]["C"])) < 1e-9
+
+
+def test_reg_rate_min_lead(make_ds, params):
+    """사전 등록률: 수주 시점보다 90일(3개월) 이상 먼저 등록된 Win만 분자. 90일 미만 사전은 분모에만"""
+    rows = _edge_hist_rows() + [row(fid="W_PRE_SHORT", status="Win", win=202606,
+                                    hist="40%(중하)(2026/04/20),100%(수주완료)(2026/06/02)")]  # 43일 전 등록
+    ds = make_ds(rows)
+    p = params(base_date="2026-11-08", total_year=2026)
+    ac = A.perf_view(ds, p)["total"]["AC"]
+    assert ac["reg"]["num"] == 1 and ac["reg"]["den"] == 4 and ac["reg_pre_short"] == 1
+    d = A.detail_view(ds, p, {"acr_type": ["A", "C"], "status": ["Win"], "win_year": 2026, "reg_type": "사전", "lead_min": 90}, 1, 50, "row", False, "")
+    assert d["total"] == 1

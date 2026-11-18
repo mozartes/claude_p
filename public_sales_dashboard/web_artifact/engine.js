@@ -8,7 +8,8 @@
   // ================================================================ 설정 (config.py 대응)
   const CFG = {
     SOURCE_UNIT: "백만원",
-    RATE_MIN_CONTRACT_WON: 1000000, // 수주율·경유 수주율 대상: 계약기간매출 100만원 이상
+    RATE_MIN_CONTRACT_WON: 1000000,
+    REG_MIN_LEAD_DAYS: 90, // 사전 등록률: 수주 시점보다 90일(3개월) 이상 먼저 등록된 Win만 // 수주율·경유 수주율 대상: 계약기간매출 100만원 이상
     TARGET_HQ: "공공고객담당",
     MAX_UPLOAD_MB: 20,
     SHEET_NAME_PREFERRED: "유선Funnel조회",
@@ -1152,6 +1153,8 @@
   }
 
   // ================================================================ 화면: AM 성과·활동 점검
+  const amtOf = (rows) => fsum(rows.map((r) => r.contract_amt)) || 0;
+  function rateAmt(num, den, ok) { return { num, den, rate: den ? num / den : null, ok: !!den && !!ok }; }
   function rate(num, den, mn) { return { num, den, rate: den ? num / den : null, ok: !!den && den >= mn }; }
   function median(arr) { const v = arr.filter(nn).sort((a, b) => a - b); if (!v.length) return null; const m = Math.floor(v.length / 2); return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; }
   function rateMinContract() {
@@ -1166,12 +1169,16 @@
       const x0 = gy.filter((r) => types.includes(r.acr_type));
       const w0 = x0.filter((r) => r.status === "Win");
       const rpre = w0.filter((r) => r.reg_type === "사전").length, rpost = w0.filter((r) => r.reg_type === "사후·당일").length;
+      const rpre3 = w0.filter((r) => r.reg_type === "사전" && gte(r.lead_days, CFG.REG_MIN_LEAD_DAYS)).length;
       const thr = rateMinContract(), x = x0.filter((r) => gte(r.contract_amt, thr)); // 100만원 미만·미입력 제외
       const w = x.filter((r) => r.status === "Win"); const nl = x.filter((r) => r.status === "Lose").length; const nd = x.filter((r) => r.status === "Drop").length;
       const wpre = w.filter((r) => r.reg_type === "사전").length, wpost = w.filter((r) => r.reg_type === "사후·당일").length;
       out[key] = { win: w.length, lose: nl, drop: nd, win_pre: wpre, win_post: wpost, win_nohist: w.length - wpre - wpost,
         simple: rate(w.length, w.length + nl + nd, mn), pre: rate(wpre, wpre + nl, mn), small_excluded: x0.length - x.length,
-        reg: rate(rpre, rpre + rpost, mn), reg_post: rpost, reg_nohist: w0.length - rpre - rpost };
+        // 금액 기준(계약기간매출 합계): 표본 판정은 건수 기준과 동일
+        simple_amt: rateAmt(amtOf(w), amtOf(w) + amtOf(x.filter((r) => r.status === "Lose")) + amtOf(x.filter((r) => r.status === "Drop")), w.length + nl + nd >= mn),
+        pre_amt: rateAmt(amtOf(w.filter((r) => r.reg_type === "사전")), amtOf(w.filter((r) => r.reg_type === "사전")) + amtOf(x.filter((r) => r.status === "Lose")), wpre + nl >= mn),
+        reg: rate(rpre3, rpre + rpost, mn), reg_post: rpost, reg_pre_short: rpre - rpre3, reg_nohist: w0.length - rpre - rpost };
     });
     const wac = gy.filter((r) => (r.acr_type === "A" || r.acr_type === "C") && r.status === "Win");
     out.new_share = rate(wac.filter((r) => r.acr_type === "A").length, wac.length, mn);
@@ -1211,10 +1218,10 @@
       year: y, level: key === "am_key" ? "am" : "team", total: perfMetrics(df, p), rows, min_sample: p.th.min_sample,
       basis: {
         "기간": `성과(수주율·리텐션·신규비중·리드타임·정확도)는 수주년월 ${y}-01~${y}-12, 활동(갱신·미갱신·체류)은 현재 진행 중 전체(기준일 ${p.base_date})`,
-        "수주율": "A·C의 Win ÷ (Win + Lose + Drop). 사업기회 소멸(Drop)도 분모에 포함. 계약기간매출 100만원 이상만(미만·미입력 제외)",
+        "수주율": "A·C의 Win ÷ (Win + Lose + Drop). 사업기회 소멸(Drop)도 분모에 포함. 계약기간매출 100만원 이상만(미만·미입력 제외). 건수 기준과 금액 기준(계약기간매출 합계)을 함께 표시",
         "Pre-sales 경유 수주율": "사전 등록 Win ÷ (사전 등록 Win + Lose). 사후·당일 등록 Win과 사업기회 소멸(Drop)은 제외. 계약기간매출 100만원 이상만(미만·미입력 제외)",
         "등록 구분(추정)": "수주가능성 변경이력의 첫 기록일을 등록일로 봄. 종결일 = 이력 100% 도달일(없으면 확정일자). 첫 기록이 100% 미만이고 종결일보다 이전이면 '사전', 아니면 '사후·당일'",
-        "사전 등록률": "Win 중 사전 등록 비율(이력 없는 Win 제외)",
+        "사전 등록률": `수주 시점보다 ${CFG.REG_MIN_LEAD_DAYS}일(3개월) 이상 먼저 등록된 Win ÷ 이력 있는 Win(사전 + 사후·당일). ${CFG.REG_MIN_LEAD_DAYS}일 미만 사전 등록은 분모에만 포함, 이력 없는 Win 제외`,
         "리텐션 성공률": "건수 = 재계약완료 ÷ (재계약완료 + 해지확정). 금액 = 재계약완료 변경 월매출 ÷ (재계약완료 + 해지확정의 기존 월매출)",
         "재계약 매출 증감률": "(변경 합계 − 기존 합계) ÷ 기존 합계, 재계약완료 중 기존매출 양수 대상",
         "신규 비중": "확정 A·C(Win) 중 A 비중(건수·월매출)",
@@ -1227,7 +1234,7 @@
   }
 
   // ================================================================ 상세 목록(드릴다운)
-  const DRILL_KEYS = ["scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "win_month", "win_year", "reg_type", "lose_overconf", "code", "team", "am_key", "ym", "product", "customer", "bid_no", "prob_bin", "period", "change", "level", "min_contract", "after_period"];
+  const DRILL_KEYS = ["scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "win_month", "win_year", "reg_type", "lose_overconf", "code", "team", "am_key", "ym", "product", "customer", "bid_no", "prob_bin", "period", "change", "level", "min_contract", "after_period", "lead_min"];
   function drillRows(ds, p, drill) {
     const d = {};
     Object.entries(drill || {}).forEach(([k, v]) => { if (DRILL_KEYS.includes(k) && v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)) d[k] = v; });
@@ -1271,6 +1278,7 @@
     if (d.prob_band) { const bs = listOf(d.prob_band); rows = rows.filter((r) => bs.includes(psBin(r.prob))); desc.push("가능성 구간=" + bs.join("/")); }
     if (d.win_year) { const wy = Number(d.win_year); rows = rows.filter((r) => nn(r.win_ym) && r.win_ym >= wy * 100 + 1 && r.win_ym <= wy * 100 + 12); desc.push(`수주년월 ${wy}년`); }
     if (d.reg_type) { rows = rows.filter((r) => r.reg_type === d.reg_type); desc.push(`등록 구분=${d.reg_type}`); }
+    if (d.lead_min) { const lm = Number(d.lead_min); rows = rows.filter((r) => gte(r.lead_days, lm)); desc.push(`수주 ${lm}일 이상 전 등록`); }
     if (d.after_period) { rows = rows.filter((r) => nn(r.win_ym) && r.win_ym > p.ym_to); desc.push(`수주년월 ${ymLabel(p.ym_to)} 이후`); }
     if (d.min_contract) { const thr = rateMinContract(); rows = rows.filter((r) => gte(r.contract_amt, thr)); desc.push("계약기간매출 100만원 이상"); }
     if (d.lose_overconf) { rows = rows.filter((r) => gte(r.hist_maxp_open, 70)); desc.push("이력상 가능성 70% 이상"); }

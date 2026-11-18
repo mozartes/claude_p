@@ -1181,6 +1181,11 @@ def total_view(ds: Dataset, p: Params) -> dict:
 # ================================================================ 화면: AM 성과·활동 점검
 
 
+def _rate_amt(num: float, den: float, ok: bool) -> dict:
+    """금액 비율(분자·분모 = 계약기간매출 합계). 표본 판정은 같은 대상의 건수 기준을 그대로 받음."""
+    return {"num": float(num), "den": float(den), "rate": (num / den) if den else None, "ok": bool(den) and bool(ok)}
+
+
 def _rate(num, den, min_n: int) -> dict:
     """비율 + 분자·분모. 분모가 min_n 미만이면 ok=False(화면은 '표본 부족(건수)')."""
     num = float(num) if isinstance(num, float) else int(num)
@@ -1211,6 +1216,7 @@ def perf_metrics(g: pd.DataFrame, p: Params) -> dict:
         x0 = gy[gy["acr_type"].isin(types)]
         w0 = x0[x0["status"] == "Win"]
         rpre, rpost = int((w0["reg_type"] == "사전").sum()), int((w0["reg_type"] == "사후·당일").sum())
+        rpre3 = int(((w0["reg_type"] == "사전") & (pd.to_numeric(w0["lead_days"], errors="coerce") >= C.REG_MIN_LEAD_DAYS)).sum())
         # 수주율·경유 수주율: 계약기간매출 100만원 이상만(미입력·100만원 미만 제외)
         big = pd.to_numeric(x0["contract_amt"], errors="coerce") >= thr
         x = x0[big.fillna(False).astype(bool)]
@@ -1223,7 +1229,10 @@ def perf_metrics(g: pd.DataFrame, p: Params) -> dict:
                     "win_nohist": int(len(w)) - wpre - wpost,
                     "simple": _rate(len(w), len(w) + nl + nd, mn), "pre": _rate(wpre, wpre + nl, mn),
                     "small_excluded": int(len(x0)) - int(len(x)),
-                    "reg": _rate(rpre, rpre + rpost, mn), "reg_post": rpost, "reg_nohist": int(len(w0)) - rpre - rpost}
+                    # 금액 기준(계약기간매출 합계): 표본 판정은 건수 기준과 동일
+                    "simple_amt": _rate_amt(fsum(w["contract_amt"]) or 0.0, (fsum(w["contract_amt"]) or 0.0) + (fsum(x.loc[x["status"] == "Lose", "contract_amt"]) or 0.0) + (fsum(x.loc[x["status"] == "Drop", "contract_amt"]) or 0.0), len(w) + nl + nd >= mn),
+                    "pre_amt": _rate_amt(fsum(w.loc[w["reg_type"] == "사전", "contract_amt"]) or 0.0, (fsum(w.loc[w["reg_type"] == "사전", "contract_amt"]) or 0.0) + (fsum(x.loc[x["status"] == "Lose", "contract_amt"]) or 0.0), wpre + nl >= mn),
+                    "reg": _rate(rpre3, rpre + rpost, mn), "reg_post": rpost, "reg_pre_short": rpre - rpre3, "reg_nohist": int(len(w0)) - rpre - rpost}
     w_ac = gy[gy["acr_type"].isin(["A", "C"]) & (gy["status"] == "Win")]
     out["new_share"] = _rate(int((w_ac["acr_type"] == "A").sum()), int(len(w_ac)), mn)
     am = fsum(w_ac.loc[w_ac["acr_type"] == "A", "monthly"]) or 0.0
@@ -1279,10 +1288,10 @@ def perf_view(ds: Dataset, p: Params) -> dict:
         "min_sample": int(p.th["min_sample"]),
         "basis": {
             "기간": f"성과(수주율·리텐션·신규비중·리드타임·정확도)는 수주년월 {y}-01~{y}-12, 활동(갱신·미갱신·체류)은 현재 진행 중 전체(기준일 {p.base_date.isoformat()})",
-            "수주율": "A·C의 Win ÷ (Win + Lose + Drop). 사업기회 소멸(Drop)도 분모에 포함. 계약기간매출 100만원 이상만(미만·미입력 제외)",
+            "수주율": "A·C의 Win ÷ (Win + Lose + Drop). 사업기회 소멸(Drop)도 분모에 포함. 계약기간매출 100만원 이상만(미만·미입력 제외). 건수 기준과 금액 기준(계약기간매출 합계)을 함께 표시",
             "Pre-sales 경유 수주율": "사전 등록 Win ÷ (사전 등록 Win + Lose). 사후·당일 등록 Win과 사업기회 소멸(Drop)은 제외. 계약기간매출 100만원 이상만(미만·미입력 제외)",
             "등록 구분(추정)": "수주가능성 변경이력의 첫 기록일을 등록일로 봄. 종결일 = 이력 100% 도달일(없으면 확정일자). 첫 기록이 100% 미만이고 종결일보다 이전이면 '사전', 아니면 '사후·당일'",
-            "사전 등록률": "Win 중 사전 등록 비율(이력 없는 Win 제외)",
+            "사전 등록률": f"수주 시점보다 {C.REG_MIN_LEAD_DAYS}일(3개월) 이상 먼저 등록된 Win ÷ 이력 있는 Win(사전 + 사후·당일). {C.REG_MIN_LEAD_DAYS}일 미만 사전 등록은 분모에만 포함, 이력 없는 Win 제외",
             "리텐션 성공률": "건수 = 재계약완료 ÷ (재계약완료 + 해지확정). 금액 = 재계약완료 변경 월매출 ÷ (재계약완료 + 해지확정의 기존 월매출)",
             "재계약 매출 증감률": "(변경 합계 − 기존 합계) ÷ 기존 합계, 재계약완료 중 기존매출 양수 대상",
             "신규 비중": "확정 A·C(Win) 중 A 비중(건수·월매출)",
@@ -1297,7 +1306,7 @@ def perf_view(ds: Dataset, p: Params) -> dict:
 # ================================================================ 상세 목록(드릴다운)
 
 DRILL_KEYS = {"scope", "status", "acr_type", "bucket", "imminent", "prob_band", "rev_month", "win_month", "win_year", "reg_type", "lose_overconf", "code", "team", "am_key", "ym", "product",
-              "customer", "bid_no", "prob_bin", "period", "change", "level", "min_contract", "after_period"}
+              "customer", "bid_no", "prob_bin", "period", "change", "level", "min_contract", "after_period", "lead_min"}
 
 
 def drill_rows(ds: Dataset, p: Params, drill: dict | None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str]:
@@ -1390,6 +1399,9 @@ def drill_rows(ds: Dataset, p: Params, drill: dict | None) -> tuple[pd.DataFrame
         rt = drill["reg_type"]
         m &= df["reg_type"] == rt
         desc.append(f"등록 구분={rt}")
+    if drill.get("lead_min"):
+        m &= (pd.to_numeric(df["lead_days"], errors="coerce") >= int(drill["lead_min"])).fillna(False).astype(bool)
+        desc.append(f"수주 {int(drill['lead_min'])}일 이상 전 등록")
     if drill.get("lose_overconf"):
         m &= (df["hist_maxp_open"] >= 70).fillna(False)
         desc.append("이력상 가능성 70% 이상")
