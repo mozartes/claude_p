@@ -1020,7 +1020,7 @@
       data: { labels: rows.map((r) => (r.am ? `${r.am} (${r.team})` : r.team)), datasets: sets.map(([lb, fn, col]) => ({ label: lb, data: rows.map((r) => pctD(fn(r))), backgroundColor: col, borderRadius: 3, maxBarThickness: 22 })) },
       options: { indexAxis: isAm ? "y" : "x", maintainAspectRatio: false, plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${(isAm ? c.parsed.x : c.parsed.y)}%` } } },
         scales: isAm ? { x: { min: 0, max: 100, title: { display: true, text: "%" } }, y: { ticks: { autoSkip: false } } } : { y: { min: 0, max: 100, title: { display: true, text: "%" } }, x: { grid: { display: false } } } } });
-    barChart("pfWinChart", okRows((r) => r.AC.simple.ok || r.AC.pre.ok), [["수주율(건수)", (r) => r.AC.simple, css("--primary", "#0f766e")], ["수주율(금액)", (r) => r.AC.simple_amt, css("--ok", "#15803d")], ["Pre-sales 경유 수주율", (r) => r.AC.pre, css("--series-a", "#2563eb")]]);
+    barChart("pfWinChart", okRows((r) => r.AC.simple.ok || r.AC.pre.ok), [["수주율(건수)", (r) => r.AC.simple, css("--primary", "#0f766e")], ["수주율(금액)", (r) => r.AC.simple_amt, css("--series-c", "#d9690b")], ["Pre-sales 경유 수주율", (r) => r.AC.pre, css("--series-a", "#2563eb")]]);
     barChart("pfRetChart", okRows((r) => r.ret_cnt.ok), [["리텐션(건수)", (r) => r.ret_cnt, COLORS.R], ["리텐션(금액)", (r) => r.ret_amt, css("--muted", "#6b7280")]]);
     document.querySelectorAll("#pyearSel button").forEach((b) => b.addEventListener("click", () => { S.f.total_year = Number(b.dataset.v); store.set("filters", S.f); render(); }));
   }
