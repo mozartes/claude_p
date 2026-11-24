@@ -17,7 +17,7 @@
   const SERIES_LABEL = { A: "A", C: "C", R: "R 증감", AC: "A+C", ACR: "A+C+R" };
   const UNIT_WON = { "원": 1, "천원": 1e3, "백만원": 1e6, "억원": 1e8 };
   const PAGE_TITLES = {
-    overview: "종합 현황", funnel: "수주·Funnel 관리", renewal: "재계약·해지 관리", acr: "ACR 수주(기여매출)", presales: "ACR 수주(Pre-sales)", total: "ACR 수주(2026년)",
+    overview: "종합 현황", funnel: "수주·Funnel 관리", renewal: "재계약·해지 관리", acr: "ACR 수주(기여매출)", presales: "ACR 수주(Pre-sales)", total: "ACR 수주",
     myteam: "우리 팀 실적", team: "팀·AM 관리", perf: "AM 성과·활동 점검", insight: "고객·상품·입찰 분석", priority: "우선 확인할 Funnel", detail: "상세 목록", data: "데이터 관리",
   };
 
@@ -446,7 +446,7 @@
       // R 증감 = 재계약 증감 × 계약기간 + 해지 감소 × 계약기간, A+C+R 수주 = A + C + R 증감
       const cr = tk.churn_ref || { amount: 0, count: 0, excluded: 0 }, rf0 = tk.r_ref || { new_total: 0, prev_total: 0 };
       const rdT = pSel ? tk.R : rf0.new_total - rf0.prev_total, rChgT = rdT + cr.amount, acrT = tk.A + tk.C + rChgT;
-      h += `<section class="ov-sec"><div class="ov-h"><h3>ACR 수주 ${sub(`${tk.year}년 수주 · 계약 전체 기간`)} ${info(`확정 건(A·C=Win, R=재계약완료)의 계약 전체 기간 매출을 수주년월(${tk.year}-01~12)에 합산 · A+C+R = A + C + R 증감(재계약 증감 + 해지 감소, 계약기간 기준)${exn ? ` · 계약기간 누락 등 ${exn}건 제외` : ""} · 연도는 ACR 수주(${tk.year}년) 화면에서 변경`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
+      h += `<section class="ov-sec"><div class="ov-h"><h3>ACR 수주 ${sub(`${tk.year}년 수주 · 계약 전체 기간`)} ${info(`확정 건(A·C=Win, R=재계약완료)의 계약 전체 기간 매출을 수주년월(${tk.year}-01~12)에 합산 · A+C+R = A + C + R 증감(재계약 증감 + 해지 감소, 계약기간 기준)${exn ? ` · 계약기간 누락 등 ${exn}건 제외` : ""} · 연도는 ACR 수주 화면에서 변경`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
       <div class="strip five">
         ${kpiCard("A+C+R 수주", amt(acrT), heroMeta(tk, rChgT, `A+C ${cnt(tk.funnels_A + tk.funnels_C)}건`), "hero", tdk())}
         ${kpiCard("A 수주", amt(tk.A), row(`${cnt(tk.funnels_A)}건`, `A+C 중 ${pctOf(tk.A, tk.AC)}`), "a", tdk({ acr_type: ["A"] }))}
@@ -820,8 +820,8 @@
     const baseYm = Number(String(S.f.base_date || "").slice(0, 7).replace("-", "")) || null;
     const tRows = aggPeriods(netRows(d.monthly), perOf(), true, baseYm), tPool = poolOf(aggPeriods(netRows(prevMonthly), perOf(), true, baseYm).concat(tRows));
     // 메뉴·제목에 집계연도 표시
-    $("pageTitle").textContent = `ACR 수주(${y}년)`;
-    document.querySelectorAll('[data-page="total"]').forEach((b) => { b.textContent = `ACR 수주(${y}년)`; });
+    $("pageTitle").textContent = "ACR 수주";
+    document.querySelectorAll('[data-page="total"]').forEach((b) => { b.textContent = "ACR 수주"; });
     const years = Array.from(new Set((S.meta.options.years || []).concat([y]))).sort((a, b) => a - b);
     const kb = esc(`수주년월 ${y}-01~${y}-12 · 계약기간매출 합계`);
     const dk = (extra) => Object.assign({ scope: "total" }, extra || {});
@@ -990,7 +990,7 @@
         <td class="num">${r.churn ? lk(r.churn, Object.assign({ acr_type: ["R"], status: ["해지확정"], period: "win_ym" }, ak)) : "0"}</td>
         <td class="num">${lk(r.chk, Object.assign({ scope: "checks" }, ak))} <span class="muted">(${cnt(r.chk1)})</span></td></tr>`; }).join("") || '<tr><td colspan="11" class="muted">자료 없음</td></tr>'}</tbody>
       <tfoot><tr><td>팀 합계</td><td class="num"><b>${amt(sumR("ACR"))}</b></td><td></td><td class="num">${amt(sumR("AC"))}</td><td class="num">${amt(sumR("RC"))}</td><td class="num">${amt(sumR("acr_acr"))}</td><td class="num">${cnt(sumR("prog"))}</td><td class="num">${cnt(sumR("overdue"))}</td><td class="num">${cnt(sumR("dec"))}</td><td class="num">${cnt(sumR("churn"))}</td><td class="num">${cnt(sumR("chk"))} <span class="muted">(${cnt(sumR("chk1"))})</span></td></tr></tfoot></table></div>
-      <p class="desc" style="margin-top:6px">A+C+R 수주 = A + C + R 증감(재계약 증감 + 해지 감소, 계약기간 기준) · ACR 수주(${y}년) 화면과 같은 계산 · 기여매출·진행 현황은 팀·AM 관리 화면과 같은 계산(조회기간 ${esc(S.f.ym_from)}~${esc(S.f.ym_to)}).</p></div>`;
+      <p class="desc" style="margin-top:6px">A+C+R 수주 = A + C + R 증감(재계약 증감 + 해지 감소, 계약기간 기준) · ACR 수주 화면(${y}년)과 같은 계산 · 기여매출·진행 현황은 팀·AM 관리 화면과 같은 계산(조회기간 ${esc(S.f.ym_from)}~${esc(S.f.ym_to)}).</p></div>`;
     $("view").innerHTML = h;
     $("mtChange").addEventListener("click", () => { store.set("myTeamPick", true); render(); });
     $("mtReset").addEventListener("click", () => {
