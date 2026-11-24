@@ -444,3 +444,14 @@ def test_reg_rate_min_lead(make_ds, params):
     assert ac["reg"]["num"] == 1 and ac["reg"]["den"] == 4 and ac["reg_pre_short"] == 1
     d = A.detail_view(ds, p, {"acr_type": ["A", "C"], "status": ["Win"], "win_year": 2026, "reg_type": "사전", "lead_min": 90}, 1, 50, "row", False, "")
     assert d["total"] == 1
+
+
+def test_acr_years_view(make_ds, params):
+    """연도별 기여매출: 수주연도 선택 + 5년(전체 연도) / 조회기간으로 자르기"""
+    ds = make_ds([row(fid="A25", monthly=10, rev=202511, win=202510, term=24),
+                  row(fid="C26", monthly=5, rev=202603, win=202602, term=12, type="Cul.")])
+    v = A.acr_years_view(ds, params(base_date="2026-11-01", mode="term", acr_win_year=2025, acr_years=[2025, 2026, 2027, 2028, 2029]))
+    acr = {r["year"]: r["ACR"] for r in v["years"]}
+    assert acr == {2025: 20, 2026: 120, 2027: 100, 2028: 0, 2029: 0} and v["available_win_years"] == [2025, 2026]
+    v2 = A.acr_years_view(ds, params(base_date="2026-11-01", mode="term", ym_from="2026-01", ym_to="2026-06", acr_clip=True))
+    assert [(r["year"], r["ACR"]) for r in v2["years"]] == [(2026, 60 + 20)]   # A 6개월 × 10 + C 4개월(3~6월) × 5

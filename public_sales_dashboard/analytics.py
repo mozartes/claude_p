@@ -39,6 +39,10 @@ class Params:
     confirmed_only: bool = False
     th: dict = field(default_factory=lambda: dict(C.BUSINESS_DEFAULTS))
     total_year: int = 0
+    # 연도별 기여매출: 수주연도(0 = 전체), 표시 연도 목록, 조회기간으로 자르기
+    acr_win_year: int = 0
+    acr_years: list[int] = field(default_factory=list)
+    acr_clip: bool = False
 
     @property
     def base_ym(self) -> int:
@@ -114,6 +118,9 @@ def parse_params(d: dict | None) -> Params:
         mode=d.get("mode") if d.get("mode") in R.MODES else "term",
         excl_midlarge=bool(d.get("excl_midlarge")), excl_rmr=bool(d.get("excl_rmr")),
         confirmed_only=bool(d.get("confirmed_only")), th=th, total_year=_year(d.get("total_year"), base.year),
+        acr_win_year=_year(d.get("acr_win_year"), 0),
+        acr_years=sorted({_year(y, 0) for y in (d.get("acr_years") or [])[:10]} - {0}),
+        acr_clip=bool(d.get("acr_clip")),
     )
 
 
@@ -465,6 +472,39 @@ def term_bands(df: pd.DataFrame, p: Params) -> dict:
         out[key] = {"label": label, "A": a, "C": c, "R": r + ch["amount"], "ACR": a + c + r + ch["amount"],
                     "count": int(g["row"].nunique()) + int(ch["funnels"])}
     return out
+
+
+def acr_years_view(ds: Dataset, p: Params) -> dict:
+    """연도별 기여매출: 수주연도(선택) 건이 각 연도 1~12월에 발생시키는 기여매출(현재 ACR 기준).
+    A·C = 금액, R 증감 = 재계약 증감 + 해지 감소. 표시 연도 = acr_years(없으면 조회기간의 연도), acr_clip이면 조회기간으로 자름."""
+    df = filter_df(ds, p)
+    if df.empty:
+        return {"empty": True}
+    conf_win = df.loc[R.is_confirmed(df) | (df["status"] == "해지확정"), "win_ym"].dropna()
+    available = sorted({int(v) // 100 for v in conf_win})
+    if p.acr_win_year:
+        wy = df["win_ym"]
+        df = df[(wy.notna() & (wy >= p.acr_win_year * 100 + 1) & (wy <= p.acr_win_year * 100 + 12)).fillna(False).astype(bool)]
+    years = p.acr_years or list(range(p.ym_from // 100, p.ym_to // 100 + 1))
+    rows = []
+    for y in years:
+        f, t = y * 100 + 1, y * 100 + 12
+        if p.acr_clip:
+            f, t = max(f, p.ym_from), min(t, p.ym_to)
+        if f > t:
+            continue
+        con, _ = R.contributions(df, p.mode, f, t, p.products)
+        con = con[con["acr_type"].isin(p.types)]
+        ch = R.churn_contrib(df, p.mode, f, t, p.products)
+        a = float(con.loc[con["acr_type"] == "A", "amount"].sum()) if len(con) else 0.0
+        c = float(con.loc[con["acr_type"] == "C", "amount"].sum()) if len(con) else 0.0
+        rr = float(con.loc[con["acr_type"] == "R", "delta"].sum()) if len(con) else 0.0
+        rows.append({"year": y, "ym_from": f, "ym_to": t, "A": a, "C": c, "AC": a + c, "R_renew": rr, "R_churn": ch["amount"],
+                     "R": rr + ch["amount"], "ACR": a + c + rr + ch["amount"],
+                     "funnels": int(con["row"].nunique()) + int(ch["funnels"]) if len(con) else int(ch["funnels"])})
+    keys = ("A", "C", "AC", "R_renew", "R_churn", "R", "ACR")
+    return {"win_year": p.acr_win_year, "available_win_years": available, "years": rows, "mode": p.mode,
+            "total": {k: sum(r[k] for r in rows) for k in keys}}
 
 
 def acr_view(ds: Dataset, p: Params) -> dict:

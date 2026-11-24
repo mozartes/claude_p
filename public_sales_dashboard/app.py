@@ -176,6 +176,7 @@ def create_app(store: DataStore | None = None, prefix: str | None = None) -> Fla
     VIEWS = {
         "overview": A.overview_view, "funnel": A.funnel_view, "renewal": A.renewal_view,
         "acr": A.acr_view, "presales": A.presales_view, "total": A.total_view, "perf": A.perf_view, "team": A.team_view, "insight": A.insight_view, "quality": A.quality_view,
+        "acr_years": A.acr_years_view,
     }
 
     @app.route("/api/view/<name>", methods=["GET", "POST"])

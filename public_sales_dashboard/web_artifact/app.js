@@ -614,6 +614,23 @@
     });
   }
 
+  // 연도별 기여매출 표: 선택한 수주연도 건이 연도별(1~12월)로 발생시키는 기여매출
+  function acrYearsCard(ay, win, span) {
+    if (!ay || ay.empty) return "";
+    const info = (x) => `<span class="info-i" title="${esc(x)}" tabindex="0" aria-label="${esc(x)}">i</span>`;
+    const ymL = (v) => `${String(v).slice(0, 4)}-${String(v).slice(4)}`;
+    const wins = [0].concat(ay.available_win_years || []);
+    const t = ay.total || {};
+    const rows = (ay.years || []).map((r) => `<tr><td><b>${r.year}년</b></td><td class="muted">${ymL(r.ym_from)}~${ymL(r.ym_to)}</td><td class="num">${amt(r.A)}</td><td class="num">${amt(r.C)}</td><td class="num">${amt(r.AC)}</td><td class="num">${amt(r.R)}</td><td class="num"><b>${amt(r.ACR)}</b></td><td class="num">${cnt(r.funnels)}</td></tr>`).join("");
+    return `<div class="card ay-card" style="margin-top:14px"><div class="card-head"><h3>연도별 기여매출 <span class="h-period">${win ? `${win}년 수주 건` : "전체 수주 건"} · ${span === "5y" ? "수주연도부터 5년" : "조회기간 연도별"}</span> ${info(`선택한 수주연도(수주년월)의 확정 건이 각 연도 1~12월에 발생시키는 기여매출 · ${ay.mode === "term" ? "계약기간 반영" : "매출개시월 기준"} · A+C+R = A + C + R 증감(재계약 증감 + 해지 감소) · ‘조회기간 연도별’은 왼쪽 시작월~종료월의 연도로 나누고 그 기간으로 자름`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
+      <div class="toolbar ay-tools"><span class="muted">수주연도</span><span class="seg-light">${wins.map((w) => `<button type="button" data-ay-win="${w}" class="${w === win ? "on" : ""}">${w ? `${w}년` : "전체"}</button>`).join("")}</span>
+        <span class="muted">표시 기간</span><span class="seg-light"><button type="button" data-ay-span="5y" class="${span === "5y" ? "on" : ""}">수주연도부터 5년</button><button type="button" data-ay-span="period" class="${span === "period" ? "on" : ""}">조회기간 연도별</button></span></div>
+      <div class="table-wrap"><table class="t"><thead><tr><th>연도</th><th>기간</th><th class="num">A</th><th class="num">C</th><th class="num">A+C</th><th class="num">R 증감</th><th class="num">A+C+R</th><th class="num">고유 Funnel</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="8" class="muted">자료 없음</td></tr>'}</tbody>
+      <tfoot><tr><td>합계</td><td></td><td class="num">${amt(t.A)}</td><td class="num">${amt(t.C)}</td><td class="num">${amt(t.AC)}</td><td class="num">${amt(t.R)}</td><td class="num"><b>${amt(t.ACR)}</b></td><td></td></tr></tfoot></table></div>
+      <p class="desc" style="margin-top:6px">예: 수주연도 2025년 + ‘수주연도부터 5년’ → 2025~2029년. 왼쪽 기간을 2025-01~2027-12로 두고 ‘조회기간 연도별’ → 2025·2026·2027년. 불러온 파일에 있는 수주연도만 고를 수 있습니다.</p></div>`;
+  }
+
   // ------------------------------------------------------------ 페이지: ACR 수주(기여매출)
   async function pageAcr() {
     const j = await api("/view/acr", { filters: S.f });
@@ -627,6 +644,11 @@
     // 월별 차트·기간별 표 = 신규 발생분(매출개시월). 카드·조직별 표·누적은 현재 기준(계약기간 반영) 합계
     const svA = term ? (await api("/view/acr", { filters: Object.assign({}, S.f, { mode: "start" }) })).data : null;
     const newM = term ? ((svA || {}).monthly || []) : d.monthly;
+    // 연도별 기여매출: 수주연도(0 = 전체) × 표시 기간(수주연도부터 5년 | 조회기간 연도별)
+    const ayWin = Number(S.ui.ayWin) || 0, aySpan = S.ui.aySpan === "period" ? "period" : "5y";
+    const ayBase = ayWin || Math.floor(Number(String(S.f.ym_from).replace("-", "")) / 100);
+    const ayF = aySpan === "5y" ? { acr_win_year: ayWin, acr_years: [0, 1, 2, 3, 4].map((i) => ayBase + i), acr_clip: false } : { acr_win_year: ayWin, acr_years: [], acr_clip: true };
+    const ay = (await api("/view/acr_years", { filters: Object.assign({}, S.f, ayF) })).data || {};
     const pRows = aggPeriods(netRows(newM), perOf(), false), pPool = poolOf(pRows);
     const cRows = aggPeriods(netRows(d.monthly), perOf(), false);
     const acrRef = term ? { label: "A+C+R 매출(월증가)", rows: cRows } : null;
@@ -646,6 +668,7 @@
       ${kpiCard("A+C. 기여매출", amt(t.AC), `<span class="row"><span>${cnt(t.funnels_A + t.funnels_C)}건</span></span>`, "", { scope: "acr", acr_type: ["A", "C"] })}
     </div>
     <p class="ov-ref">참고 · <b>R 재계약</b>(${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감" : "재계약 후 월매출"}, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr", acr_type: ["R"] }))}'>${amt(t.R)}</span> · ${cnt(t.funnels_R)}건 · 고유 Funnel 수는 월별 반복 반영 횟수가 아님</p>${recurringLine(d)}
+    ${acrYearsCard(ay, ayWin, aySpan)}
     ${Object.keys(d.excluded).length ? `<div class="notice warn">확정 조건이지만 이 지표에서 제외: ${Object.entries(d.excluded).map(([r, n]) => `${esc(r)} ${n}건`).join(", ")} <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr_excluded" }))}'>목록 보기</span></div>` : ""}
     <div class="card" style="margin-top:14px"><div class="card-head"><h3>${(PERIODS.find((x) => x[0] === perOf()) || PERIODS[0])[1]} 신규 발생 매출</h3>${periodToolbar("acrPer")}
       <div class="legend" id="serSel">${["A", "C", "R", "AC", "ACR"].map((k) => `<label><input type="checkbox" value="${k}" ${ser.includes(k) ? "checked" : ""}><i style="background:${COLORS[k]}"></i>${SERIES_LABEL[k]}</label>`).join("")}</div></div>
@@ -660,6 +683,8 @@
     ${basisBlock(d.basis)}`;
     $("view").innerHTML = h;
     bindPeriodToolbar("acrPer");
+    document.querySelectorAll("[data-ay-win]").forEach((b) => b.addEventListener("click", () => { S.ui.ayWin = Number(b.dataset.ayWin); store.set("ui", S.ui); render(); }));
+    document.querySelectorAll("[data-ay-span]").forEach((b) => b.addEventListener("click", () => { S.ui.aySpan = b.dataset.aySpan; store.set("ui", S.ui); render(); }));
     acrMonthlyChart("acrChart", pRows, ser, (m, key) => openDetail({ scope: "acr", rev_month: m.ym, acr_type: key && ["A", "C", "R"].includes(key) ? [key] : undefined }), acrRef);
     const cumDs = ser.map((k) => ({ label: `누적 ${SERIES_LABEL[k]}`, data: cRows.map((m) => conv(m.cum[k])), borderColor: COLORS[k], backgroundColor: COLORS[k], borderWidth: 2, pointRadius: 2, tension: 0 }));
     chart("cumChart", { type: "line", data: { labels: cRows.map((m) => m.label), datasets: cumDs },

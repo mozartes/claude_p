@@ -510,6 +510,10 @@
       search: String(d.search || "").trim().slice(0, 100), mode: MODES[d.mode] ? d.mode : "term",
       excl_midlarge: !!d.excl_midlarge, excl_rmr: !!d.excl_rmr, confirmed_only: !!d.confirmed_only, th,
       total_year: (() => { const ty = parseInt(String(d.total_year), 10); return String(ty) === String(d.total_year).trim() && ty >= 1990 && ty <= 2100 ? ty : y; })(),
+      // 연도별 기여매출: 수주연도(0 = 전체), 표시 연도 목록, 조회기간으로 자르기
+      acr_win_year: yearOr0(d.acr_win_year),
+      acr_years: Array.from(new Set((Array.isArray(d.acr_years) ? d.acr_years.slice(0, 10) : []).map(yearOr0).filter((v) => v))).sort((a, b) => a - b),
+      acr_clip: !!d.acr_clip,
     };
   }
   function resolveProductGroup(ds, p) {
@@ -687,6 +691,30 @@
       out[key] = { label, A: a, C: c, R: r + ch.amount, ACR: a + c + r + ch.amount, count: new Set(g.map((x) => x.row)).size + ch.funnels };
     });
     return out;
+  }
+  function yearOr0(v) { const n = parseInt(String(v), 10); return String(n) === String(v).trim() && n >= 1990 && n <= 2100 ? n : 0; }
+  // 연도별 기여매출: 수주연도(선택) 건이 각 연도 1~12월에 발생시키는 기여매출(현재 ACR 기준). R 증감 = 재계약 증감 + 해지 감소
+  function acrYearsView(ds, p) {
+    let df = filterDf(ds, p);
+    if (!df.length) return { empty: true };
+    const conf = new Set(df.filter((r) => isConfirmed(r) || r.status === "해지확정").filter((r) => nn(r.win_ym)).map((r) => Math.floor(r.win_ym / 100)));
+    const available = Array.from(conf).sort((a, b) => a - b);
+    if (p.acr_win_year) df = df.filter((r) => nn(r.win_ym) && r.win_ym >= p.acr_win_year * 100 + 1 && r.win_ym <= p.acr_win_year * 100 + 12);
+    const years = p.acr_years.length ? p.acr_years : Array.from({ length: Math.floor(p.ym_to / 100) - Math.floor(p.ym_from / 100) + 1 }, (_, i) => Math.floor(p.ym_from / 100) + i);
+    const rows = [];
+    years.forEach((y) => {
+      let f = y * 100 + 1, t = y * 100 + 12;
+      if (p.acr_clip) { f = Math.max(f, p.ym_from); t = Math.min(t, p.ym_to); }
+      if (f > t) return;
+      const con = contributions(df, p.mode, f, t, p.products)[0].filter((c) => p.types.includes(c.acr_type));
+      const ch = churnContrib(df, p.mode, f, t, p.products);
+      const s = (tp, k) => con.filter((c) => c.acr_type === tp).reduce((x, c) => x + c[k], 0);
+      const a = s("A", "amount"), c = s("C", "amount"), rr = s("R", "delta");
+      rows.push({ year: y, ym_from: f, ym_to: t, A: a, C: c, AC: a + c, R_renew: rr, R_churn: ch.amount, R: rr + ch.amount, ACR: a + c + rr + ch.amount,
+        funnels: new Set(con.map((x) => x.row)).size + ch.funnels });
+    });
+    const total = {}; ["A", "C", "AC", "R_renew", "R_churn", "R", "ACR"].forEach((k) => { total[k] = rows.reduce((x, r) => x + r[k], 0); });
+    return { win_year: p.acr_win_year, available_win_years: available, years: rows, mode: p.mode, total };
   }
   function acrView(ds, p) {
     const df = filterDf(ds, p);
@@ -1391,7 +1419,7 @@
   function setDataset(ds) { state.ds = ds; }
   function loadParsed(parsed, fileName, at, extra) { state.ds = buildDataset(parsed, fileName, at, extra); return state.ds; }
 
-  const VIEWS = { overview: overviewView, funnel: funnelView, renewal: renewalView, acr: acrView, presales: presalesView, total: totalView, perf: perfView, team: teamView, insight: insightView, quality: qualityView };
+  const VIEWS = { overview: overviewView, funnel: funnelView, renewal: renewalView, acr: acrView, presales: presalesView, total: totalView, perf: perfView, team: teamView, insight: insightView, quality: qualityView, acr_years: acrYearsView };
   function envelope(view, p, data) {
     const d = state.ds;
     return { ok: true, view, dataset: { empty: d.empty, file_name: d.meta.file_name, uploaded_at: d.meta.uploaded_at, rows: d.meta.row_count || 0,
