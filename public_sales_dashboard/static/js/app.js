@@ -369,6 +369,12 @@
     });
   }
 
+  // R 증감 카드 설명: 1줄 = 100만원 이상 / 미만, 2줄 = 재계약 / 해지
+  function rCardMeta(sp, rd, chAmt, chN) {
+    if (!sp || !sp.big) return `<span class="row"><span>재계약 ${amt(rd)}</span></span><span class="row"><span>해지 ${amt(chAmt)}${chN != null ? ` · ${cnt(chN)}건` : ""}</span></span>`;
+    const tip = `기존 월매출(재계약 전) 100만원 이상 / 미만(미입력 포함) · 전체 재계약 ${fmtNum(conv(rd)).replace(/<[^>]+>/g, "")} · 해지 ${fmtNum(conv(chAmt)).replace(/<[^>]+>/g, "")}`;
+    return `<span class="row" title="${esc(tip)}"><span>100만원 이상</span><span>${amt(sp.big.R)}</span></span><span class="row" title="${esc(tip)}"><span>100만원 미만</span><span>${amt(sp.small.R)}</span></span>`;
+  }
   // R 증감 구분: 기존 월매출(재계약 전) 100만원 이상 / 미만
   function rSplitLine(v) {
     const sp = v && v.r_split; if (!sp) return "";
@@ -421,7 +427,7 @@
     // ① 핵심 KPI — 시안(2026-11): 줄마다 Hero(A+C+R) + A · C · R 증감 · A+C 5장, 설명 2줄 이내, R 재계약은 참고 1줄
     const sub = (t) => `<span class="h-period">${t}</span>`;
     const heroMeta = (o, rc, fn) => `${row(`A+C ${amt(o.AC)} + R 증감 ${amt(rc)}`, fn)}<div class="mini" aria-hidden="true"><span style="width:${wOf(o.A, o.AC)}%;background:var(--series-a)"></span><span style="width:${wOf(o.C, o.AC)}%;background:var(--series-c)"></span></div>${row(`A ${pctOf(o.A, o.AC)} · C ${pctOf(o.C, o.AC)}`, "A+C 구성비")}`;
-    const rcCard = (rd, chAmt, chN, drill) => kpiCard("R 증감", amt(rd + chAmt), `<span class="row"><span>재계약 ${amt(rd)}</span></span><span class="row"><span>해지 ${amt(chAmt)} · ${cnt(chN)}건</span></span>`, "neg", drill);
+    const rcCard = (rd, chAmt, chN, drill, sp) => kpiCard("R 증감", amt(rd + chAmt), rCardMeta(sp, rd, chAmt, chN), "neg", drill);
     let tk = d.total_kpi;
     // ACR 수주 줄은 ACR 수주 화면과 같은 기준(중대형퍼널제외=Y 기본 제외)
     if (tk && totExcl() && !S.f.excl_midlarge) {
@@ -440,7 +446,7 @@
         ${kpiCard("A+C+R 수주", amt(acrT), heroMeta(tk, rChgT, `A+C ${cnt(tk.funnels_A + tk.funnels_C)}건`), "hero", tdk())}
         ${kpiCard("A 수주", amt(tk.A), row(`${cnt(tk.funnels_A)}건`, `A+C 중 ${pctOf(tk.A, tk.AC)}`), "a", tdk({ acr_type: ["A"] }))}
         ${kpiCard("C 수주", amt(tk.C), row(`${cnt(tk.funnels_C)}건`, `A+C 중 ${pctOf(tk.C, tk.AC)}`), "c", tdk({ acr_type: ["C"] }))}
-        ${rcCard(rdT, cr.amount, cr.count, { status: ["해지확정"], period: "win_ym" })}
+        ${rcCard(rdT, cr.amount, cr.count, { status: ["해지확정"], period: "win_ym" }, tk.r_split)}
         ${kpiCard(`${tk.year}년 수주(A+C)`, amt(tk.AC), row(`${cnt(tk.funnels_A + tk.funnels_C)}건`, ""), "", tdk({ acr_type: ["A", "C"] }))}
       </div>
       <p class="ov-ref">참고 · <b>R 재계약</b>(재계약 후 확보 매출, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify(tdk({ acr_type: ["R"] })))}'>${amt(tk.R)}</span> · ${cnt(tk.funnels_R)}건</p>${rSplitLine(tk)}</section>`;
@@ -457,7 +463,7 @@
       ${kpiCard("A+C+R 기여매출", amt(acrNet), heroMeta(a, rChg, `고유 ${cnt(a.funnels)}건`), "hero", { scope: "acr" })}
       ${kpiCard("A 기여매출", amt(a.A), row(`${cnt(a.funnels_A)}건`, `A+C 중 ${pctOf(a.A, a.AC)}`), "a", { scope: "acr", acr_type: ["A"] })}
       ${kpiCard("C 기여매출", amt(a.C), row(`${cnt(a.funnels_C)}건`, `A+C 중 ${pctOf(a.C, a.AC)}`), "c", { scope: "acr", acr_type: ["C"] })}
-      ${rcCard(rdX, chX.amount, chX.funnels, { status: ["해지확정"], period: "rev_ym" })}
+      ${rcCard(rdX, chX.amount, chX.funnels, { status: ["해지확정"], period: "rev_ym" }, acrOv && acrOv.r_split)}
       ${kpiCard("A+C 기여매출", amt(a.AC), row(`${cnt(a.funnels_A + a.funnels_C)}건`, ""), "", { scope: "acr", acr_type: ["A", "C"] })}
     </div>
     <p class="ov-ref">참고 · <b>R 재계약</b>(재계약 후 확보 매출, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr", acr_type: ["R"] }))}'>${amt(a.R)}</span> · ${cnt(a.funnels_R)}건${rt.amount === null ? "" : ` · 재계약 전 ${amt(rt.prev_amount)}`}</p>${recurringLine(acrOv)}${rSplitLine(acrOv)}</section>`;
@@ -653,7 +659,7 @@
       ${kpiCard("A+C+R. 기여매출", amt(t.A + t.C + rcA), `<span class="row"><span>A+C ${amt(t.AC)} + R 증감 ${amt(rcA)}</span><span>고유 ${cnt(t.funnels)}건</span></span><div class="mini" aria-hidden="true"><span style="width:${t.AC > 0 && t.A > 0 ? (t.A / t.AC * 100).toFixed(1) : 0}%;background:var(--series-a)"></span><span style="width:${t.AC > 0 && t.C > 0 ? (t.C / t.AC * 100).toFixed(1) : 0}%;background:var(--series-c)"></span></div>`, "hero", { scope: "acr" })}
       ${kpiCard("A. 기여매출", amt(t.A), `<span class="row"><span>${cnt(t.funnels_A)}건</span><span>A+C 중 ${t.AC > 0 ? (t.A / t.AC * 100).toFixed(1) + "%" : "—"}</span></span>`, "a", { scope: "acr", acr_type: ["A"] })}
       ${kpiCard("C. 기여매출", amt(t.C), `<span class="row"><span>${cnt(t.funnels_C)}건</span><span>A+C 중 ${t.AC > 0 ? (t.C / t.AC * 100).toFixed(1) + "%" : "—"}</span></span>`, "c", { scope: "acr", acr_type: ["C"] })}
-      ${kpiCard("R. 증감", amt(rcA), `<span class="row"><span>재계약 ${amt(rdA)}</span></span><span class="row"><span>해지 ${amt(chA.amount)} · ${cnt(chA.funnels)}건</span></span>`, "neg", { status: ["해지확정"], period: "rev_ym" })}
+      ${kpiCard("R. 증감", amt(rcA), rCardMeta(d.r_split, rdA, chA.amount, chA.funnels), "neg", { status: ["해지확정"], period: "rev_ym" })}
       ${kpiCard("A+C. 기여매출", amt(t.AC), `<span class="row"><span>${cnt(t.funnels_A + t.funnels_C)}건</span></span>`, "", { scope: "acr", acr_type: ["A", "C"] })}
     </div>
     <p class="ov-ref">참고 · <b>R 재계약</b>(${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감" : "재계약 후 월매출"}, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr", acr_type: ["R"] }))}'>${amt(t.R)}</span> · ${cnt(t.funnels_R)}건 · 고유 Funnel 수는 월별 반복 반영 횟수가 아님</p>${recurringLine(d)}${rSplitLine(d)}
@@ -828,7 +834,7 @@
       ${kpiCard("A+C+R. 매출", amt(t.A + t.C + rcT), `<span class="row"><span>A+C ${amt(t.AC)} + R 증감 ${amt(rcT)}</span><span>A+C ${cnt(t.funnels_A + t.funnels_C)}건</span></span><div class="mini" aria-hidden="true"><span style="width:${t.AC > 0 && t.A > 0 ? (t.A / t.AC * 100).toFixed(1) : 0}%;background:var(--series-a)"></span><span style="width:${t.AC > 0 && t.C > 0 ? (t.C / t.AC * 100).toFixed(1) : 0}%;background:var(--series-c)"></span></div>`, "hero", dk())}
       ${kpiCard("A. 수주", amt(t.A), `<span class="row"><span>${cnt(t.funnels_A)}건</span><span>A+C 중 ${t.AC > 0 ? (t.A / t.AC * 100).toFixed(1) + "%" : "—"}</span></span>`, "a", dk({ acr_type: ["A"] }))}
       ${kpiCard("C. 수주", amt(t.C), `<span class="row"><span>${cnt(t.funnels_C)}건</span><span>A+C 중 ${t.AC > 0 ? (t.C / t.AC * 100).toFixed(1) + "%" : "—"}</span></span>`, "c", dk({ acr_type: ["C"] }))}
-      ${kpiCard("R. 증감", amt(rcT), `<span class="row"><span>재계약 ${amt(rdT)}</span></span><span class="row"><span>해지 ${amt(crT.amount)} · ${cnt(crT.count)}건</span></span>`, "neg", { status: ["해지확정"], period: "win_ym" })}
+      ${kpiCard("R. 증감", amt(rcT), rCardMeta(d.r_split, rdT, crT.amount, crT.count), "neg", { status: ["해지확정"], period: "win_ym" })}
       ${kpiCard(`${y}년 수주(A+C)`, amt(t.AC), `<span class="row"><span>${cnt(t.funnels_A + t.funnels_C)}건</span></span>`, "", dk({ acr_type: ["A", "C"] }))}
     </div>
     <p class="ov-ref">참고 · <b>R 재계약</b>(${pSelT ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"}, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify(dk({ acr_type: ["R"] })))}'>${amt(t.R)}</span> · ${cnt(t.funnels_R)}건 = 기존 계약총액 ${amt(rf.prev_total)} + 재계약 증감 ${amt(rf.new_total - rf.prev_total)}</p>${rSplitLine(d)}
