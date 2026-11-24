@@ -474,6 +474,26 @@ def term_bands(df: pd.DataFrame, p: Params) -> dict:
     return out
 
 
+def r_split(df: pd.DataFrame, p: Params) -> dict:
+    """R 증감을 기존 월매출(재계약 전 월매출) 100만원 이상 / 미만(미입력 포함)으로 구분. 재계약 증감 + 해지 감소, 합 = R 증감."""
+    thr = rate_min_contract()
+    big = (pd.to_numeric(df["prev_monthly"], errors="coerce") >= thr).fillna(False).astype(bool)
+    out = {}
+    for key, m in (("big", big), ("small", ~big)):
+        sub = df[m]
+        rt = R.retention_contrib(sub, p.mode, p.ym_from, p.ym_to, p.products)
+        if rt["amount"] is None:
+            con, _ = R.contributions(sub, p.mode, p.ym_from, p.ym_to, p.products)
+            renew = float(con.loc[con["acr_type"] == "R", "delta"].sum()) if len(con) else 0.0
+            n_r = int(con.loc[con["acr_type"] == "R", "row"].nunique()) if len(con) else 0
+        else:
+            renew, n_r = rt["amount"] - rt["prev_amount"], rt["funnels"]
+        ch = R.churn_contrib(sub, p.mode, p.ym_from, p.ym_to, p.products)
+        out[key] = {"renew": renew, "churn": ch["amount"], "R": renew + ch["amount"], "renew_n": n_r, "churn_n": ch["funnels"]}
+    out["threshold_won"] = C.RATE_MIN_CONTRACT_WON
+    return out
+
+
 def acr_years_view(ds: Dataset, p: Params) -> dict:
     """연도별 기여매출: 수주연도(선택) 건이 각 연도 1~12월에 발생시키는 기여매출(현재 ACR 기준).
     A·C = 금액, R 증감 = 재계약 증감 + 해지 감소. 표시 연도 = acr_years(없으면 조회기간의 연도), acr_clip이면 조회기간으로 자름."""
@@ -516,6 +536,7 @@ def acr_view(ds: Dataset, p: Params) -> dict:
     res["r_change"] = {"retention": R.retention_contrib(df, p.mode, p.ym_from, p.ym_to, p.products),
                        "churn": R.churn_contrib(df, p.mode, p.ym_from, p.ym_to, p.products)}
     res["term_bands"] = term_bands(df, p)
+    res["r_split"] = r_split(df, p)
     res["basis"] = {
         "기간 기준": "매출발생년월" if p.mode == "start" else "매출발생년월부터 계약기간(월) 동안 매월 반영(시작월 포함)",
         "확정 조건": "A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
@@ -597,7 +618,7 @@ def overview_view(ds: Dataset, p: Params) -> dict:
         "priority": priority_rows(df, p, ck, limit=20),
         # ACR 수주(연도) 화면과 같은 계산(수주년월 집계연도, 계약기간매출, R = 변경매출 × 계약기간)
         "total_kpi": (lambda tv: {"year": tv["year"], **tv["totals"], "excluded": tv["excluded"],
-                                   "r_ref": tv["r_ref"], "churn_ref": tv["churn_ref"]})(total_view(ds, p)),
+                                   "r_ref": tv["r_ref"], "churn_ref": tv["churn_ref"], "r_split": tv["r_split"]})(total_view(ds, p)),
         "basis": {
             "ACR": f"{R.MODES[p.mode]} · 매출발생년월 {R.ym_label(p.ym_from)}~{R.ym_label(p.ym_to)}",
             "진행 중": "현재상황 Pre Sales·제안완료 전체(기간 필터 미적용, 현재 상태 기준)",
@@ -1149,6 +1170,24 @@ def _total_churn(df: pd.DataFrame, p: Params) -> dict:
     return {"amount": amt, "count": n, "excluded": ex}
 
 
+def _total_r_split(df: pd.DataFrame, rr: pd.DataFrame, p: Params) -> dict:
+    """ACR 수주 R 증감을 기존 월매출 100만원 이상 / 미만(미입력 포함)으로 구분. 재계약 증감 × 계약기간 + 해지 감소 × 계약기간."""
+    thr = rate_min_contract()
+    big_r = (pd.to_numeric(rr["prev_monthly"], errors="coerce") >= thr).fillna(False).astype(bool)
+    big_d = (pd.to_numeric(df["prev_monthly"], errors="coerce") >= thr).fillna(False).astype(bool)
+    out = {}
+    for key, mr, md in (("big", big_r, big_d), ("small", ~big_r, ~big_d)):
+        x = rr[mr]
+        if p.products:
+            renew = float(x["dlt"].sum()) if len(x) else 0.0
+        else:
+            t = x["term"].astype(float)
+            renew = float(((x["new_monthly"] - x["prev_monthly"]) * t).sum()) if len(x) else 0.0
+        ch = _total_churn(df[md], p)
+        out[key] = {"renew": renew, "churn": ch["amount"], "R": renew + ch["amount"], "renew_n": int(len(x)), "churn_n": ch["count"]}
+    return out
+
+
 def total_view(ds: Dataset, p: Params) -> dict:
     df = filter_df(ds, p)
     if df.empty:
@@ -1207,6 +1246,7 @@ def total_view(ds: Dataset, p: Params) -> dict:
     return {
         "year": y, "totals": totals, "monthly": monthly, "by_team": org("team", ["team"]), "by_am": org("am_key", ["team", "am"]),
         "r_ref": r_ref, "excluded": excl, "mismatch": mismatch, "churn_ref": _total_churn(df, p),
+        "r_split": _total_r_split(df, rr, p),
         "basis": {
             "대상": "확정 건 — A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
             "기간": f"수주년월 {y}-01 ~ {y}-12 (사이드바 조회기간과 별개, 화면 상단에서 연도 선택)",

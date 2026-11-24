@@ -390,3 +390,7 @@ table.core-team:not(.show-all) :is(th, td):nth-child(n+10):not(:last-child) { di
 
 /* ACR 수주: 중대형퍼널 제외 토글 */
 .ml-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-2); border: 1px solid var(--border); border-radius: 7px; padding: 3px 9px; cursor: pointer; }
+
+/* R 증감 구분 */
+.rec-line .rec-c.rbig { border-left: 3px solid var(--series-r); }
+.rec-line .rec-c.rsmall { border-left: 3px solid var(--border); }

@@ -692,6 +692,23 @@
     });
     return out;
   }
+  // R 증감을 기존 월매출(재계약 전 월매출) 100만원 이상 / 미만(미입력 포함)으로 구분. 재계약 증감 + 해지 감소, 합 = R 증감
+  function rSplit(df, p) {
+    const thr = rateMinContract(), out = {};
+    [["big", (r) => gte(r.prev_monthly, thr)], ["small", (r) => !gte(r.prev_monthly, thr)]].forEach(([key, fn]) => {
+      const sub = df.filter(fn);
+      const rt = retentionContrib(sub, p.mode, p.ym_from, p.ym_to, p.products);
+      let renew, nR;
+      if (rt.amount === null) {
+        const con = contributions(sub, p.mode, p.ym_from, p.ym_to, p.products)[0].filter((c) => c.acr_type === "R");
+        renew = con.reduce((a, c) => a + c.delta, 0); nR = new Set(con.map((c) => c.row)).size;
+      } else { renew = rt.amount - rt.prev_amount; nR = rt.funnels; }
+      const ch = churnContrib(sub, p.mode, p.ym_from, p.ym_to, p.products);
+      out[key] = { renew, churn: ch.amount, R: renew + ch.amount, renew_n: nR, churn_n: ch.funnels };
+    });
+    out.threshold_won = CFG.RATE_MIN_CONTRACT_WON;
+    return out;
+  }
   function yearOr0(v) { const n = parseInt(String(v), 10); return String(n) === String(v).trim() && n >= 1990 && n <= 2100 ? n : 0; }
   // 연도별 기여매출: 수주연도(선택) 건이 각 연도 1~12월에 발생시키는 기여매출(현재 ACR 기준). R 증감 = 재계약 증감 + 해지 감소
   function acrYearsView(ds, p) {
@@ -723,6 +740,7 @@
     // R. 증감매출 = 재계약 증감(변경−기존) + 해지확정 감소액(같은 ACR 기준). 종합 현황 관리 지표와 같은 계산
     res.r_change = { retention: retentionContrib(df, p.mode, p.ym_from, p.ym_to, p.products), churn: churnContrib(df, p.mode, p.ym_from, p.ym_to, p.products) };
     res.term_bands = termBands(df, p);
+    res.r_split = rSplit(df, p);
     res.basis = {
       "기간 기준": p.mode === "start" ? "매출발생년월" : "매출발생년월부터 계약기간(월) 동안 매월 반영(시작월 포함)",
       "확정 조건": "A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
@@ -793,7 +811,7 @@
       churn: rowsOf(sortBy(churn, [[(r) => r.prev_monthly, false]]), 10),
       team_checks: teamChecks, priority: priorityRows(df, p, ck, 20),
       // ACR 수주(연도) 화면과 같은 계산(수주년월 집계연도, 계약기간매출, R = 변경매출 × 계약기간)
-      total_kpi: (() => { const tv = totalView(ds, p); return Object.assign({ year: tv.year }, tv.totals, { excluded: tv.excluded, r_ref: tv.r_ref, churn_ref: tv.churn_ref }); })(),
+      total_kpi: (() => { const tv = totalView(ds, p); return Object.assign({ year: tv.year }, tv.totals, { excluded: tv.excluded, r_ref: tv.r_ref, churn_ref: tv.churn_ref, r_split: tv.r_split }); })(),
       basis: {
         "ACR": `${MODES[p.mode]} · 매출발생년월 ${ymLabel(p.ym_from)}~${ymLabel(p.ym_to)}`,
         "진행 중": "현재상황 Pre Sales·제안완료 전체(기간 필터 미적용, 현재 상태 기준)",
@@ -1169,6 +1187,16 @@
     if (!p.products.length) mismatch = g.filter((e) => { const r = e.r; if (!nn(r.monthly) || !nn(r.term) || !nn(r.contract_amt)) return false; const c = r.monthly * r.term; return Math.abs(r.contract_amt - c) > 1e-6 + 1e-9 * Math.abs(c); }).length;
     return {
       year: y, totals, monthly, by_team: org("team", ["team"]), by_am: org("am_key", ["team", "am"]), r_ref: rRef, excluded: excl, mismatch, churn_ref: totalChurn(df, p),
+      r_split: (() => { // R 증감을 기존 월매출 100만원 이상 / 미만(미입력 포함)으로 구분
+        const thr = rateMinContract(), out = {};
+        [["big", (r) => gte(r.prev_monthly, thr)], ["small", (r) => !gte(r.prev_monthly, thr)]].forEach(([key, fn]) => {
+          const x = rr.filter((e) => fn(e.r));
+          const renew = p.products.length ? x.reduce((a, e) => a + (e.dlt || 0), 0) : x.reduce((a, e) => a + (e.r.new_monthly - e.r.prev_monthly) * e.r.term, 0);
+          const ch = totalChurn(df.filter(fn), p);
+          out[key] = { renew, churn: ch.amount, R: renew + ch.amount, renew_n: x.length, churn_n: ch.count };
+        });
+        return out;
+      })(),
       basis: {
         "대상": "확정 건 — A=Acq.+Win, C=Cul.+Win, R=Ret.+재계약완료",
         "기간": `수주년월 ${y}-01 ~ ${y}-12 (사이드바 조회기간과 별개, 화면 상단에서 연도 선택)`,
