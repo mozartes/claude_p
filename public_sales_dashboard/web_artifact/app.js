@@ -425,6 +425,82 @@
   const totExcl = () => S.ui.totExclML !== false;
   const totF = (f) => Object.assign({}, f || S.f, totExcl() ? { excl_midlarge: true } : {});
 
+  // ------------------------------------------------------------ ACR 수주(연도) 목표 달성(종합 현황)
+  // 목표 = 연도별 수주(A+C) 목표(억원). 목표 엑셀 불러오기 또는 직접 입력, 이 브라우저에만 저장
+  // 회사 목표 수치는 코드에 넣지 않음: 목표 엑셀을 이 브라우저에서 읽어 저장(외부 전송 없음)하거나 칸에 직접 입력
+  const TARGET_DEFAULTS = {};
+  function targetsOf(year) {
+    const all = store.get("targets", {}) || {};
+    const d = TARGET_DEFAULTS[year] || {}, u = all[year] || {};
+    return Object.assign({}, d, u, { teams: Object.assign({}, d.teams || {}, u.teams || {}) });
+  }
+  function saveTarget(year, key, val) {
+    const all = store.get("targets", {}) || {}, t = Object.assign({ teams: {} }, all[year] || {});
+    const v = val === "" || val == null ? null : Number(String(val).replace(/,/g, ""));
+    // 빈칸·숫자 아님 → 저장값 삭제(기본 목표로 복귀)
+    const tgtObj = key.startsWith("team:") ? (t.teams = Object.assign({}, t.teams)) : t, k = key.startsWith("team:") ? key.slice(5) : key;
+    if (Number.isFinite(v)) tgtObj[k] = v; else delete tgtObj[k];
+    all[year] = t; store.set("targets", all);
+  }
+  async function targetSection(year) {
+    const base = Object.assign(totF(), { teams: [], ams: [], products: [], total_year: year });
+    const [all, le, nl] = await Promise.all(["all", "leased", "non_leased"].map((g) => api("/view/total", { filters: Object.assign({}, base, { product_group: g }) }).then((x) => x.data || {})));
+    if (!all || all.empty) return "";
+    const t = targetsOf(year);
+    const srcWon = UNIT_WON[S.ui.srcUnit] || 1e6;
+    const toSrc = (eok) => (eok == null ? null : eok * 1e8 / srcWon);
+    const rows = [["담당 전체", "total", all.totals.AC, t.total, true]]
+      .concat((all.by_team || []).slice().sort((a, b) => { const ord = Object.keys((TARGET_DEFAULTS[year] || {}).teams || {}), ia = ord.indexOf(a.key), ib = ord.indexOf(b.key); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || String(a.key).localeCompare(String(b.key), "ko"); }).map((r) => [r.key, `team:${r.key}`, r.AC, (t.teams || {})[r.key], false]))
+      .concat([["전용회선", "leased", le.empty ? 0 : le.totals.AC, t.leased, true], ["전용회선외", "non_leased", nl.empty ? 0 : nl.totals.AC, t.non_leased, true]]);
+    const pctTxt = (a, g) => (g ? `${((a / g) * 100).toFixed(1)}%` : "—");
+    const tr = rows.map(([lb, key, act, tg, strong]) => {
+      const g = toSrc(tg), rate = g ? act / g : null, w = rate == null ? 0 : Math.min(100, rate * 100);
+      return `<tr class="${strong ? "tg-strong" : ""}"><td>${esc(lb)}</td>
+        <td class="num"><input class="tg-in" type="text" inputmode="decimal" data-tg="${esc(key)}" value="${tg == null ? "" : Math.round(tg * 10) / 10}" placeholder="억원" aria-label="${esc(lb)} 목표(억원)"></td>
+        <td class="num">${g == null ? '<span class="muted">목표 입력</span>' : amt(g)}</td><td class="num"><b>${amt(act)}</b></td>
+        <td class="num">${g == null ? "—" : `<span class="tg-frac">${fmtNum(conv(act), 0)} / ${fmtNum(conv(g), 0)}</span> = <b class="${rate >= 1 ? "tg-ok" : ""}">${pctTxt(act, g)}</b>`}</td>
+        <td><span class="tm-bar tg-bar"><span style="width:${w.toFixed(1)}%"></span></span></td>
+        <td class="num">${g == null ? "—" : amt(act - g)}</td></tr>`;
+    }).join("");
+    return `<section class="ov-sec"><div class="ov-h"><h3>ACR 수주(${year}년) 목표 달성 <span class="h-period">${year}년 수주(A+C) 실적 ÷ 목표</span> <span class="info-i" tabindex="0" title="실적 = ACR 수주 화면의 ${year}년 수주(A+C)(계약 전체 기간, 확정 A·C${totExcl() ? ", 중대형퍼널제외=Y 제외" : ""}). 팀·AM 필터와 무관하게 담당 전체·팀별로 계산. 전용회선 = 국내전용+국제전용 상품 금액, 전용회선외 = 나머지 상품(두 값의 합은 상품별 금액 입력 차이로 전체와 조금 다를 수 있음). 목표는 억원으로 입력, 1억원 = 100백만원. 목표는 이 브라우저에만 저장">i</span></h3><span class="unit">단위 ${esc(unitName())} · 목표 입력 억원</span></div>
+      <div class="card"><div class="table-wrap"><table class="t tg-t"><thead><tr><th>구분</th><th class="num">목표(억원)</th><th class="num">목표</th><th class="num">실적 ${year}년 수주(A+C)</th><th class="num">달성율 (실적 / 목표)</th><th>진척</th><th class="num">차이</th></tr></thead><tbody>${tr}</tbody></table></div>
+      <div class="toolbar tg-tools">${window.XLSX ? `<label class="btn small">목표 엑셀 불러오기<input type="file" id="tgFile" accept=".xlsx,.xls" hidden></label>` : ""}<button type="button" class="btn small" id="tgClear">목표 지우기</button>
+        <span class="muted">‘전체 목표’ 시트(구분 · 전체상품 · 전용회선 · 전용회선 외)를 읽어 이 브라우저에만 저장합니다. 파일은 외부로 전송되지 않습니다. 목표(억원) 칸에 직접 입력해도 됩니다.</span></div></div></section>`;
+  }
+  // 목표 엑셀(‘전체 목표’ 시트: 구분 | 전체상품 | 전용회선 | 전용회선 외, 행 = 공공담당·팀) → 이 브라우저에 저장
+  function importTargets(file, year) {
+    if (!window.XLSX) { alert("이 화면에서는 엑셀을 읽을 수 없습니다. 목표 칸에 직접 입력하세요."); return; }
+    const rd = new FileReader();
+    rd.onload = () => {
+      try {
+        const wb = window.XLSX.read(new Uint8Array(rd.result), { type: "array" });
+        const name = wb.SheetNames.find((n) => n.replace(/\s/g, "").includes("전체목표")) || wb.SheetNames[0];
+        const rows = window.XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null });
+        const norm = (v) => String(v == null ? "" : v).replace(/\s/g, "");
+        const hi = rows.findIndex((r) => r.some((v) => norm(v) === "전체상품"));
+        if (hi < 0) throw new Error("‘전체상품’ 머리글을 찾지 못했습니다.");
+        const head = rows[hi].map(norm), cAll = head.indexOf("전체상품"), cLe = head.indexOf("전용회선"), cNl = head.findIndex((v) => v === "전용회선외");
+        const cKey = head.findIndex((v) => v === "구분"), yr = (String(rows.flat().find((v) => /\d{2}년도/.test(String(v || ""))) || "").match(/(\d{2})년도/) || [])[1];
+        const y = yr ? 2000 + Number(yr) : year, teams = new Set(S.meta.options.teams || []), t = { teams: {} };
+        rows.slice(hi + 1).forEach((r) => {
+          const k = norm(r[cKey < 0 ? 0 : cKey]), num = (c) => (c >= 0 && Number.isFinite(Number(r[c])) && r[c] !== null && r[c] !== "" ? Number(r[c]) : null);
+          if (!k) return;
+          if (/담당/.test(k)) { t.total = num(cAll); if (num(cLe) !== null) t.leased = num(cLe); if (num(cNl) !== null) t.non_leased = num(cNl); }
+          else if (teams.has(k) || /팀$/.test(k)) { if (num(cAll) !== null) t.teams[k] = num(cAll); }
+        });
+        if (t.total == null && !Object.keys(t.teams).length) throw new Error("담당·팀 목표 행을 찾지 못했습니다.");
+        const all = store.get("targets", {}) || {}; all[y] = t; store.set("targets", all);
+        render();
+      } catch (e) { alert("목표 파일을 읽지 못했습니다: " + e.message); }
+    };
+    rd.readAsArrayBuffer(file);
+  }
+  function bindTargets(year) {
+    document.querySelectorAll("input[data-tg]").forEach((el) => el.addEventListener("change", () => { saveTarget(year, el.dataset.tg, el.value.trim()); render(); }));
+    const fi = $("tgFile"); if (fi) fi.addEventListener("change", () => { if (fi.files && fi.files[0]) importTargets(fi.files[0], year); });
+    const clr = $("tgClear"); if (clr) clr.addEventListener("click", () => { const all = store.get("targets", {}) || {}; delete all[year]; store.set("targets", all); render(); });
+  }
+
   // ------------------------------------------------------------ 페이지: 종합 현황
   async function pageOverview() {
     const j = await api("/view/overview", { filters: S.f });
@@ -484,6 +560,9 @@
     // 매출개시월 기준 같은 계산(월별 신규 발생 차트·Recurring 구분용)
     const svOv = S.f.mode === "term" ? (await api("/view/acr", { filters: Object.assign({}, S.f, { mode: "start" }) })).data : null;
     const acrOv = (await api("/view/acr", { filters: S.f })).data;  // 계약기간 구간별 구성(같은 기준)
+    // ACR 수주(연도) 목표 달성
+    const tgYear = (tk && tk.year) || S.f.total_year || Number(String(S.f.base_date || "2026").slice(0, 4));
+    h += await targetSection(tgYear);
     // ① 핵심 KPI — 2줄: ACR 기여매출(조회기간 실제 발생분)
     const chX = k.churn_acr || { amount: 0, funnels: 0 };
     const rdX = rt.amount === null ? a.R : rt.amount - rt.prev_amount;
@@ -546,6 +625,7 @@
       document.querySelectorAll(".ovl-p").forEach((x) => { x.hidden = x.dataset.ovl !== bt.dataset.ovl; });
     }));
     bindPeriodToolbar("ovPer");
+    bindTargets(tgYear);
     acrMonthlyChart("ovChart", ovRows, ["A", "C", "R", "ACR"], (m, key) => openDetail({ scope: "acr", rev_month: m.ym, acr_type: key && ["A", "C", "R"].includes(key) ? [key] : undefined }), ovRef);
   }
 
