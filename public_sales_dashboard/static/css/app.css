@@ -387,3 +387,6 @@ table.core-team:not(.show-all) :is(th, td):nth-child(n+10):not(:last-child) { di
 
 /* 연도별 기여매출 */
 .ay-tools { flex-wrap: wrap; gap: 8px; margin: 4px 0 10px; }
+
+/* ACR 수주: 중대형퍼널 제외 토글 */
+.ml-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--text-2); border: 1px solid var(--border); border-radius: 7px; padding: 3px 9px; cursor: pointer; }

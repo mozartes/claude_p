@@ -405,6 +405,10 @@
       <span class="rec-k">계약기간별</span>${cell(tb.one, "one")}${cell(tb.short, "new")}${cell(tb.long, "rec", true)}</div>`;
   }
 
+  // ACR 수주 실적: 중대형퍼널제외=Y 건은 기본 제외(ACR 수주 화면의 체크로 끔). 사이드바 보조필터가 켜져 있으면 그대로 적용
+  const totExcl = () => S.ui.totExclML !== false;
+  const totF = (f) => Object.assign({}, f || S.f, totExcl() ? { excl_midlarge: true } : {});
+
   // ------------------------------------------------------------ 페이지: 종합 현황
   async function pageOverview() {
     const j = await api("/view/overview", { filters: S.f });
@@ -438,7 +442,12 @@
     const sub = (t) => `<span class="h-period">${t}</span>`;
     const heroMeta = (o, rc, fn) => `${row(`A+C ${amt(o.AC)} + R 증감 ${amt(rc)}`, fn)}<div class="mini" aria-hidden="true"><span style="width:${wOf(o.A, o.AC)}%;background:var(--series-a)"></span><span style="width:${wOf(o.C, o.AC)}%;background:var(--series-c)"></span></div>${row(`A ${pctOf(o.A, o.AC)} · C ${pctOf(o.C, o.AC)}`, "A+C 구성비")}`;
     const rcCard = (rd, chAmt, chN, drill) => kpiCard("R 증감", amt(rd + chAmt), `<span class="row"><span>재계약 ${amt(rd)}</span></span><span class="row"><span>해지 ${amt(chAmt)} · ${cnt(chN)}건</span></span>`, "neg", drill);
-    const tk = d.total_kpi;
+    let tk = d.total_kpi;
+    // ACR 수주 줄은 ACR 수주 화면과 같은 기준(중대형퍼널제외=Y 기본 제외)
+    if (tk && totExcl() && !S.f.excl_midlarge) {
+      const tv = (await api("/view/total", { filters: totF() })).data;
+      if (tv && !tv.empty) tk = Object.assign({}, tv.totals, { year: tv.year, r_ref: tv.r_ref, churn_ref: tv.churn_ref, excluded: tv.excluded });
+    }
     if (tk) {
       const tdk = (extra) => Object.assign({ scope: "total" }, extra || {});
       const exn = Object.values(tk.excluded || {}).reduce((x, y) => x + y, 0);
@@ -809,14 +818,14 @@
 
   // ------------------------------------------------------------ 페이지: ACR 수주(연도) — 구 ACR 수주(계약기간)
   async function pageTotal() {
-    const j = await api("/view/total", { filters: S.f });
+    const j = await api("/view/total", { filters: totF() });
     setHeader(j);
     const d = j.data;
     if (d.empty) { $("view").innerHTML = emptyState(); return; }
     const t = d.totals, y = d.year, rf = d.r_ref;
     // 전년 동기 비교용: 같은 화면 계산을 직전 연도로 한 번 더 조회(계산 로직 동일)
     let prevMonthly = [];
-    try { const jp = await api("/view/total", { filters: Object.assign({}, S.f, { total_year: y - 1 }) }); prevMonthly = (jp.data && jp.data.monthly) || []; } catch (e) { prevMonthly = []; }
+    try { const jp = await api("/view/total", { filters: Object.assign(totF(), { total_year: y - 1 }) }); prevMonthly = (jp.data && jp.data.monthly) || []; } catch (e) { prevMonthly = []; }
     const baseYm = Number(String(S.f.base_date || "").slice(0, 7).replace("-", "")) || null;
     const tRows = aggPeriods(netRows(d.monthly), perOf(), true, baseYm), tPool = poolOf(aggPeriods(netRows(prevMonthly), perOf(), true, baseYm).concat(tRows));
     // 메뉴·제목에 집계연도 표시
@@ -832,6 +841,7 @@
     const rdT = pSelT ? t.R : rf.new_total - rf.prev_total, rcT = rdT + crT.amount;
     const teamTop = netRows(d.by_team).slice().sort((x, z) => z.ACR - x.ACR), teamMax = Math.max(0, ...teamTop.map((r) => r.ACR));
     let h = `<div class="toolbar"><span class="muted">집계연도</span><span class="seg-light" id="tyearSel">${years.map((yy) => `<button type="button" data-v="${yy}" class="${yy === y ? "on" : ""}">${yy}년</button>`).join("")}</span>
+        <label class="ml-toggle" title="원본 ‘중대형퍼널제외’ 열이 Y인 건을 ACR 수주 실적에서 뺌(종합 현황·우리 팀 실적의 ACR 수주도 같은 기준)"><input type="checkbox" id="totExclML" ${totExcl() || S.f.excl_midlarge ? "checked" : ""} ${S.f.excl_midlarge ? "disabled" : ""}> 중대형퍼널제외=Y 제외</label>
         <span class="muted">확정 건(A·C=Win, R=재계약완료)의 계약 전체 기간 매출을 수주월에 합산</span></div>
     <div class="ov-h" style="margin-top:16px"><h3>요약 <span class="h-period">수주년월 ${y}-01~${y}-12 · 계약기간매출 합계</span> <span class="info-i" tabindex="0" title="${esc(`A+C+R = A + C + R 증감(재계약 증감 × 계약기간 + 해지 감소 × 계약기간)${crT.excluded ? ` · 해지 계산 제외 ${crT.excluded}건` : ""}${Object.keys(d.excluded).length ? ` · 집계 제외 ${Object.values(d.excluded).reduce((x, z) => x + z, 0)}건` : ""}`)}">i</span></h3><span class="unit">단위 ${esc(unitName())}</span></div>
     <div class="strip five">
@@ -867,6 +877,7 @@
     bindPeriodToolbar("totPer");
     acrMonthlyChart("totChart", tRows, ["A", "C", "R", "ACR"], (m, key) => openDetail(dk({ win_month: m.ym, acr_type: key && ["A", "C", "R"].includes(key) ? [key] : undefined })));
     document.querySelectorAll("#tyearSel button").forEach((b) => b.addEventListener("click", () => { S.f.total_year = Number(b.dataset.v); store.set("filters", S.f); render(); }));
+    const mlT = $("totExclML"); if (mlT) mlT.addEventListener("change", () => { S.ui.totExclML = mlT.checked; store.set("ui", S.ui); render(); });
   }
 
   // ------------------------------------------------------------ 페이지: 팀·AM
@@ -932,7 +943,7 @@
       S.f.teams = [tm]; S.f.ams = []; $("amSearch").value = ""; renderFilterInputs(); store.set("filters", S.f);
     }
     const fA = Object.assign({}, S.f, { level: "am" });
-    const [jt, jm] = await Promise.all([api("/view/total", { filters: fA }), api("/view/team", { filters: fA })]);
+    const [jt, jm] = await Promise.all([api("/view/total", { filters: totF(fA) }), api("/view/team", { filters: fA })]);
     setHeader(jt);
     const d = jt.data, m = jm.data;
     if (d.empty) { $("view").innerHTML = emptyState(); return; }
