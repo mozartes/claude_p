@@ -394,3 +394,13 @@ table.core-team:not(.show-all) :is(th, td):nth-child(n+10):not(:last-child) { di
 /* R 증감 구분 */
 .rec-line .rec-c.rbig { border-left: 3px solid var(--series-r); }
 .rec-line .rec-c.rsmall { border-left: 3px solid var(--border); }
+
+/* R 증감 카드: 재계약·해지확정 × 100만원 이상/미만 */
+.kpi .meta .rgrid { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 2px; }
+.kpi .meta .rgrid th, .kpi .meta .rgrid td { padding: 1px 2px; text-align: right; font-weight: 400; white-space: nowrap; }
+.kpi .meta .rgrid thead th { color: var(--muted); font-size: 11px; }
+.kpi .meta .rgrid tbody th { text-align: left; color: var(--text-2); }
+.kpi .meta .rgrid td:nth-child(2) { font-weight: 600; }
+
+/* R 증감 카드(4번째)에 표가 들어가므로 조금 넓게 */
+@media (min-width: 1281px) { .strip.five:has(.rgrid) { grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)) minmax(0, 1.45fr) minmax(0, 1fr); } }
