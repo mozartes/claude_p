@@ -375,7 +375,8 @@
     // 재계약 / 해지확정 × 기존 월매출 100만원 이상 / 미만
     return `<table class="rgrid" title="기존 월매출(재계약 전) 기준 · 100만원 미만에는 미입력 포함 · 괄호는 건수"><thead><tr><th></th><th>합계</th><th>100만↑</th><th>미만</th></tr></thead><tbody>
       <tr><th>재계약</th><td>${amt(rd)}</td><td>${amt(sp.big.renew)}</td><td>${amt(sp.small.renew)}</td></tr>
-      <tr><th>해지확정</th><td>${amt(chAmt)}</td><td>${amt(sp.big.churn)}</td><td>${amt(sp.small.churn)}</td></tr></tbody></table>`;
+      <tr><th>해지확정</th><td>${amt(chAmt)}</td><td>${amt(sp.big.churn)}</td><td>${amt(sp.small.churn)}</td></tr>
+      <tr class="rg-tot"><th>R 증감</th><td>${amt(rd + chAmt)}</td><td>${amt(sp.big.R)}</td><td>${amt(sp.small.R)}</td></tr></tbody></table>`;
   }
   // R 증감 구분: 기존 월매출(재계약 전) 100만원 이상 / 미만
   function rSplitLine(v) {
