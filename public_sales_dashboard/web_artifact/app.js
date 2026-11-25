@@ -434,11 +434,24 @@
     teams: { "공공고객팀": 288.6515, "중부기업고객팀": 132.7797, "서부기업고객팀": 132.7797, "동부기업고객1팀": 121.2336, "동부기업고객2팀": 132.7797 } } };
   // 2026년 수주(A+C) 목표(억원) 기본값 — 공개 가능 목표 파일(분기별 시트 연간). 화면 입력·엑셀 불러오기 값이 우선
   // 카드 meta: 실적/목표 달성율 (목표 없으면 건수만)
-  function acTargetMeta(year, act, cntTxt) {
-    const te = targetsOf(year).total, g = te == null ? null : te * 1e8 / (UNIT_WON[S.ui.srcUnit] || 1e6);
+  // 현재 필터 범위에 맞는 목표(억원): AM 선택·상품 개별 선택 → 없음, 팀 선택 → 선택 팀 목표 합, 팀 미선택 → 담당(상품 카테고리별)
+  function scopeTarget(year, teams) {
+    const t = targetsOf(year), f = S.f || {};
+    teams = teams || f.teams || [];
+    if ((f.ams || []).length || (f.products || []).length) return null;
+    if (teams.length) {
+      if ((f.product_group || "all") !== "all") return null;
+      const v = teams.map((k) => (t.teams || {})[k]);
+      return v.every((x) => x != null) ? { eok: v.reduce((a, b) => a + b, 0), label: teams.length === 1 ? "팀 목표" : "선택 팀 목표" } : null;
+    }
+    const pg = f.product_group || "all", e = pg === "leased" ? t.leased : pg === "non_leased" ? t.non_leased : t.total;
+    return e == null ? null : { eok: e, label: pg === "all" ? "담당 목표" : pg === "leased" ? "전용회선 목표" : "전용회선외 목표" };
+  }
+  function acTargetMeta(year, act, cntTxt, teams) {
+    const st = scopeTarget(year, teams), g = st ? st.eok * 1e8 / (UNIT_WON[S.ui.srcUnit] || 1e6) : null;
     if (!g) return `<span class="row"><span>${cntTxt}</span></span>`;
     const r = act / g;
-    return `<span class="row"><span class="tg-frac">${fmtNum(conv(act), 0)}/${fmtNum(conv(g), 0)} <b class="${r >= 1 ? "tg-ok" : ""}">${(r * 100).toFixed(1)}%</b></span><span>${cntTxt}</span></span>`;
+    return `<span class="row"><span class="tg-frac" title="${st.label} ${Math.round(st.eok * 10) / 10}억원">${fmtNum(conv(act), 0)}/${fmtNum(conv(g), 0)} <b class="${r >= 1 ? "tg-ok" : ""}">${(r * 100).toFixed(1)}%</b></span><span>${cntTxt}</span></span><span class="muted" style="font-size:11px">${st.label}</span>`;
   }
   function targetsOf(year) {
     const all = store.get("targets", {}) || {};
@@ -1143,7 +1156,7 @@
         ${kpiCard("A 수주", amt(t.A), `<span class="row"><span>${cnt(t.funnels_A)}건</span></span>`, "a", dkT({ acr_type: ["A"] }))}
         ${kpiCard("C 수주", amt(t.C), `<span class="row"><span>${cnt(t.funnels_C)}건</span></span>`, "c", dkT({ acr_type: ["C"] }))}
         ${kpiCard("R 증감", amt(rc), `<span class="row"><span>재계약 ${amt(rd)}</span></span><span class="row"><span>해지 ${amt(cr.amount)} · ${cnt(cr.count)}건</span></span>`, "neg", { status: ["해지확정"], period: "win_ym" })}
-        ${kpiCard(`${y}년 수주(A+C)`, amt(t.AC), acTargetMeta(y, t.AC, `${cnt(t.funnels_A + t.funnels_C)}건`), "", dkT({ acr_type: ["A", "C"] }))}
+        ${kpiCard(`${y}년 수주(A+C)`, amt(t.AC), acTargetMeta(y, t.AC, `${cnt(t.funnels_A + t.funnels_C)}건`, [tm]), "", dkT({ acr_type: ["A", "C"] }))}
       </div></section>
       <section class="ov-sec"><div class="ov-h"><h3>기여매출 · 진행 현황 ${sub(`${esc(S.f.ym_from)}~${esc(S.f.ym_to)}`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
       <div class="grid kpis">
