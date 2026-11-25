@@ -492,16 +492,15 @@
     const tr = rows.map(([lb, key, act, tg, strong]) => {
       const g = toSrc(tg), rate = g ? act / g : null, w = rate == null ? 0 : Math.min(100, rate * 100);
       return `<tr class="${strong ? "tg-strong" : ""}"><td>${esc(lb)}</td>
-        <td class="num"><input class="tg-in" type="text" inputmode="decimal" data-tg="${esc(key)}" value="${tg == null ? "" : Math.round(tg * 10) / 10}" placeholder="억원" aria-label="${esc(lb)} 목표(억원)"></td>
         <td class="num">${g == null ? '<span class="muted">목표 입력</span>' : amt(g)}</td><td class="num"><b>${amt(act)}</b></td>
         <td class="num">${g == null ? "—" : `<span class="tg-frac">${fmtNum(conv(act), 0)} / ${fmtNum(conv(g), 0)}</span> = <b class="${rate >= 1 ? "tg-ok" : ""}">${pctTxt(act, g)}</b>`}</td>
         <td><span class="tm-bar tg-bar"><span style="width:${w.toFixed(1)}%"></span></span></td>
         <td class="num">${g == null ? "—" : amt(act - g)}</td></tr>`;
     }).join("");
     return `<section class="ov-sec"><div class="ov-h"><h3>ACR 수주(${year}년) 목표 달성 <span class="h-period">${year}년 수주(A+C) 실적 ÷ 목표</span> <span class="info-i" tabindex="0" title="실적 = ACR 수주 화면의 ${year}년 수주(A+C)(계약 전체 기간, 확정 A·C${totExcl() ? ", 중대형퍼널제외=Y 제외" : ""}). 팀·AM 필터와 무관하게 담당 전체·팀별로 계산. 전용회선 = 국내전용+국제전용 상품 금액, 전용회선외 = 나머지 상품(두 값의 합은 상품별 금액 입력 차이로 전체와 조금 다를 수 있음). 목표는 억원으로 입력, 1억원 = 100백만원. 목표는 이 브라우저에만 저장">i</span></h3><span class="unit">단위 ${esc(unitName())} · 목표 입력 억원</span></div>
-      <div class="card"><div class="table-wrap"><table class="t tg-t"><thead><tr><th>구분</th><th class="num">목표(억원)</th><th class="num">목표</th><th class="num">실적 ${year}년 수주(A+C)</th><th class="num">달성율 (실적 / 목표)</th><th>진척</th><th class="num">차이</th></tr></thead><tbody>${tr}</tbody></table></div>
+      <div class="card"><div class="table-wrap"><table class="t tg-t"><thead><tr><th>구분</th><th class="num">목표</th><th class="num">실적 ${year}년 수주(A+C)</th><th class="num">달성율 (실적 / 목표)</th><th>진척</th><th class="num">차이</th></tr></thead><tbody>${tr}</tbody></table></div>
       <div class="toolbar tg-tools">${window.XLSX ? `<label class="btn small">목표 엑셀 불러오기<input type="file" id="tgFile" accept=".xlsx,.xls" hidden></label>` : ""}<button type="button" class="btn small" id="tgClear">목표 지우기</button>
-        <span class="muted">‘전체 목표’ 시트(구분 · 전체상품 · 전용회선 · 전용회선 외)를 읽어 이 브라우저에만 저장합니다. 파일은 외부로 전송되지 않습니다. 목표(억원) 칸에 직접 입력해도 됩니다.</span></div></div></section>`;
+        <span class="muted">‘전체 목표’ 시트(구분 · 전체상품 · 전용회선 · 전용회선 외)를 읽어 이 브라우저에만 저장합니다. 파일은 외부로 전송되지 않습니다.</span></div></div></section>`;
   }
   // 목표 엑셀(‘전체 목표’ 시트: 구분 | 전체상품 | 전용회선 | 전용회선 외, 행 = 공공담당·팀) → 이 브라우저에 저장
   function importTargets(file, year) {
