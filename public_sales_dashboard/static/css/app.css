@@ -416,3 +416,6 @@ table.core-team:not(.show-all) :is(th, td):nth-child(n+10):not(:last-child) { di
 
 .tg-tools { flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .tg-tools label.btn { cursor: pointer; }
+
+/* 수주연도별 기여매출 합계 행 */
+tr.bw-tot td { border-top: 1px solid var(--border); }

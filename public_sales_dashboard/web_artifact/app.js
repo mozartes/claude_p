@@ -719,6 +719,16 @@
     });
   }
 
+  // 수주연도별 기여매출: 조회기간(시작월~종료월)에 발생한 기여매출을 수주연도로 나눔. 합계 = 위 요약 카드
+  function acrByWinCard(rows) {
+    if (!rows || !rows.length) return "";
+    const tot = rows.find((r) => r.total) || { ACR: 0 };
+    const tr = rows.map((r) => `<tr class="${r.total ? "tg-strong bw-tot" : ""}"><td>${esc(r.label)}</td><td class="num">${amt(r.A)}</td><td class="num">${amt(r.C)}</td><td class="num">${amt(r.AC)}</td><td class="num">${amt(r.R_renew)}</td><td class="num">${amt(r.R_churn)}</td><td class="num">${amt(r.R)}</td><td class="num"><b>${amt(r.ACR)}</b></td><td class="num">${tot.ACR ? `${((r.ACR / tot.ACR) * 100).toFixed(1)}%` : "—"}</td></tr>`).join("");
+    return `<div class="card" style="margin-top:14px"><div class="card-head"><h3>수주연도별 기여매출 <span class="h-period">${esc(S.f.ym_from)}~${esc(S.f.ym_to)} 발생분 · 수주연도 무관 합계를 수주연도로 나눔</span></h3><span class="unit">단위 ${esc(unitName())}</span></div>
+      <div class="table-wrap"><table class="t"><thead><tr><th>수주연도</th><th class="num">A</th><th class="num">C</th><th class="num">A+C</th><th class="num">R 재계약 증감</th><th class="num">R 해지 감소</th><th class="num">R 증감</th><th class="num">A+C+R</th><th class="num">A+C+R 비중</th></tr></thead><tbody>${tr}</tbody></table></div>
+      <p class="desc" style="margin-top:6px">합계 = 위 요약 카드(조회기간 기여매출). 불러온 파일에 있는 계약만 포함 — 파일에 없는 이전 연도 수주 계약은 빠집니다.</p></div>`;
+  }
+
   // 연도별 기여매출 표: 선택한 수주연도 건이 연도별(1~12월)로 발생시키는 기여매출
   function acrYearsCard(ay, win, span) {
     if (!ay || ay.empty) return "";
@@ -754,6 +764,19 @@
     const ayBase = ayWin || Math.floor(Number(String(S.f.ym_from).replace("-", "")) / 100);
     const ayF = aySpan === "5y" ? { acr_win_year: ayWin, acr_years: [0, 1, 2, 3, 4].map((i) => ayBase + i), acr_clip: false } : { acr_win_year: ayWin, acr_years: [], acr_clip: true };
     const ay = (await api("/view/acr_years", { filters: Object.assign({}, S.f, ayF) })).data || {};
+    // 수주연도별 기여매출(조회기간 전체): 연도마다 같은 계산(acr_years, 조회기간으로 자름)을 수주연도로 나눠 합계
+    const byWin = [];
+    if (!ay.empty) {
+      const pf = (w) => api("/view/acr_years", { filters: Object.assign({}, S.f, { acr_win_year: w, acr_years: [], acr_clip: true }) }).then((x) => (x.data && x.data.total) || null);
+      const wins = ay.available_win_years || [];
+      const [tAll, ...tw] = await Promise.all([pf(0)].concat(wins.map(pf)));
+      wins.forEach((w, i) => { if (tw[i]) byWin.push(Object.assign({ label: `${w}년 수주` }, tw[i])); });
+      if (tAll) {
+        const rest = {}; ["A", "C", "AC", "R_renew", "R_churn", "R", "ACR"].forEach((k) => { rest[k] = tAll[k] - byWin.reduce((a, r) => a + r[k], 0); });
+        if (Math.abs(rest.A) + Math.abs(rest.C) + Math.abs(rest.R) > 0.05) byWin.push(Object.assign({ label: "수주년월 미입력" }, rest));
+        byWin.push(Object.assign({ label: "합계", total: true }, tAll));
+      }
+    }
     const pRows = aggPeriods(netRows(newM), perOf(), false), pPool = poolOf(pRows);
     const cRows = aggPeriods(netRows(d.monthly), perOf(), false);
     const acrRef = term ? { label: "A+C+R 매출(월증가)", rows: cRows } : null;
@@ -773,6 +796,7 @@
       ${kpiCard("A+C. 기여매출", amt(t.AC), `<span class="row"><span>${cnt(t.funnels_A + t.funnels_C)}건</span></span>`, "", { scope: "acr", acr_type: ["A", "C"] })}
     </div>
     <p class="ov-ref">참고 · <b>R 재계약</b>(${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감" : "재계약 후 월매출"}, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr", acr_type: ["R"] }))}'>${amt(t.R)}</span> · ${cnt(t.funnels_R)}건 · 고유 Funnel 수는 월별 반복 반영 횟수가 아님</p>${recurringLine(d)}${rSplitLine(d)}
+    ${acrByWinCard(byWin)}
     ${acrYearsCard(ay, ayWin, aySpan)}
     ${Object.keys(d.excluded).length ? `<div class="notice warn">확정 조건이지만 이 지표에서 제외: ${Object.entries(d.excluded).map(([r, n]) => `${esc(r)} ${n}건`).join(", ")} <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr_excluded" }))}'>목록 보기</span></div>` : ""}
     <div class="card" style="margin-top:14px"><div class="card-head"><h3>${(PERIODS.find((x) => x[0] === perOf()) || PERIODS[0])[1]} 신규 발생 매출</h3>${periodToolbar("acrPer")}
