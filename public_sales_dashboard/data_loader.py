@@ -257,19 +257,71 @@ def _find_sheet_and_header(wb) -> tuple[Any, int, list[str]]:
     )
 
 
-def read_workbook(path: Path) -> tuple[str, int, list[str], list[tuple]]:
+def _data_rows(ws, header_row: int) -> list[tuple]:
+    rows = []
+    for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
+        if row is None or all(v is None or (isinstance(v, str) and v.strip() == "") for v in row):
+            continue  # 완전히 빈 행만 건너뜀(데이터 아님)
+        rows.append(row)
+    return rows
+
+
+def _sheet_header(ws) -> tuple[int, list[str], int] | None:
+    """시트 앞 10행 중 필수 열이 가장 많이 맞는 머리글 행 (행 번호, 머리글, 일치 수)."""
+    best = None
+    for r_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=10, values_only=True), start=1):
+        headers = [clean_str(h) or "" for h in row]
+        hit = sum(1 for h in C.REQUIRED_COLUMNS if h in headers)
+        if best is None or hit > best[2]:
+            best = (r_idx, headers, hit)
+    return best
+
+
+def merge_map(base: list[str], sh: list[str]) -> tuple[list[int | None], list[str]]:
+    """다른 시트 머리글 → 기준 머리글 열 위치. 이름이 같으면 그 열, 없으면 같은 위치의 열이 기준에 없는 이름(깨진 머리글 등)일 때만 위치로 맞춤.
+    (위치 목록, 위치로 맞춘 내역)"""
+    base_set = {h for h in base if h}
+    pos = {h: i for i, h in reversed(list(enumerate(sh))) if h}
+    out, notes = [], []
+    for i, h in enumerate(base):
+        if not h:
+            out.append(None)
+        elif h in pos:
+            out.append(pos[h])
+        elif i < len(sh) and sh[i] not in base_set:
+            out.append(i)
+            notes.append(f"‘{sh[i] or '(빈 머리글)'}’ → ‘{h}’")
+        else:
+            out.append(None)
+    return out, notes
+
+
+def read_workbook(path: Path, info: dict | None = None) -> tuple[str, int, list[str], list[tuple]]:
+    """Funnel 시트를 읽는다. 같은 양식(필수 열이 하나 이하만 빠진) 시트가 여러 개면 모두 합친다(연도별 시트 등).
+    info(dict)를 주면 합친 시트·위치로 맞춘 머리글 내역을 채운다."""
     try:
         wb = load_workbook(path, read_only=True, data_only=True)
     except Exception as e:  # 손상 파일
         raise LoadError(f"엑셀 파일을 열 수 없습니다(손상 또는 암호화 가능성): {type(e).__name__}") from e
     try:
         ws, header_row, headers = _find_sheet_and_header(wb)
-        rows = []
-        for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
-            if row is None or all(v is None or (isinstance(v, str) and v.strip() == "") for v in row):
-                continue  # 완전히 빈 행만 건너뜀(데이터 아님)
-            rows.append(row)
-        return ws.title, header_row, headers, rows
+        rows = _data_rows(ws, header_row)
+        merged = [{"sheet": ws.title, "rows": len(rows), "fixes": []}]
+        need = len(C.REQUIRED_COLUMNS) - 1
+        for other in wb.worksheets:
+            if other.title == ws.title:
+                continue
+            h = _sheet_header(other)
+            if not h or h[2] < need:
+                continue
+            idx, notes = merge_map(headers, h[1])
+            add = [tuple(r[j] if j is not None and j < len(r) else None for j in idx) for r in _data_rows(other, h[0])]
+            rows += add
+            merged.append({"sheet": other.title, "rows": len(add), "fixes": notes})
+        if info is not None:
+            info["merged_sheets"] = merged if len(merged) > 1 else []
+        title = ws.title if len(merged) == 1 else f"{ws.title} 외 {len(merged) - 1}개 시트 합침"
+        return title, header_row, headers, rows
     finally:
         wb.close()
 
@@ -313,7 +365,8 @@ def _norm_type(v: Any) -> str | None:
 
 def build_dataset(path: Path, original_name: str, uploaded_at: str) -> Dataset:
     t0 = time.perf_counter()
-    sheet, header_row, headers, rows = read_workbook(path)
+    rinfo: dict = {}
+    sheet, header_row, headers, rows = read_workbook(path, rinfo)
     # 같은 헤더 이름이 여러 번 나오면 첫 번째를 사용하고 기록
     idx: dict[str, int] = {}
     dup_headers = []
@@ -511,6 +564,7 @@ def build_dataset(path: Path, original_name: str, uploaded_at: str) -> Dataset:
         "file_name": original_name,
         "uploaded_at": uploaded_at,
         "sheet": sheet,
+        "merged_sheets": rinfo.get("merged_sheets", []),
         "header_row": header_row,
         "row_count": int(len(df)),
         "column_count": len([h for h in headers if h]),

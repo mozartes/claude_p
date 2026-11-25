@@ -1380,7 +1380,9 @@
   }
   function qualityHtml(d) {
     const q = d.quality, s = d.summary, m = d.meta;
-    return `${(q.warnings || []).map((w) => `<div class="notice neg" style="margin-top:14px"><b>원본 확인 필요</b> — ${esc(w)}</div>`).join("")}<div class="grid kpis" style="margin-top:14px">
+    const ms = (m.merged_sheets || []);
+    const mergedHtml = ms.length ? `<div class="notice info" style="margin-top:14px"><b>시트 ${ms.length}개를 합쳐 읽음</b> — ${ms.map((x) => `${esc(x.sheet)} ${cnt(x.rows)}건`).join(" · ")}${ms.some((x) => x.fixes && x.fixes.length) ? `<br>머리글 위치로 맞춤: ${ms.filter((x) => x.fixes && x.fixes.length).map((x) => `${esc(x.sheet)} ${x.fixes.map(esc).join(", ")}`).join(" / ")}` : ""}</div>` : "";
+    return `${(q.warnings || []).map((w) => `<div class="notice neg" style="margin-top:14px"><b>원본 확인 필요</b> — ${esc(w)}</div>`).join("")}${mergedHtml}<div class="grid kpis" style="margin-top:14px">
       ${kpiCard("원본 건수", cnt(s.source_rows) + "건", `시트 ${esc(m.sheet)} · 헤더 ${m.header_row}행 · ${m.column_count}열`, "", { scope: "all" })}
       ${kpiCard("대상 본부 건수", cnt(s.in_scope_rows) + "건", `본부 = ${esc(m.target_hq)}`, "", { scope: "all" })}
       ${kpiCard("집계 제외(중복·번호 없음)", cnt(s.agg_excluded_rows) + "건", `중복 그룹 ${q.dup_group_count}개`, s.agg_excluded_rows ? "neg" : "", { scope: "quality" })}

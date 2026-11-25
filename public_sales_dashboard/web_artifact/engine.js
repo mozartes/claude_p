@@ -167,6 +167,28 @@
   function ymLabel(ym) { if (!nn(ym)) return ""; return `${Math.floor(ym / 100)}-${String(ym % 100).padStart(2, "0")}`; }
 
   // ================================================================ 엑셀 읽기
+  function dataRows(aoa, hi, rng) {
+    const rows = [];
+    for (let j = hi + 1; j < aoa.length; j++) {
+      const r = aoa[j] || [];
+      if (r.every((v) => v === null || v === undefined || (typeof v === "string" && v.trim() === ""))) continue;
+      rows.push({ excelRow: rng.s.r + j + 1, values: r });
+    }
+    return rows;
+  }
+  // 다른 시트 머리글 → 기준 머리글 열 위치. 이름이 같으면 그 열, 없으면 같은 위치의 열이 기준에 없는 이름(깨진 머리글 등)일 때만 위치로 맞춤
+  function mergeMap(base, sh) {
+    const baseSet = new Set(base.filter((h) => h)), pos = {};
+    sh.forEach((h, j) => { if (h && !(h in pos)) pos[h] = j; });
+    const idx = [], notes = [];
+    base.forEach((h, i) => {
+      if (!h) idx.push(null);
+      else if (h in pos) idx.push(pos[h]);
+      else if (i < sh.length && !baseSet.has(sh[i])) { idx.push(i); notes.push(`‘${sh[i] || "(빈 머리글)"}’ → ‘${h}’`); }
+      else idx.push(null);
+    });
+    return { idx, notes };
+  }
   function readWorkbook(buf) {
     if (typeof XLSX === "undefined") throw new LoadError("엑셀 읽기 라이브러리를 불러오지 못했습니다. 페이지를 새로 고치세요.");
     let wb;
@@ -186,13 +208,23 @@
         const headerRow = rng.s.r + i + 1;
         if (!best || hit > best.hit) best = { name, headerRow, headers, hit };
         if (hit === CFG.REQUIRED_COLUMNS.length) {
-          const rows = [];
-          for (let j = i + 1; j < aoa.length; j++) {
-            const r = aoa[j] || [];
-            if (r.every((v) => v === null || v === undefined || (typeof v === "string" && v.trim() === ""))) continue;
-            rows.push({ excelRow: rng.s.r + j + 1, values: r });
-          }
-          return { sheet: name, headerRow, headers, rows };
+          const rows = dataRows(aoa, i, rng);
+          // 같은 양식(필수 열이 하나 이하만 빠진) 시트가 더 있으면 모두 합침(연도별 시트 등)
+          const merged = [{ sheet: name, rows: rows.length, fixes: [] }];
+          names.filter((n) => n !== name).forEach((on) => {
+            const ows = wb.Sheets[on]; if (!ows || !ows["!ref"]) return;
+            const orng = XLSX.utils.decode_range(ows["!ref"]);
+            const oa = XLSX.utils.sheet_to_json(ows, { header: 1, raw: true, defval: null, blankrows: true });
+            let ob = null;
+            for (let k = 0; k < Math.min(10, oa.length); k++) { const hh = (oa[k] || []).map((h) => cleanStr(h) || ""); const ht = CFG.REQUIRED_COLUMNS.filter((h) => hh.includes(h)).length; if (!ob || ht > ob.hit) ob = { k, hh, hit: ht }; }
+            if (!ob || ob.hit < CFG.REQUIRED_COLUMNS.length - 1) return;
+            const { idx, notes } = mergeMap(headers, ob.hh);
+            const add = dataRows(oa, ob.k, orng).map((x) => ({ values: idx.map((j) => (j !== null && j < x.values.length ? (x.values[j] === undefined ? null : x.values[j]) : null)) }));
+            add.forEach((x) => rows.push(x));
+            merged.push({ sheet: on, rows: add.length, fixes: notes });
+          });
+          if (merged.length > 1) rows.forEach((x, n) => { x.excelRow = headerRow + 1 + n; }); // 합친 경우 행 번호 = 합친 목록 순서
+          return { sheet: merged.length > 1 ? `${name} 외 ${merged.length - 1}개 시트 합침` : name, headerRow, headers, rows, merged_sheets: merged.length > 1 ? merged : [] };
         }
       }
     }
@@ -297,7 +329,7 @@
     });
     const quality = buildQuality(recs, dupHeaders);
     const meta = Object.assign({
-      file_name: fileName, uploaded_at: uploadedAt, sheet, header_row: headerRow, row_count: recs.length,
+      file_name: fileName, uploaded_at: uploadedAt, sheet, merged_sheets: parsed.merged_sheets || [], header_row: headerRow, row_count: recs.length,
       column_count: headers.filter(Boolean).length, missing_optional_columns: missingOpt,
       unknown_columns: headers.filter((h) => h && !known.has(h)).sort(), duplicate_headers: dupHeaders,
       load_seconds: (Date.now() - t0) / 1000, target_hq: CFG.TARGET_HQ,

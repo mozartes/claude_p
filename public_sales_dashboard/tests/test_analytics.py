@@ -455,3 +455,28 @@ def test_acr_years_view(make_ds, params):
     assert acr == {2025: 20, 2026: 120, 2027: 100, 2028: 0, 2029: 0} and v["available_win_years"] == [2025, 2026]
     v2 = A.acr_years_view(ds, params(base_date="2026-11-01", mode="term", ym_from="2026-01", ym_to="2026-06", acr_clip=True))
     assert [(r["year"], r["ACR"]) for r in v2["years"]] == [(2026, 60 + 20)]   # A 6개월 × 10 + C 4개월(3~6월) × 5
+
+
+def test_multi_sheet_merge(tmp_path):
+    """연도별 시트 여러 개 → 자동 합침. 머리글이 깨진 열(같은 위치)은 위치로 맞추고, 빠진 열은 비움"""
+    from openpyxl import Workbook
+    import config as C
+    import data_loader as DL
+    from pathlib import Path
+    base = list(C.REQUIRED_COLUMNS) + ["Funnel"]
+    wb = Workbook(); ws = wb.active; ws.title = "2025년"; ws.append(base)
+    def row(fid, win, monthly):
+        d = {"고객사": "고객", "수주년월": win, "월매출합계": monthly, "현재상황": "Win", "팀": "공공고객팀", "AM": "가", "ACR유형": "Acq.",
+             "계약기간(월)": 12, "매출발생년월": win, "Funnel번호": fid, "본부": C.TARGET_HQ, "계약기간매출": monthly * 12, "기존매출": 0, "변경매출": monthly, "Funnel": "x"}
+        return d
+    ws.append([row("F1", 202501, 10)[h] for h in base])
+    h2 = [("\\\\" if h == "월매출합계" else h) for h in base if h != "Funnel"]   # 깨진 머리글 + 열 하나 없음
+    w2 = wb.create_sheet("2026년"); w2.append(h2)
+    r2 = row("F2", 202601, 7); w2.append([r2["월매출합계" if h == "\\\\" else h] for h in h2])
+    wb.create_sheet("메모").append(["설명", "값"])
+    p = tmp_path / "multi.xlsx"; wb.save(p)
+    ds = DL.build_dataset(Path(p), "multi.xlsx", "x")
+    assert len(ds.df) == 2 and set(ds.df["funnel_id"]) == {"F1", "F2"}
+    assert float(ds.df.set_index("funnel_id").loc["F2", "monthly"]) == 7
+    ms = ds.meta["merged_sheets"]
+    assert [m["sheet"] for m in ms] == ["2025년", "2026년"] and ms[1]["fixes"]
