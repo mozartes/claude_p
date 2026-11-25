@@ -71,6 +71,7 @@
   function renderFilterInputs() {
     const f = S.f, o = S.meta.options;
     $("f_base").value = f.base_date; $("f_from").value = f.ym_from; $("f_to").value = f.ym_to;
+    $("f_wfrom").value = f.win_from || ""; $("f_wto").value = f.win_to || "";
     document.querySelectorAll("#f_level button").forEach((b) => b.classList.toggle("on", b.dataset.v === f.level));
     $("f_teams").innerHTML = o.teams.length ? o.teams.map((t) => `<label><input type="checkbox" value="${esc(t)}" ${f.teams.includes(t) ? "checked" : ""}> ${esc(t)}</label>`).join("") : '<span class="side-note">자료 없음</span>';
     renderAmList();
@@ -123,6 +124,7 @@
     f.base_date = $("f_base").value || S.meta.defaults.base_date;
     f.ym_from = $("f_from").value || S.meta.defaults.ym_from;
     f.ym_to = $("f_to").value || S.meta.defaults.ym_to;
+    f.win_from = $("f_wfrom").value || ""; f.win_to = $("f_wto").value || "";
     f.teams = selectedValues("f_teams");
     // 선택 팀에 속하지 않는 AM 선택은 해제
     const amSel = new Set(selectedValues("f_ams"));
@@ -176,7 +178,7 @@
       : (S.ui.dispUnit === S.ui.srcUnit ? `단위: ${S.ui.dispUnit}` : `단위: ${S.ui.dispUnit} (원본 ${S.ui.srcUnit} 환산)`);
     if (j && j.applied) {
       const a = j.applied;
-      $("pageSub").textContent = `기준일 ${a["기준일"]} · 조회기간 ${a["조회기간"]} · ${a["ACR 기준"]}`;
+      $("pageSub").textContent = `기준일 ${a["기준일"]} · 수주 기준 ${a["수주 기준 기간"] || "전체"} · 기여매출 기준 ${a["조회기간"]} · ${a["ACR 기준"]}`;
       const chips = [["집계", a["집계 수준"]], ["팀", a["팀"]], ["AM", a["AM"]], ["유형", a["ACR유형"]], ["상품 카테고리", a["상품 카테고리"] === "상품전체(모든 상품)" ? "전체" : a["상품 카테고리"]], ["상품", a["상품"]], ["검색", a["검색"]], ["보조필터", a["보조필터"]]];
       // 기본값과 다른 필터만 칩으로 표시, 전체 칩은 "필터 n개 적용" 버튼으로 펼침
       const isDef = (v) => ["전체", "없음", "미적용", "담당 전체", "A, C, R"].includes(String(v)) || /^전체/.test(String(v));
@@ -1547,7 +1549,7 @@
     }));
     $("applyBtn").addEventListener("click", () => { readFilters(); render(); });
     // 기준일·기간·ACR 기준은 바꾸는 즉시 다시 계산('조회' 버튼 없이도 반영)
-    ["f_base", "f_from", "f_to", "f_mode"].forEach((id) => $(id).addEventListener("change", () => { readFilters(); render(); }));
+    ["f_base", "f_from", "f_to", "f_wfrom", "f_wto", "f_mode"].forEach((id) => $(id).addEventListener("change", () => { readFilters(); render(); }));
     $("resetBtn").addEventListener("click", () => { S.f = defaultFilters(); $("amSearch").value = ""; $("prodSearch").value = ""; renderFilterInputs(); store.set("filters", S.f); render(); });
     document.querySelectorAll("#f_level button").forEach((b) => b.addEventListener("click", () => { S.f.level = b.dataset.v; document.querySelectorAll("#f_level button").forEach((x) => x.classList.toggle("on", x === b)); }));
     $("f_teams").addEventListener("change", () => { S.f.teams = selectedValues("f_teams"); S.f.ams = S.f.ams.filter((k) => !S.f.teams.length || S.f.teams.includes(k.split("|")[0])); renderAmList(); updateCounts(); });

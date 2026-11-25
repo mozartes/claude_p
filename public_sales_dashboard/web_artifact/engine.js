@@ -514,6 +514,8 @@
       acr_win_year: yearOr0(d.acr_win_year),
       acr_years: Array.from(new Set((Array.isArray(d.acr_years) ? d.acr_years.slice(0, 10) : []).map(yearOr0).filter((v) => v))).sort((a, b) => a - b),
       acr_clip: !!d.acr_clip,
+      // 수주 기준 기간(확정 건의 수주년월 범위). null = 제한 없음
+      win_from: ymFromStr(d.win_from) || null, win_to: ymFromStr(d.win_to) || null,
     };
   }
   function resolveProductGroup(ds, p) {
@@ -534,6 +536,7 @@
   function paramsSummary(p) {
     return {
       "기준일": p.base_date, "조회기간": `${ymLabel(p.ym_from)} ~ ${ymLabel(p.ym_to)}`,
+      "수주 기준 기간": p.win_from || p.win_to ? `${p.win_from ? ymLabel(p.win_from) : "처음"} ~ ${p.win_to ? ymLabel(p.win_to) : "끝"}` : "전체",
       "집계 수준": { all: "담당 전체", team: "팀", am: "AM" }[p.level], "팀": p.teams.join(", ") || "전체",
       "AM": p.ams.map((a) => `${a.split("|").pop()}(${a.split("|")[0]})`).join(", ") || "전체",
       "ACR유형": p.types.join(", "), "상품 카테고리": CFG.PRODUCT_GROUPS[p.product_group], "상품": productSummary(p), "검색": p.search || "없음",
@@ -559,6 +562,12 @@
       if (p.excl_midlarge && r.midlarge_excl === "Y") return false;
       if (p.excl_rmr && r.rmr_excl === "Y") return false;
       if (p.confirmed_only && r.confirmer === null) return false;
+      if ((p.win_from || p.win_to) && (isConfirmed(r) || r.status === "해지확정")) {
+        // 수주 기준 기간: 확정 건·해지확정의 수주년월만 제한, 진행 중 Funnel은 그대로
+        if (!nn(r.win_ym)) return false;
+        if (p.win_from && r.win_ym < p.win_from) return false;
+        if (p.win_to && r.win_ym > p.win_to) return false;
+      }
       return true;
     });
   }
@@ -679,6 +688,13 @@
   // ================================================================ 화면: ACR
   // 총 계약기간 구간별 기여매출(조회기간 반영분). 회사 기준 Recurring = 계약기간 12개월 이상. 세 구간 합 = A+C+R 기여매출
   const TERM_BANDS = [["one", "일회성(1개월)", 1, 1], ["short", "단기(2~11개월)", 2, 11], ["long", "Recurring(12개월 이상)", 12, 1e6]];
+  // R 재계약 증감 합: 상품 미선택이면 행별 (변경매출 − 기존매출), 상품 선택이면 상품 슬롯 증감. 카드(R 증감)와 같은 정의
+  function rRenewSum(con, df, p) {
+    const rs = con.filter((c) => c.acr_type === "R");
+    if (p.products.length) return rs.reduce((a, c) => a + c.delta, 0);
+    const byRow = new Map(df.map((r) => [r.row, r]));
+    return rs.reduce((a, c) => { const r = byRow.get(c.row); const d = r && nn(r.new_monthly) && nn(r.prev_monthly) ? r.new_monthly - r.prev_monthly : 0; return a + d; }, 0);
+  }
   function termBands(df, p) {
     const termOf = new Map(df.map((r) => [r.row, r.term]));
     const con = contributions(df, p.mode, p.ym_from, p.ym_to, p.products)[0].filter((c) => p.types.includes(c.acr_type));
@@ -686,7 +702,7 @@
     TERM_BANDS.forEach(([key, label, lo, hi]) => {
       const g = con.filter((c) => { const t = termOf.get(c.row); return t !== null && t !== undefined && t >= lo && t <= hi; });
       const s = (t, k) => g.filter((c) => c.acr_type === t).reduce((x, c) => x + c[k], 0);
-      const a = s("A", "amount"), c = s("C", "amount"), r = s("R", "delta");
+      const a = s("A", "amount"), c = s("C", "amount"), r = rRenewSum(g, df, p);
       const ch = churnContrib(df.filter((x) => x.term !== null && x.term >= lo && x.term <= hi), p.mode, p.ym_from, p.ym_to, p.products);
       out[key] = { label, A: a, C: c, R: r + ch.amount, ACR: a + c + r + ch.amount, count: new Set(g.map((x) => x.row)).size + ch.funnels };
     });
@@ -726,7 +742,7 @@
       const con = contributions(df, p.mode, f, t, p.products)[0].filter((c) => p.types.includes(c.acr_type));
       const ch = churnContrib(df, p.mode, f, t, p.products);
       const s = (tp, k) => con.filter((c) => c.acr_type === tp).reduce((x, c) => x + c[k], 0);
-      const a = s("A", "amount"), c = s("C", "amount"), rr = s("R", "delta");
+      const a = s("A", "amount"), c = s("C", "amount"), rr = rRenewSum(con, df, p);
       rows.push({ year: y, ym_from: f, ym_to: t, A: a, C: c, AC: a + c, R_renew: rr, R_churn: ch.amount, R: rr + ch.amount, ACR: a + c + rr + ch.amount,
         funnels: new Set(con.map((x) => x.row)).size + ch.funnels });
     });

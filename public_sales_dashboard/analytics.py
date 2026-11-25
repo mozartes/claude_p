@@ -41,6 +41,9 @@ class Params:
     total_year: int = 0
     # 연도별 기여매출: 수주연도(0 = 전체), 표시 연도 목록, 조회기간으로 자르기
     acr_win_year: int = 0
+    # 수주 기준 기간(확정 건의 수주년월 범위). None = 제한 없음
+    win_from: int | None = None
+    win_to: int | None = None
     acr_years: list[int] = field(default_factory=list)
     acr_clip: bool = False
 
@@ -121,6 +124,7 @@ def parse_params(d: dict | None) -> Params:
         acr_win_year=_year(d.get("acr_win_year"), 0),
         acr_years=sorted({_year(y, 0) for y in (d.get("acr_years") or [])[:10]} - {0}),
         acr_clip=bool(d.get("acr_clip")),
+        win_from=_ym_from_str(d.get("win_from")), win_to=_ym_from_str(d.get("win_to")),
     )
 
 
@@ -155,6 +159,7 @@ def params_summary(p: Params) -> dict:
     return {
         "기준일": p.base_date.isoformat(),
         "조회기간": f"{R.ym_label(p.ym_from)} ~ {R.ym_label(p.ym_to)}",
+        "수주 기준 기간": (f"{R.ym_label(p.win_from) if p.win_from else '처음'} ~ {R.ym_label(p.win_to) if p.win_to else '끝'}" if (p.win_from or p.win_to) else "전체"),
         "집계 수준": {"all": "담당 전체", "team": "팀", "am": "AM"}[p.level],
         "팀": ", ".join(p.teams) or "전체",
         "AM": ", ".join(a.split("|")[-1] + f"({a.split('|')[0]})" for a in p.ams) or "전체",
@@ -201,6 +206,16 @@ def filter_df(ds: Dataset, p: Params, include_excluded: bool = False) -> pd.Data
         m &= df["rmr_excl"].fillna("") != "Y"
     if p.confirmed_only:
         m &= df["confirmer"].notna()
+    if p.win_from or p.win_to:
+        # 수주 기준 기간: 확정 건(Win·재계약완료)과 해지확정의 수주년월만 제한, 진행 중 Funnel은 그대로
+        fixed = R.is_confirmed(df) | (df["status"] == "해지확정")
+        w = df["win_ym"]
+        ok = w.notna()
+        if p.win_from:
+            ok &= w >= p.win_from
+        if p.win_to:
+            ok &= w <= p.win_to
+        m &= ~fixed | ok.fillna(False).astype(bool)
     return df[m]
 
 
@@ -456,6 +471,17 @@ def row_record(r: pd.Series, ck: dict | None = None, acr: dict | None = None) ->
 TERM_BANDS = (("one", "일회성(1개월)", 1, 1), ("short", "단기(2~11개월)", 2, 11), ("long", "Recurring(12개월 이상)", 12, 10**6))
 
 
+def _r_renew_sum(con: pd.DataFrame, df: pd.DataFrame, p: Params) -> float:
+    """R 재계약 증감 합: 상품 미선택이면 행별 (변경매출 − 기존매출), 상품 선택이면 상품 슬롯 증감. 카드(R 증감)와 같은 정의."""
+    r = con[con["acr_type"] == "R"] if len(con) else con
+    if not len(r):
+        return 0.0
+    if p.products:
+        return float(r["delta"].sum())
+    d = (pd.to_numeric(df["new_monthly"], errors="coerce") - pd.to_numeric(df["prev_monthly"], errors="coerce"))
+    return float(r["row"].map(d).fillna(0).sum())
+
+
 def term_bands(df: pd.DataFrame, p: Params) -> dict:
     """총 계약기간 구간별 기여매출(조회기간 반영분, 현재 ACR 기준). 회사 기준 Recurring = 계약기간 12개월 이상.
     A·C = 금액, R = 재계약 증감 + 해지 감소. 세 구간 합 = A+C+R 기여매출."""
@@ -467,7 +493,7 @@ def term_bands(df: pd.DataFrame, p: Params) -> dict:
         g = con[(term >= lo) & (term <= hi)] if len(con) else con
         a = float(g.loc[g["acr_type"] == "A", "amount"].sum()) if len(g) else 0.0
         c = float(g.loc[g["acr_type"] == "C", "amount"].sum()) if len(g) else 0.0
-        r = float(g.loc[g["acr_type"] == "R", "delta"].sum()) if len(g) else 0.0
+        r = _r_renew_sum(g, df, p)
         ch = R.churn_contrib(df[(df["term"] >= lo) & (df["term"] <= hi)], p.mode, p.ym_from, p.ym_to, p.products)
         out[key] = {"label": label, "A": a, "C": c, "R": r + ch["amount"], "ACR": a + c + r + ch["amount"],
                     "count": int(g["row"].nunique()) + int(ch["funnels"])}
@@ -518,7 +544,7 @@ def acr_years_view(ds: Dataset, p: Params) -> dict:
         ch = R.churn_contrib(df, p.mode, f, t, p.products)
         a = float(con.loc[con["acr_type"] == "A", "amount"].sum()) if len(con) else 0.0
         c = float(con.loc[con["acr_type"] == "C", "amount"].sum()) if len(con) else 0.0
-        rr = float(con.loc[con["acr_type"] == "R", "delta"].sum()) if len(con) else 0.0
+        rr = _r_renew_sum(con, df, p)
         rows.append({"year": y, "ym_from": f, "ym_to": t, "A": a, "C": c, "AC": a + c, "R_renew": rr, "R_churn": ch["amount"],
                      "R": rr + ch["amount"], "ACR": a + c + rr + ch["amount"],
                      "funnels": int(con["row"].nunique()) + int(ch["funnels"]) if len(con) else int(ch["funnels"])})
