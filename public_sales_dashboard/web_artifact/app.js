@@ -851,7 +851,16 @@
       ${kpiCard("R. 증감", amt(rcA), rCardMeta(d.r_split, rdA, chA.amount, chA.funnels), "neg", { status: ["해지확정"], period: "rev_ym" })}
       ${kpiCard("A+C. 기여매출", amt(t.AC), `<span class="row"><span>${cnt(t.funnels_A + t.funnels_C)}건</span></span>`, "", { scope: "acr", acr_type: ["A", "C"] })}
     </div>
-    <p class="ov-ref">참고 · <b>R 재계약</b>(${S.f.products.length || S.f.product_group !== "all" ? "상품 선택: 재계약 증감" : "재계약 후 월매출"}, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr", acr_type: ["R"] }))}'>${amt(t.R)}</span> · ${cnt(t.funnels_R)}건 · 고유 Funnel 수는 월별 반복 반영 횟수가 아님</p>${recurringLine(d)}${rSplitLine(d)}
+    <div class="ov-h" style="margin-top:14px"><h3>발생매출 <span class="h-period">R = 재계약 후 실제 발생 매출(감소분 반영) · ${esc(lbl)}</span> <span class="info-i" tabindex="0" title="R. 발생매출 = 재계약완료 건의 재계약 후 월매출(변경매출)을 기여매출과 같은 규칙(매출발생년월·계약기간)으로 반영한 금액. 재계약 때 줄어든 금액이 반영된 실제 매출입니다(증감이 아님). A+C+R. 발생매출 = A+C 기여매출 + R. 발생매출. 해지확정 건은 재계약 후 매출이 없으므로 포함되지 않습니다." aria-label="발생매출 기준">i</span></h3></div>
+    <div class="strip two">
+      ${rtA.amount === null
+        ? kpiCard("A+C+R. 발생매출", "자료 없음", `<span class="row"><span>${esc(rtA.na || "상품 선택 시 산출 안 함")}</span></span>`, "hero")
+        : kpiCard("A+C+R. 발생매출", amt(t.AC + rtA.amount), `<span class="row"><span>A+C ${amt(t.AC)} + R 발생 ${amt(rtA.amount)}</span><span>${cnt(t.funnels_A + t.funnels_C + (rtA.funnels || 0))}건</span></span>`, "hero", { scope: "acr" })}
+      ${rtA.amount === null
+        ? kpiCard("R. 발생매출", "자료 없음", `<span class="row"><span>${esc(rtA.na || "상품 선택 시 산출 안 함")}</span></span>`, "r")
+        : kpiCard("R. 발생매출", amt(rtA.amount), `<span class="row"><span>재계약 전 ${amt(rtA.prev_amount)} → 재계약 후</span><span>${cnt(rtA.funnels || 0)}건</span></span><span class="row"><span>재계약 감소·증가 ${amt(rtA.amount - rtA.prev_amount)}</span></span>`, "r", { scope: "acr", acr_type: ["R"], status: ["재계약완료"] })}
+    </div>
+    <p class="ov-ref">고유 Funnel 수는 월별 반복 반영 횟수가 아님 · R. 발생매출은 R. 증감(기여매출)과 달리 재계약 후 매출 전체입니다.</p>${recurringLine(d)}${rSplitLine(d)}
     ${acrByWinCard(byWin)}
     ${acrYearsCard(ay, ayWin, aySpan)}
     ${Object.keys(d.excluded).length ? `<div class="notice warn">확정 조건이지만 이 지표에서 제외: ${Object.entries(d.excluded).map(([r, n]) => `${esc(r)} ${n}건`).join(", ")} <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr_excluded" }))}'>목록 보기</span></div>` : ""}
