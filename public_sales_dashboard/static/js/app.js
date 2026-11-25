@@ -721,6 +721,38 @@
       <p class="desc" style="margin-top:6px">예: 수주연도 2025년 + ‘수주연도부터 5년’ → 2025~2029년. 왼쪽 기간을 2025-01~2027-12로 두고 ‘조회기간 연도별’ → 2025·2026·2027년. 불러온 파일에 있는 수주연도만 고를 수 있습니다.</p></div>`;
   }
 
+  // ACR 수주 2026년 목표(억원, 사용자 제공·공개 가능 수치): 구분별 [1Q, 2Q, 3Q, 4Q, 1H, 2H, 연간] — 2026년 수주(A+C)에만 적용
+  const ORDER_TARGETS = { 2026: {
+    all: { "담당 전체": [239.8697, 199.9039, 185.1093, 183.3412, 439.7736, 368.4506, 808.2242],
+      "공공고객팀": [85.6678, 71.3943, 66.1105, 65.479, 157.062, 131.5895, 288.6515], "중부기업고객팀": [39.4072, 32.8414, 30.4108, 30.1203, 72.2485, 60.5312, 132.7797],
+      "서부기업고객팀": [39.4072, 32.8414, 30.4108, 30.1203, 72.2485, 60.5312, 132.7797], "동부기업고객1팀": [35.9805, 29.9856, 27.7664, 27.5012, 65.966, 55.2676, 121.2336],
+      "동부기업고객2팀": [39.4072, 32.8414, 30.4108, 30.1203, 72.2485, 60.5312, 132.7797] },
+    leased: { "담당 전체": [130.9489, 142.8534, 134.3502, 130.0986, 273.8023, 264.4488, 538.2512],
+      "공공고객팀": [46.7675, 51.0191, 47.9822, 46.4638, 97.7865, 94.446, 192.2326], "중부기업고객팀": [21.513, 23.4688, 22.0718, 21.3733, 44.9818, 43.4452, 88.427],
+      "서부기업고객팀": [21.513, 23.4688, 22.0718, 21.3733, 44.9818, 43.4452, 88.427], "동부기업고객1팀": [19.6423, 21.428, 20.1525, 19.5148, 41.0704, 39.6673, 80.7377],
+      "동부기업고객2팀": [21.513, 23.4688, 22.0718, 21.3733, 44.9818, 43.4452, 88.427] } } };
+  const OT_PERIODS = [["1Q", 1, 3], ["2Q", 4, 6], ["3Q", 7, 9], ["4Q", 10, 12], ["1H", 1, 6], ["2H", 7, 12], ["연간", 1, 12]];
+  async function orderTargetCard(year) {
+    const tg = ORDER_TARGETS[year]; if (!tg) return "";
+    const prod = S.ui.otProd === "leased" ? "leased" : "all", T = tg[prod];
+    const base = Object.assign(totF(), { teams: [], ams: [], products: [], total_year: year, product_group: prod });
+    const names = Object.keys(T);
+    const views = await Promise.all(names.map((nm) => api("/view/total", { filters: Object.assign({}, base, nm === "담당 전체" ? {} : { teams: [nm] }) }).then((x) => x.data || {})));
+    const srcWon = UNIT_WON[S.ui.srcUnit] || 1e6, toSrc = (eok) => eok * 1e8 / srcWon;
+    const baseYm = Number(String(S.f.base_date || "").slice(0, 7).replace("-", "")) || 0;
+    const sumM = (v, m1, m2) => (v.empty ? 0 : (v.monthly || []).filter((m) => m.ym % 100 >= m1 && m.ym % 100 <= m2).reduce((a, m) => a + (m.AC || 0), 0));
+    const n0 = (x) => fmtNum(conv(x), 0).replace(/<[^>]+>/g, "");
+    const cell = (act, t, m1) => {
+      const g = toSrc(t), r = g ? act / g : null, future = baseYm && year * 100 + m1 > baseYm;
+      return `<td class="num ot-c${future ? " ot-future" : ""}"><span class="ot-frac">${n0(act)}/${n0(g)}</span><b class="ot-pct ${r >= 1 ? "ot-ok" : r < 0.7 ? "ot-low" : ""}">${r == null ? "—" : `${(r * 100).toFixed(0)}%`}</b></td>`;
+    };
+    const rows = names.map((nm, i) => `<tr class="${nm === "담당 전체" ? "tg-strong" : ""}"><td>${esc(nm)}</td>${OT_PERIODS.map(([lb, m1, m2], k) => cell(sumM(views[i], m1, m2), T[nm][k], m1)).join("")}</tr>`).join("");
+    return `<div class="card ot-card" style="margin-top:16px"><div class="card-head"><h3>${year}년 수주(A+C) 목표 대비 달성율 <span class="h-period">실적/목표 달성율 · 분기·반기·연간</span></h3>
+      <span class="seg-light" id="otProd"><button type="button" data-v="all" class="${prod === "all" ? "on" : ""}">전체 상품</button><button type="button" data-v="leased" class="${prod === "leased" ? "on" : ""}">전용회선</button></span></div>
+      <div class="table-wrap"><table class="t ot-t"><thead><tr><th>구분</th>${OT_PERIODS.map(([lb]) => `<th class="num">${lb}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>
+      <p class="desc" style="margin-top:6px">실적 = ${year}년 수주(A+C) 계약기간매출(수주년월 기준${totExcl() ? ", 중대형퍼널제외=Y 제외" : ""}) · 목표 = ${year}년 수주 목표(억원 → 1억원 = 100백만원) · 단위 ${esc(unitName())} · 기준일 이후 분기는 흐리게. 팀·AM 필터와 무관.</p></div>`;
+  }
+
   // ------------------------------------------------------------ 페이지: ACR 수주(기여매출)
   async function pageAcr() {
     const j = await api("/view/acr", { filters: S.f });
@@ -922,6 +954,7 @@
     let prevMonthly = [];
     try { const jp = await api("/view/total", { filters: Object.assign(totF(), { total_year: y - 1 }) }); prevMonthly = (jp.data && jp.data.monthly) || []; } catch (e) { prevMonthly = []; }
     const baseYm = Number(String(S.f.base_date || "").slice(0, 7).replace("-", "")) || null;
+    const otHtml = await orderTargetCard(y);
     const tRows = aggPeriods(netRows(d.monthly), perOf(), true, baseYm), tPool = poolOf(aggPeriods(netRows(prevMonthly), perOf(), true, baseYm).concat(tRows));
     // 메뉴·제목에 집계연도 표시
     $("pageTitle").textContent = "ACR 수주";
@@ -949,6 +982,7 @@
     <p class="ov-ref">참고 · <b>R 재계약</b>(${pSelT ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"}, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify(dk({ acr_type: ["R"] })))}'>${amt(t.R)}</span> · ${cnt(t.funnels_R)}건 = 기존 계약총액 ${amt(rf.prev_total)} + 재계약 증감 ${amt(rf.new_total - rf.prev_total)}</p>${rSplitLine(d)}
     ${Object.keys(d.excluded).length ? `<div class="notice warn">집계에서 제외: ${Object.entries(d.excluded).map(([k, v]) => `${esc(k)} ${v}건`).join(", ")}</div>` : ""}
     ${d.mismatch ? `<div class="notice warn">계약기간매출이 월매출합계 × 계약기간과 다른 건 ${d.mismatch}건 — 원본 계약기간매출 그대로 합산했습니다.</div>` : ""}
+    ${otHtml}
     <div class="card" style="margin-top:16px"><div class="card-head"><h3>${(PERIODS.find((x) => x[0] === perOf()) || PERIODS[0])[1]} 추이 차트 (${y}년)</h3>${periodToolbar("totPer")}</div><p class="desc">막대 A·C 누적, R 증감은 0 아래, 선 A+C+R · 월별 보기에서 클릭 → 해당 월 Funnel</p>
       <div class="chart-box tall"><canvas id="totChart"></canvas></div></div>
     <div class="grid ov-split" style="margin-top:16px">
@@ -973,6 +1007,7 @@
     acrMonthlyChart("totChart", tRows, ["A", "C", "R", "ACR"], (m, key) => openDetail(dk({ win_month: m.ym, acr_type: key && ["A", "C", "R"].includes(key) ? [key] : undefined })));
     document.querySelectorAll("#tyearSel button").forEach((b) => b.addEventListener("click", () => { S.f.total_year = Number(b.dataset.v); store.set("filters", S.f); render(); }));
     const mlT = $("totExclML"); if (mlT) mlT.addEventListener("change", () => { S.ui.totExclML = mlT.checked; store.set("ui", S.ui); render(); });
+    document.querySelectorAll("#otProd button").forEach((b) => b.addEventListener("click", () => { S.ui.otProd = b.dataset.v; store.set("ui", S.ui); render(); }));
   }
 
   // ------------------------------------------------------------ 페이지: 팀·AM
