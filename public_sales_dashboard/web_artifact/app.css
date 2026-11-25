@@ -452,6 +452,13 @@ tr.bw-tot td { border-top: 1px solid var(--border); }
 .ot-t .ot-ok { color: var(--ok); }
 .ot-t th, .ot-t td { padding-left: 8px; padding-right: 8px; }
 /* ACR 수주(기여매출): 발생매출 2장 */
-.strip.two { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+.gen-wrap { margin-top: 12px; max-width: max(34%, 380px); }
+.gen-h { font-size: 12.5px; font-weight: 600; margin: 0 0 6px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.gen-h .muted { font-weight: 400; font-size: 11.5px; }
+.strip.two { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .strip.two .kpi, .strip.two .kpi.hero { grid-column: auto; }
-@media (max-width: 760px) { .strip.two { grid-template-columns: minmax(0, 1fr); } }
+.kpi.gen { padding: 10px 12px; }
+.strip.two .kpi.gen .value { font-size: 20px; }
+.kpi.gen .label { font-size: 12px; }
+.kpi.gen .meta { font-size: 11.5px; }
+@media (max-width: 760px) { .gen-wrap { max-width: none; } }

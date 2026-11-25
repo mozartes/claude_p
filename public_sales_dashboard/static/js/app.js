@@ -194,6 +194,18 @@
     return `<details class="card" style="margin-top:14px"><summary><b>${esc(title || "계산 기준")}</b> <span class="muted">(펼치기)</span></summary>
       <dl class="basis" style="margin-top:8px">${Object.entries(b).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></details>`;
   }
+  // 발생매출(R = 재계약 후 매출 전체, A+C+R = A+C 기여매출 + R 발생) — 종합 현황·ACR 수주(기여매출) 공용, 작은 카드 2장
+  function genStrip(ac, acN, rt, basisTxt) {
+    rt = rt || { amount: null };
+    const na = rt.amount === null, naTxt = `<span class="row"><span>${esc(rt.na || "상품 선택 시 산출 안 함")}</span></span>`;
+    return `<div class="gen-wrap"><div class="gen-h">발생매출 <span class="muted">${esc(basisTxt || "")}</span> <span class="info-i" tabindex="0" title="R. 발생매출 = 재계약완료 건의 재계약 후 월매출(변경매출)을 기여매출과 같은 규칙(매출발생년월·계약기간)으로 반영한 금액. 재계약 때 줄어든 금액이 반영된 실제 매출입니다(증감 아님). A+C+R. 발생매출 = A+C 기여매출 + R. 발생매출. 해지확정 건은 재계약 후 매출이 없어 포함되지 않습니다." aria-label="발생매출 기준">i</span></div>
+    <div class="strip two">
+      ${na ? kpiCard("A+C+R. 발생매출", "자료 없음", naTxt, "hero gen")
+        : kpiCard("A+C+R. 발생매출", amt(ac + rt.amount), `<span class="row"><span>A+C ${amt(ac)} + R ${amt(rt.amount)}</span></span><span class="row"><span>${cnt(acN + (rt.funnels || 0))}건</span></span>`, "hero gen", { scope: "acr" })}
+      ${na ? kpiCard("R. 발생매출", "자료 없음", naTxt, "r gen")
+        : kpiCard("R. 발생매출", amt(rt.amount), `<span class="row"><span>재계약 전 ${amt(rt.prev_amount)}</span></span><span class="row"><span>감소·증가 ${amt(rt.amount - rt.prev_amount)}</span><span>${cnt(rt.funnels || 0)}건</span></span>`, "r gen", { scope: "acr", acr_type: ["R"], status: ["재계약완료"] })}
+    </div></div>`;
+  }
   function kpiCard(label, value, meta, cls, drill) {
     return `<div class="card kpi ${cls || ""}" ${drill ? `data-drill='${esc(JSON.stringify(drill))}'` : ""} tabindex="0" role="button">
       <div class="bar"></div><div class="label">${esc(label)}</div><div class="value">${value}</div><div class="meta" title="${esc(String(meta || "").replace(/<br\s*\/?>/g, " · ").replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim())}">${meta || ""}</div></div>`;
@@ -572,7 +584,7 @@
       ${rcCard(rdX, chX.amount, chX.funnels, { status: ["해지확정"], period: "rev_ym" }, acrOv && acrOv.r_split)}
       ${kpiCard("A+C 기여매출", amt(a.AC), row(`${cnt(a.funnels_A + a.funnels_C)}건`, ""), "", { scope: "acr", acr_type: ["A", "C"] })}
     </div>
-    <p class="ov-ref">참고 · <b>R 재계약</b>(재계약 후 확보 매출, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr", acr_type: ["R"] }))}'>${amt(a.R)}</span> · ${cnt(a.funnels_R)}건${rt.amount === null ? "" : ` · 재계약 전 ${amt(rt.prev_amount)}`}</p>${recurringLine(acrOv)}${rSplitLine(acrOv)}</section>`;
+    ${genStrip(a.AC, a.funnels_A + a.funnels_C, rt, "R = 재계약 후 매출(감소분 반영)")}${recurringLine(acrOv)}${rSplitLine(acrOv)}</section>`;
     // ③ 확인 필요 — 음수·위험 신호를 한 곳에 모음(값은 기존 계산 그대로)
     const ch = k.churn_acr || { amount: 0, funnels: 0, excluded: {} };
     const chEx = Object.values(ch.excluded || {}).reduce((x, y) => x + y, 0);
@@ -824,15 +836,7 @@
       ${kpiCard("R. 증감", amt(rcA), rCardMeta(d.r_split, rdA, chA.amount, chA.funnels), "neg", { status: ["해지확정"], period: "rev_ym" })}
       ${kpiCard("A+C. 기여매출", amt(t.AC), `<span class="row"><span>${cnt(t.funnels_A + t.funnels_C)}건</span></span>`, "", { scope: "acr", acr_type: ["A", "C"] })}
     </div>
-    <div class="ov-h" style="margin-top:14px"><h3>발생매출 <span class="h-period">R = 재계약 후 실제 발생 매출(감소분 반영) · ${esc(lbl)}</span> <span class="info-i" tabindex="0" title="R. 발생매출 = 재계약완료 건의 재계약 후 월매출(변경매출)을 기여매출과 같은 규칙(매출발생년월·계약기간)으로 반영한 금액. 재계약 때 줄어든 금액이 반영된 실제 매출입니다(증감이 아님). A+C+R. 발생매출 = A+C 기여매출 + R. 발생매출. 해지확정 건은 재계약 후 매출이 없으므로 포함되지 않습니다." aria-label="발생매출 기준">i</span></h3></div>
-    <div class="strip two">
-      ${rtA.amount === null
-        ? kpiCard("A+C+R. 발생매출", "자료 없음", `<span class="row"><span>${esc(rtA.na || "상품 선택 시 산출 안 함")}</span></span>`, "hero")
-        : kpiCard("A+C+R. 발생매출", amt(t.AC + rtA.amount), `<span class="row"><span>A+C ${amt(t.AC)} + R 발생 ${amt(rtA.amount)}</span><span>${cnt(t.funnels_A + t.funnels_C + (rtA.funnels || 0))}건</span></span>`, "hero", { scope: "acr" })}
-      ${rtA.amount === null
-        ? kpiCard("R. 발생매출", "자료 없음", `<span class="row"><span>${esc(rtA.na || "상품 선택 시 산출 안 함")}</span></span>`, "r")
-        : kpiCard("R. 발생매출", amt(rtA.amount), `<span class="row"><span>재계약 전 ${amt(rtA.prev_amount)} → 재계약 후</span><span>${cnt(rtA.funnels || 0)}건</span></span><span class="row"><span>재계약 감소·증가 ${amt(rtA.amount - rtA.prev_amount)}</span></span>`, "r", { scope: "acr", acr_type: ["R"], status: ["재계약완료"] })}
-    </div>
+    ${genStrip(t.AC, t.funnels_A + t.funnels_C, rtA, `R = 재계약 후 매출(감소분 반영) · ${lbl}`)}
     <p class="ov-ref">고유 Funnel 수는 월별 반복 반영 횟수가 아님 · R. 발생매출은 R. 증감(기여매출)과 달리 재계약 후 매출 전체입니다.</p>${recurringLine(d)}${rSplitLine(d)}
     ${acrByWinCard(byWin)}
     ${acrYearsCard(ay, ayWin, aySpan)}
