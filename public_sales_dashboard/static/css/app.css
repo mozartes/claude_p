@@ -490,6 +490,13 @@ tr.bw-tot td { border-top: 1px solid var(--border); }
 .gen-row { display: grid; grid-template-columns: minmax(180px, .85fr) minmax(0, 5fr); gap: 16px; align-items: stretch; }
 .gen-wrap.gen-side { margin-top: 0; max-width: none; display: flex; flex-direction: column; }
 .gen-wrap.gen-side .strip.two { grid-template-columns: minmax(0, 1fr); flex: 1; gap: 8px; }
-@media (min-width: 1281px) { .gen-row .strip.five, .gen-row .strip.five:has(.rgrid) { grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, .9fr)) minmax(0, 1.6fr) minmax(0, .9fr); } }
-@media (max-width: 1499px) { .gen-row { grid-template-columns: minmax(0, 1fr); } .gen-wrap.gen-side .strip.two { grid-template-columns: repeat(2, minmax(0, 1fr)); } .gen-wrap.gen-side { max-width: max(34%, 380px); } }
+@media (min-width: 1281px) { .gen-row .strip.five.six, .gen-row .strip.five.six:has(.rgrid) { grid-template-columns: minmax(0, 1.3fr) repeat(2, minmax(0, .9fr)) minmax(0, 1.65fr) minmax(0, .9fr) minmax(0, 1.1fr); } }
+@media (max-width: 1599px) { .gen-row { grid-template-columns: minmax(0, 1fr); } .gen-wrap.gen-side { max-width: max(22%, 240px); } }
 @media (max-width: 760px) { .gen-wrap.gen-side { max-width: none; } }
+.gen-wrap.gen-side .kpi.gen { padding: 14px 16px; }
+.gen-wrap.gen-side .strip.two .kpi.gen .value { font-size: 24px; }
+@media (max-width: 760px) { .gen-wrap.gen-side { max-width: none; } }
+/* 발생매출 카드: 보라 테두리·배경(수주 카드 주황과 구분) */
+.kpi.gen-box { background: var(--r-soft); border: 2px solid var(--series-r); }
+.kpi.gen-box .label { color: var(--r-ink); }
+.kpi.gen-box .label::before { background: var(--series-r); }
