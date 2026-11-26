@@ -475,11 +475,14 @@ tr.bw-tot td { border-top: 1px solid var(--border); }
 .kpi.ac-tgc .value { overflow: visible; }
 /* 목표 카드가 있는 줄: A+C+R 수주(hero) 폭을 줄이고 수주(A+C) 카드 폭 확보 */
 @media (min-width: 1281px) {
-  .strip.five:has(.ac-tgc) { grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(0, 1fr)) minmax(0, 1.2fr) minmax(0, 1.55fr); }
-  .strip.five:has(.ac-tgc):has(.rgrid) { grid-template-columns: minmax(0, 1.15fr) repeat(2, minmax(0, .9fr)) minmax(0, 1.45fr) minmax(0, 1.5fr); }
+  .strip.five.ac-first { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1.25fr) repeat(2, minmax(0, 1fr)) minmax(0, 1.2fr); }
+  .strip.five.ac-first:has(.rgrid) { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.15fr) repeat(2, minmax(0, .9fr)) minmax(0, 1.45fr); }
 }
 @media (min-width: 1281px) and (max-width: 1440px) { .kpi.ac-tgc .value .ac-tg-frac { font-size: 20px; } .kpi.ac-tgc .value .ac-tg-pct { font-size: 15px; } }
 /* 수주(A+C) 카드: 주황 테두리·배경 */
 .kpi.ac-box { background: var(--c-soft); border: 2px solid var(--series-c); }
 .kpi.ac-box .label { color: var(--c-ink); }
 .kpi.ac-box .label::before { background: var(--series-c); }
+/* 수주(A+C) 카드가 맨 왼쪽: 좁은 화면(2열)에서는 hero가 둘째 줄 전체 */
+@media (max-width: 1280px) { .strip.five.ac-first .kpi.ac-box { grid-column: span 2; } .strip.five.ac-first .kpi.hero { grid-column: span 2; } }
+@media (max-width: 560px) { .strip.five.ac-first .kpi.ac-box, .strip.five.ac-first .kpi.hero { grid-column: auto; } }

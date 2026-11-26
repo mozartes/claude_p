@@ -586,12 +586,12 @@
       const cr = tk.churn_ref || { amount: 0, count: 0, excluded: 0 }, rf0 = tk.r_ref || { new_total: 0, prev_total: 0 };
       const rdT = pSel ? tk.R : rf0.new_total - rf0.prev_total, rChgT = rdT + cr.amount, acrT = tk.A + tk.C + rChgT;
       h += `<section class="ov-sec"><div class="ov-h"><h3>ACR 수주 ${sub(`${tk.year}년 수주 · 계약 전체 기간`)} ${info(`확정 건(A·C=Win, R=재계약완료)의 계약 전체 기간 매출을 수주년월(${tk.year}-01~12)에 합산 · A+C+R = A + C + R 증감(재계약 증감 + 해지 감소, 계약기간 기준)${exn ? ` · 계약기간 누락 등 ${exn}건 제외` : ""} · 연도는 ACR 수주 화면에서 변경`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
-      <div class="strip five">
+      <div class="strip five ac-first">
+        ${acCard(`${tk.year}년 수주(A+C)`, tk.year, tk.AC, `${cnt(tk.funnels_A + tk.funnels_C)}건`, tdk({ acr_type: ["A", "C"] }))}
         ${kpiCard("A+C+R 수주", amt(acrT), heroMeta(tk, rChgT, `A+C ${cnt(tk.funnels_A + tk.funnels_C)}건`), "hero", tdk())}
         ${kpiCard("A 수주", amt(tk.A), row(`${cnt(tk.funnels_A)}건`, `A+C 중 ${pctOf(tk.A, tk.AC)}`), "a", tdk({ acr_type: ["A"] }))}
         ${kpiCard("C 수주", amt(tk.C), row(`${cnt(tk.funnels_C)}건`, `A+C 중 ${pctOf(tk.C, tk.AC)}`), "c", tdk({ acr_type: ["C"] }))}
         ${rcCard(rdT, cr.amount, cr.count, { status: ["해지확정"], period: "win_ym" }, tk.r_split)}
-        ${acCard(`${tk.year}년 수주(A+C)`, tk.year, tk.AC, `${cnt(tk.funnels_A + tk.funnels_C)}건`, tdk({ acr_type: ["A", "C"] }))}
       </div>
       <p class="ov-ref">참고 · <b>R 재계약</b>(재계약 후 확보 매출, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify(tdk({ acr_type: ["R"] })))}'>${amt(tk.R)}</span> · ${cnt(tk.funnels_R)}건</p>${rSplitLine(tk)}</section>`;
     }
@@ -1036,12 +1036,12 @@
         <label class="ml-toggle" title="원본 ‘중대형퍼널제외’ 열이 Y인 건을 ACR 수주 실적에서 뺌(종합 현황·우리 팀 실적의 ACR 수주도 같은 기준)"><input type="checkbox" id="totExclML" ${totExcl() || S.f.excl_midlarge ? "checked" : ""} ${S.f.excl_midlarge ? "disabled" : ""}> 중대형퍼널제외=Y 제외</label>
         <span class="muted">확정 건(A·C=Win, R=재계약완료)의 계약 전체 기간 매출을 수주월에 합산</span></div>
     <div class="ov-h" style="margin-top:16px"><h3>요약 <span class="h-period">수주년월 ${y}-01~${y}-12 · 계약기간매출 합계</span> <span class="info-i" tabindex="0" title="${esc(`A+C+R = A + C + R 증감(재계약 증감 × 계약기간 + 해지 감소 × 계약기간)${crT.excluded ? ` · 해지 계산 제외 ${crT.excluded}건` : ""}${Object.keys(d.excluded).length ? ` · 집계 제외 ${Object.values(d.excluded).reduce((x, z) => x + z, 0)}건` : ""}`)}">i</span></h3><span class="unit">단위 ${esc(unitName())}</span></div>
-    <div class="strip five">
+    <div class="strip five ac-first">
+      ${acCard(`${y}년 수주(A+C)`, y, t.AC, `${cnt(t.funnels_A + t.funnels_C)}건`, dk({ acr_type: ["A", "C"] }))}
       ${kpiCard("A+C+R. 매출", amt(t.A + t.C + rcT), `<span class="row"><span>A+C ${amt(t.AC)} + R 증감 ${amt(rcT)}</span><span>A+C ${cnt(t.funnels_A + t.funnels_C)}건</span></span><div class="mini" aria-hidden="true"><span style="width:${t.AC > 0 && t.A > 0 ? (t.A / t.AC * 100).toFixed(1) : 0}%;background:var(--series-a)"></span><span style="width:${t.AC > 0 && t.C > 0 ? (t.C / t.AC * 100).toFixed(1) : 0}%;background:var(--series-c)"></span></div>`, "hero", dk())}
       ${kpiCard("A. 수주", amt(t.A), `<span class="row"><span>${cnt(t.funnels_A)}건</span><span>A+C 중 ${t.AC > 0 ? (t.A / t.AC * 100).toFixed(1) + "%" : "—"}</span></span>`, "a", dk({ acr_type: ["A"] }))}
       ${kpiCard("C. 수주", amt(t.C), `<span class="row"><span>${cnt(t.funnels_C)}건</span><span>A+C 중 ${t.AC > 0 ? (t.C / t.AC * 100).toFixed(1) + "%" : "—"}</span></span>`, "c", dk({ acr_type: ["C"] }))}
       ${kpiCard("R. 증감", amt(rcT), rCardMeta(d.r_split, rdT, crT.amount, crT.count), "neg", { status: ["해지확정"], period: "win_ym" })}
-      ${acCard(`${y}년 수주(A+C)`, y, t.AC, `${cnt(t.funnels_A + t.funnels_C)}건`, dk({ acr_type: ["A", "C"] }))}
     </div>
     <p class="ov-ref">참고 · <b>R 재계약</b>(${pSelT ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"}, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify(dk({ acr_type: ["R"] })))}'>${amt(t.R)}</span> · ${cnt(t.funnels_R)}건 = 기존 계약총액 ${amt(rf.prev_total)} + 재계약 증감 ${amt(rf.new_total - rf.prev_total)}</p>${rSplitLine(d)}
     ${Object.keys(d.excluded).length ? `<div class="notice warn">집계에서 제외: ${Object.entries(d.excluded).map(([k, v]) => `${esc(k)} ${v}건`).join(", ")}</div>` : ""}
@@ -1166,12 +1166,12 @@
         <span class="muted">집계연도</span><span class="seg-light" id="mtYear">${years.map((yy) => `<button type="button" data-v="${yy}" class="${yy === y ? "on" : ""}">${yy}년</button>`).join("")}</span></div>
       <div class="notice info">왼쪽 필터의 팀이 <b>${esc(tm)}</b>(으)로 설정되어 다른 메뉴도 우리 팀 기준으로 보입니다. 전체를 보려면 ‘전체로 되돌리기’.</div>
       <section class="ov-sec"><div class="ov-h"><h3>ACR 수주 ${sub(`${y}년 수주 · 계약 전체 기간`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
-      <div class="strip five">
+      <div class="strip five ac-first">
+        ${acCard(`${y}년 수주(A+C)`, y, t.AC, `${cnt(t.funnels_A + t.funnels_C)}건`, dkT({ acr_type: ["A", "C"] }), [tm])}
         ${kpiCard("A+C+R 수주", amt(acrT), `<span class="row"><span>A+C ${amt(t.AC)} + R 증감 ${amt(rc)}</span></span>`, "hero", dkT())}
         ${kpiCard("A 수주", amt(t.A), `<span class="row"><span>${cnt(t.funnels_A)}건</span></span>`, "a", dkT({ acr_type: ["A"] }))}
         ${kpiCard("C 수주", amt(t.C), `<span class="row"><span>${cnt(t.funnels_C)}건</span></span>`, "c", dkT({ acr_type: ["C"] }))}
         ${kpiCard("R 증감", amt(rc), `<span class="row"><span>재계약 ${amt(rd)}</span></span><span class="row"><span>해지 ${amt(cr.amount)} · ${cnt(cr.count)}건</span></span>`, "neg", { status: ["해지확정"], period: "win_ym" })}
-        ${acCard(`${y}년 수주(A+C)`, y, t.AC, `${cnt(t.funnels_A + t.funnels_C)}건`, dkT({ acr_type: ["A", "C"] }), [tm])}
       </div></section>
       <section class="ov-sec"><div class="ov-h"><h3>기여매출 · 진행 현황 ${sub(`${esc(S.f.ym_from)}~${esc(S.f.ym_to)}`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
       <div class="grid kpis">
