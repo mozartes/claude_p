@@ -467,3 +467,8 @@ tr.bw-tot td { border-top: 1px solid var(--border); }
 .tg-tools .tg-import { cursor: pointer; padding: 7px 14px; font-size: 13px; box-shadow: var(--shadow); }
 .tg-tools .tg-import:hover { filter: brightness(1.08); }
 .tg-tools .tg-import:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* 수주(A+C) 카드: 실적/목표 크게 · 달성율 약간 작게 */
+.ac-tg { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; margin: 2px 0 4px; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.ac-tg-frac { font-size: 17px; font-weight: 700; color: var(--text); }
+.ac-tg-pct { font-size: 14px; font-weight: 600; color: var(--text-2); }
+.ac-tg-pct.tg-ok { color: var(--ok); }

@@ -463,7 +463,7 @@
     const st = scopeTarget(year, teams), g = st ? st.eok * 1e8 / (UNIT_WON[S.ui.srcUnit] || 1e6) : null;
     if (!g) return `<span class="row"><span>${cntTxt}</span></span>`;
     const r = act / g;
-    return `<span class="row"><span class="tg-frac" title="${st.label} ${Math.round(st.eok * 10) / 10}억원">${fmtNum(conv(act), 0)}/${fmtNum(conv(g), 0)} <b class="${r >= 1 ? "tg-ok" : ""}">${(r * 100).toFixed(1)}%</b></span><span>${cntTxt}</span></span><span class="muted" style="font-size:11px">${st.label}</span>`;
+    return `<span class="ac-tg" title="${st.label} ${Math.round(st.eok * 10) / 10}억원"><span class="ac-tg-frac">${fmtNum(conv(act), 0)}/${fmtNum(conv(g), 0)}</span> <span class="ac-tg-pct ${r >= 1 ? "tg-ok" : ""}">(${(r * 100).toFixed(1)}%)</span></span><span class="row"><span>${cntTxt}</span><span class="muted" style="font-size:11px">${st.label}</span></span>`;
   }
   function targetsOf(year) {
     const all = store.get("targets", {}) || {};
