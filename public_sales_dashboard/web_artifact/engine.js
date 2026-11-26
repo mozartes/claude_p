@@ -534,7 +534,7 @@
     let types = listOf(d.types).filter((t) => ["A", "C", "R"].includes(t));
     if (!types.length) types = ["A", "C", "R"];
     const [yy, mm] = base.split("-").map(Number);
-    return {
+    const P = {
       base_date: base, base_ms: Date.UTC(yy, mm - 1, +base.slice(8)), base_ym: yy * 100 + mm,
       ym_from: from, ym_to: to, level: ["all", "team", "am"].includes(d.level) ? d.level : "all",
       teams: listOf(d.teams), ams: listOf(d.ams), types, products: listOf(d.products), user_products: listOf(d.products),
@@ -549,6 +549,10 @@
       // 수주 기준 기간(확정 건의 수주년월 범위). null = 제한 없음
       win_from: ymFromStr(d.win_from) || null, win_to: ymFromStr(d.win_to) || null,
     };
+    // 수주 기준 기간이 있으면 집계연도(ACR 수주)를 그 기간 안으로 맞춤(예: 수주 기준 2021-01~12 → 2021년)
+    if (P.win_to && P.total_year > Math.floor(P.win_to / 100)) P.total_year = Math.floor(P.win_to / 100);
+    if (P.win_from && P.total_year < Math.floor(P.win_from / 100)) P.total_year = Math.floor(P.win_from / 100);
+    return P;
   }
   function resolveProductGroup(ds, p) {
     p.products = p.user_products.slice();

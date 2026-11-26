@@ -112,7 +112,7 @@ def parse_params(d: dict | None) -> Params:
                 pass
     types = [t for t in _list(d.get("types")) if t in ("A", "C", "R")] or ["A", "C", "R"]
     level = d.get("level") if d.get("level") in ("all", "team", "am") else "all"
-    return Params(
+    p = Params(
         base_date=base, ym_from=ym_from, ym_to=ym_to, level=level,
         teams=_list(d.get("teams")), ams=_list(d.get("ams")), types=types,
         products=_list(d.get("products")), user_products=_list(d.get("products")),
@@ -126,6 +126,12 @@ def parse_params(d: dict | None) -> Params:
         acr_clip=bool(d.get("acr_clip")),
         win_from=_ym_from_str(d.get("win_from")), win_to=_ym_from_str(d.get("win_to")),
     )
+    # 수주 기준 기간이 있으면 집계연도(ACR 수주)를 그 기간 안으로 맞춤(예: 수주 기준 2021-01~12 → 2021년)
+    if p.win_to and p.total_year > p.win_to // 100:
+        p.total_year = p.win_to // 100
+    if p.win_from and p.total_year < p.win_from // 100:
+        p.total_year = p.win_from // 100
+    return p
 
 
 def leased_set() -> set[str]:

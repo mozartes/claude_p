@@ -480,3 +480,15 @@ def test_multi_sheet_merge(tmp_path):
     assert float(ds.df.set_index("funnel_id").loc["F2", "monthly"]) == 7
     ms = ds.meta["merged_sheets"]
     assert [m["sheet"] for m in ms] == ["2025년", "2026년"] and ms[1]["fixes"]
+
+
+def test_total_year_follows_win_range():
+    """수주 기준 기간이 있으면 ACR 수주 집계연도가 그 기간 안으로 맞춰진다."""
+    p = A.parse_params({"base_date": "2026-11-18", "win_from": "2021-01", "win_to": "2021-12"})
+    assert p.total_year == 2021
+    p = A.parse_params({"base_date": "2026-11-18", "win_from": "2021-01", "win_to": "2023-12", "total_year": 2022})
+    assert p.total_year == 2022
+    p = A.parse_params({"base_date": "2026-11-18", "win_from": "2027-01"})
+    assert p.total_year == 2027
+    p = A.parse_params({"base_date": "2026-11-18"})
+    assert p.total_year == 2026
