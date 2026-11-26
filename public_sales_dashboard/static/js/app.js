@@ -195,10 +195,10 @@
       <dl class="basis" style="margin-top:8px">${Object.entries(b).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl></details>`;
   }
   // 발생매출(R = 재계약 후 매출 전체, A+C+R = A+C 기여매출 + R 발생) — 종합 현황·ACR 수주(기여매출) 공용, 작은 카드 2장
-  function genStrip(ac, acN, rt, basisTxt) {
+  function genStrip(ac, acN, rt, basisTxt, side) {
     rt = rt || { amount: null };
     const na = rt.amount === null, naTxt = `<span class="row"><span>${esc(rt.na || "상품 선택 시 산출 안 함")}</span></span>`;
-    return `<div class="gen-wrap"><div class="gen-h">발생매출 <span class="muted">${esc(basisTxt || "")}</span> <span class="info-i" tabindex="0" title="R. 발생매출 = 재계약완료 건의 재계약 후 월매출(변경매출)을 기여매출과 같은 규칙(매출발생년월·계약기간)으로 반영한 금액. 재계약 때 줄어든 금액이 반영된 실제 매출입니다(증감 아님). A+C+R. 발생매출 = A+C 기여매출 + R. 발생매출. 해지확정 건은 재계약 후 매출이 없어 포함되지 않습니다." aria-label="발생매출 기준">i</span></div>
+    return `<div class="gen-wrap${side ? " gen-side" : ""}"><div class="gen-h">발생매출 <span class="muted">${esc(basisTxt || "")}</span> <span class="info-i" tabindex="0" title="R. 발생매출 = 재계약완료 건의 재계약 후 월매출(변경매출)을 기여매출과 같은 규칙(매출발생년월·계약기간)으로 반영한 금액. 재계약 때 줄어든 금액이 반영된 실제 매출입니다(증감 아님). A+C+R. 발생매출 = A+C 기여매출 + R. 발생매출. 해지확정 건은 재계약 후 매출이 없어 포함되지 않습니다." aria-label="발생매출 기준">i</span></div>
     <div class="strip two">
       ${na ? kpiCard("A+C+R. 발생매출", "자료 없음", naTxt, "hero gen")
         : kpiCard("A+C+R. 발생매출", amt(ac + rt.amount), `<span class="row"><span>A+C ${amt(ac)} + R ${amt(rt.amount)}</span></span><span class="row"><span>${cnt(acN + (rt.funnels || 0))}건</span></span>`, "hero gen", { scope: "acr" })}
@@ -579,6 +579,7 @@
     const rdX = rt.amount === null ? a.R : rt.amount - rt.prev_amount;
     const rChg = rdX + chX.amount, acrNet = a.A + a.C + rChg;
     h += `<section class="ov-sec"><div class="ov-h"><h3>ACR 기여매출 ${sub(`${esc(S.f.ym_from)}~${esc(S.f.ym_to)} ${S.f.mode === "term" ? "실제 발생분(계약기간 반영)" : "신규 발생분(매출개시월)"}`)} ${info(`${S.f.mode === "term" ? "확정 ACR 중 조회기간에 매출이 발생하는 부분(계약기간 동안 매월 반영)" : "확정 ACR 중 매출발생년월이 조회기간 안인 건의 월매출(그 달에 새로 시작된 매출만, 다음 달부터는 미반영 · 사이드바 ‘ACR 기준’에서 계약기간 반영으로 전환 가능)"} · ${ml} · A+C+R = A + C + R 증감(재계약 증감 + 해지 감소)${rt.amount === null ? " · 상품 선택 시 R은 재계약 증감 기준" : ""}`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
+    <div class="gen-row">${genStrip(a.AC, a.funnels_A + a.funnels_C, rt, "R = 재계약 후 매출(감소분 반영)", true)}
     <div class="strip five">
       ${kpiCard("A+C+R 기여매출", amt(acrNet), heroMeta(a, rChg, `고유 ${cnt(a.funnels)}건`), "hero", { scope: "acr" })}
       ${kpiCard("A 기여매출", amt(a.A), row(`${cnt(a.funnels_A)}건`, `A+C 중 ${pctOf(a.A, a.AC)}`), "a", { scope: "acr", acr_type: ["A"] })}
@@ -586,7 +587,8 @@
       ${rcCard(rdX, chX.amount, chX.funnels, { status: ["해지확정"], period: "rev_ym" }, acrOv && acrOv.r_split)}
       ${kpiCard("A+C 기여매출", amt(a.AC), row(`${cnt(a.funnels_A + a.funnels_C)}건`, ""), "", { scope: "acr", acr_type: ["A", "C"] })}
     </div>
-    ${genStrip(a.AC, a.funnels_A + a.funnels_C, rt, "R = 재계약 후 매출(감소분 반영)")}${recurringLine(acrOv)}${rSplitLine(acrOv)}</section>`;
+    </div>
+    ${recurringLine(acrOv)}${rSplitLine(acrOv)}</section>`;
     // ③ 확인 필요 — 음수·위험 신호를 한 곳에 모음(값은 기존 계산 그대로)
     const ch = k.churn_acr || { amount: 0, funnels: 0, excluded: {} };
     const chEx = Object.values(ch.excluded || {}).reduce((x, y) => x + y, 0);

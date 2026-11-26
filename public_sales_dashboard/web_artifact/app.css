@@ -486,3 +486,10 @@ tr.bw-tot td { border-top: 1px solid var(--border); }
 /* 수주(A+C) 카드가 맨 왼쪽: 좁은 화면(2열)에서는 hero가 둘째 줄 전체 */
 @media (max-width: 1280px) { .strip.five.ac-first .kpi.ac-box { grid-column: span 2; } .strip.five.ac-first .kpi.hero { grid-column: span 2; } }
 @media (max-width: 560px) { .strip.five.ac-first .kpi.ac-box, .strip.five.ac-first .kpi.hero { grid-column: auto; } }
+/* 종합 현황 ACR 기여매출: 발생매출(세로 2장)을 맨 왼쪽, 오른쪽에 기여매출 5장 */
+.gen-row { display: grid; grid-template-columns: minmax(180px, .85fr) minmax(0, 5fr); gap: 16px; align-items: stretch; }
+.gen-wrap.gen-side { margin-top: 0; max-width: none; display: flex; flex-direction: column; }
+.gen-wrap.gen-side .strip.two { grid-template-columns: minmax(0, 1fr); flex: 1; gap: 8px; }
+@media (min-width: 1281px) { .gen-row .strip.five, .gen-row .strip.five:has(.rgrid) { grid-template-columns: minmax(0, 1.35fr) repeat(2, minmax(0, .9fr)) minmax(0, 1.6fr) minmax(0, .9fr); } }
+@media (max-width: 1499px) { .gen-row { grid-template-columns: minmax(0, 1fr); } .gen-wrap.gen-side .strip.two { grid-template-columns: repeat(2, minmax(0, 1fr)); } .gen-wrap.gen-side { max-width: max(34%, 380px); } }
+@media (max-width: 760px) { .gen-wrap.gen-side { max-width: none; } }
