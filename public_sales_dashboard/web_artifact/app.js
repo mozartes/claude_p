@@ -512,6 +512,37 @@
         <span class="muted">‘전체 목표’ 시트(구분 · 전체상품 · 전용회선 · 전용회선 외)를 읽어 이 브라우저에만 저장합니다. 파일은 외부로 전송되지 않습니다.</span></div></div></section>`;
   }
   // 목표 엑셀(‘전체 목표’ 시트: 구분 | 전체상품 | 전용회선 | 전용회선 외, 행 = 공공담당·팀) → 이 브라우저에 저장
+  // 분기별 목표 시트(구분 | 1Q 2Q 3Q 4Q 1H 2H 연간, 각 기간 아래 ‘목표’ 열; 블록 제목 ‘총수주’·‘전용회선수주’) → { all: {조직: [7]}, leased: {...} }
+  function parseQuarterTargets(wb) {
+    const norm = (v) => String(v == null ? "" : v).replace(/\s/g, "");
+    const name = wb.SheetNames.find((n) => /분기/.test(n)); if (!name) return null;
+    const rows = window.XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null });
+    const P = [["1Q"], ["2Q"], ["3Q"], ["4Q"], ["1H", "상반기"], ["2H", "하반기"], ["연간", "년간", "합계"]], out = {};
+    rows.forEach((r, hr) => {
+      const cols = P.map((alts) => r.findIndex((v) => alts.includes(norm(v))));
+      if (cols[0] < 0 || cols[3] < 0) return;
+      const title = [rows[hr - 1], rows[hr - 2]].filter(Boolean).flat().map(norm).join(" ");
+      const kind = /전용/.test(title) ? "leased" : "all";
+      const sub = rows[hr + 1] || [], hasSub = sub.some((v) => norm(v) === "목표");
+      const tcol = cols.map((c) => { if (c < 0) return -1; if (!hasSub) return c; for (let k = c; k < c + 3; k++) if (norm(sub[k]) === "목표") return k; return c; });
+      const kc = r.findIndex((v) => norm(v) === "구분");
+      const map = {};
+      for (let i = hr + (hasSub ? 2 : 1); i < rows.length; i++) {
+        const row = rows[i] || [], key = norm(row[kc >= 0 ? kc : Math.max(0, cols[0] - 1)]);
+        if (!key || row.some((v) => ["1Q", "구분"].includes(norm(v)))) break;
+        const nm = /담당/.test(key) ? "담당 전체" : /팀$/.test(key) ? key : null; if (!nm) continue;
+        const val = (c) => (c >= 0 && row[c] !== null && row[c] !== "" && Number.isFinite(Number(row[c])) ? Number(row[c]) : null);
+        const q = tcol.slice(0, 4).map(val); if (q.some((x) => x === null)) continue;
+        const h1 = val(tcol[4]) ?? q[0] + q[1], h2 = val(tcol[5]) ?? q[2] + q[3], yr = val(tcol[6]) ?? h1 + h2;
+        map[nm] = [q[0], q[1], q[2], q[3], h1, h2, yr];
+      }
+      // 담당 전체를 맨 위로
+      const ord = Object.keys(map).sort((x, z) => (x === "담당 전체" ? -1 : z === "담당 전체" ? 1 : 0)), m2 = {};
+      ord.forEach((k) => { m2[k] = map[k]; });
+      if (ord.length && !out[kind]) out[kind] = m2;
+    });
+    return out.all ? out : null;
+  }
   function importTargets(file, year) {
     if (!window.XLSX) { alert("이 화면에서는 엑셀을 읽을 수 없습니다. 목표 칸에 직접 입력하세요."); return; }
     const rd = new FileReader();
@@ -522,18 +553,30 @@
         const rows = window.XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: null });
         const norm = (v) => String(v == null ? "" : v).replace(/\s/g, "");
         const hi = rows.findIndex((r) => r.some((v) => norm(v) === "전체상품"));
-        if (hi < 0) throw new Error("‘전체상품’ 머리글을 찾지 못했습니다.");
-        const head = rows[hi].map(norm), cAll = head.indexOf("전체상품"), cLe = head.indexOf("전용회선"), cNl = head.findIndex((v) => v === "전용회선외");
+        if (hi < 0 && !parseQuarterTargets(wb)) throw new Error("‘전체상품’ 머리글(또는 분기별 목표 시트)을 찾지 못했습니다.");
+        const head = hi < 0 ? [] : rows[hi].map(norm), cAll = head.indexOf("전체상품"), cLe = head.indexOf("전용회선"), cNl = head.findIndex((v) => v === "전용회선외");
         const cKey = head.findIndex((v) => v === "구분"), yr = (String(rows.flat().find((v) => /\d{2}년도/.test(String(v || ""))) || "").match(/(\d{2})년도/) || [])[1];
         const y = yr ? 2000 + Number(yr) : year, teams = new Set(S.meta.options.teams || []), t = { teams: {} };
-        rows.slice(hi + 1).forEach((r) => {
+        (hi < 0 ? [] : rows.slice(hi + 1)).forEach((r) => {
           const k = norm(r[cKey < 0 ? 0 : cKey]), num = (c) => (c >= 0 && Number.isFinite(Number(r[c])) && r[c] !== null && r[c] !== "" ? Number(r[c]) : null);
           if (!k) return;
           if (/담당/.test(k)) { t.total = num(cAll); if (num(cLe) !== null) t.leased = num(cLe); if (num(cNl) !== null) t.non_leased = num(cNl); }
           else if (teams.has(k) || /팀$/.test(k)) { if (num(cAll) !== null) t.teams[k] = num(cAll); }
         });
+        const qt = parseQuarterTargets(wb);
+        if (t.total == null && !Object.keys(t.teams).length && qt) {
+          // ‘전체 목표’ 시트가 없으면 분기 시트의 연간 목표로 채움
+          const a = qt.all, l = qt.leased || {};
+          if (a["담당 전체"]) t.total = a["담당 전체"][6];
+          if (l["담당 전체"]) { t.leased = l["담당 전체"][6]; if (t.total != null) t.non_leased = t.total - t.leased; }
+          Object.keys(a).forEach((k) => { if (k !== "담당 전체") t.teams[k] = a[k][6]; });
+        }
         if (t.total == null && !Object.keys(t.teams).length) throw new Error("담당·팀 목표 행을 찾지 못했습니다.");
         const all = store.get("targets", {}) || {}; all[y] = t; store.set("targets", all);
+        const oq = store.get("orderTargets", {}) || {};
+        if (qt) oq[y] = qt; else delete oq[y];
+        store.set("orderTargets", oq);
+        toast(qt ? `${y}년 목표를 불러왔습니다(연간 + 분기·반기 목표).` : `${y}년 연간 목표를 불러왔습니다. 분기별 시트가 없어 ACR 수주의 분기·반기 표는 기본 목표를 씁니다.`);
         render();
       } catch (e) { alert("목표 파일을 읽지 못했습니다: " + e.message); }
     };
@@ -542,7 +585,7 @@
   function bindTargets(year) {
     document.querySelectorAll("input[data-tg]").forEach((el) => el.addEventListener("change", () => { saveTarget(year, el.dataset.tg, el.value.trim()); render(); }));
     const fi = $("tgFile"); if (fi) fi.addEventListener("change", () => { if (fi.files && fi.files[0]) importTargets(fi.files[0], year); });
-    const clr = $("tgClear"); if (clr) clr.addEventListener("click", () => { const all = store.get("targets", {}) || {}; delete all[year]; store.set("targets", all); render(); });
+    const clr = $("tgClear"); if (clr) clr.addEventListener("click", () => { const all = store.get("targets", {}) || {}; delete all[year]; store.set("targets", all); const oq = store.get("orderTargets", {}) || {}; delete oq[year]; store.set("orderTargets", oq); render(); });
   }
 
   // ------------------------------------------------------------ 페이지: 종합 현황
@@ -805,8 +848,10 @@
       "동부기업고객2팀": [21.513, 23.4688, 22.0718, 21.3733, 44.9818, 43.4452, 88.427] } } };
   const OT_PERIODS = [["1Q", 1, 3], ["2Q", 4, 6], ["3Q", 7, 9], ["4Q", 10, 12], ["1H", 1, 6], ["2H", 7, 12], ["연간", 1, 12]];
   async function orderTargetCard(year) {
-    const tg = ORDER_TARGETS[year]; if (!tg) return "";
-    const prod = S.ui.otProd === "leased" ? "leased" : "all", T = tg[prod];
+    const up = (store.get("orderTargets", {}) || {})[year];
+    const tg = up || ORDER_TARGETS[year]; if (!tg) return "";
+    const prod = S.ui.otProd === "leased" && tg.leased ? "leased" : "all", T = tg[prod];
+    const srcTxt = up ? "목표: 불러온 목표 파일" : "목표: 기본값(공개용 예시) · 종합 현황 ‘목표 엑셀 불러오기’로 바꿀 수 있음";
     const base = Object.assign(totF(), { teams: [], ams: [], products: [], total_year: year, product_group: prod });
     const names = Object.keys(T);
     const views = await Promise.all(names.map((nm) => api("/view/total", { filters: Object.assign({}, base, nm === "담당 전체" ? {} : { teams: [nm] }) }).then((x) => x.data || {})));
@@ -819,7 +864,7 @@
       return `<td class="num ot-c${future ? " ot-future" : ""}"><span class="ot-frac">${n0(act)}/${n0(g)}</span><b class="ot-pct ${r >= 1 ? "ot-ok" : r < 0.7 ? "ot-low" : ""}">${r == null ? "—" : `${(r * 100).toFixed(0)}%`}</b></td>`;
     };
     const rows = names.map((nm, i) => `<tr class="${nm === "담당 전체" ? "tg-strong" : ""}"><td>${esc(nm)}</td>${OT_PERIODS.map(([lb, m1, m2], k) => cell(sumM(views[i], m1, m2), T[nm][k], m1)).join("")}</tr>`).join("");
-    return `<div class="card ot-card" style="margin-top:16px"><div class="card-head"><h3>${year}년 수주(A+C) 목표 대비 달성율 <span class="h-period">실적/목표 달성율 · 분기·반기·연간</span></h3>
+    return `<div class="card ot-card" style="margin-top:16px"><div class="card-head"><h3>${year}년 수주(A+C) 목표 대비 달성율 <span class="h-period">실적/목표 달성율 · 분기·반기·연간</span> <span class="ot-src${up ? " up" : ""}">${esc(srcTxt)}</span></h3>
       <span class="seg-light" id="otProd"><button type="button" data-v="all" class="${prod === "all" ? "on" : ""}">전체 상품</button><button type="button" data-v="leased" class="${prod === "leased" ? "on" : ""}">전용회선</button></span></div>
       <div class="table-wrap"><table class="t ot-t"><thead><tr><th>구분</th>${OT_PERIODS.map(([lb]) => `<th class="num">${lb}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>
       <p class="desc" style="margin-top:6px">실적 = ${year}년 수주(A+C) 계약기간매출(수주년월 기준${totExcl() ? ", 중대형퍼널제외=Y 제외" : ""}) · 목표 = ${year}년 수주 목표(억원 → 1억원 = 100백만원) · 단위 ${esc(unitName())} · 기준일 이후 분기는 흐리게. 팀·AM 필터와 무관.</p></div>`;
