@@ -436,10 +436,10 @@
   // 수주(A+C) 카드: 목표가 있으면 큰 숫자 = 실적/목표 + (달성율), 없으면 실적만
   function acCard(label, year, act, cntTxt, drill, teams) {
     const st = scopeTarget(year, teams), g = st ? st.eok * 1e8 / (UNIT_WON[S.ui.srcUnit] || 1e6) : null;
-    if (!g) return kpiCard(label, amt(act), `<span class="row"><span>${cntTxt}</span></span>`, "", drill);
+    if (!g) return kpiCard(label, amt(act), `<span class="row"><span>${cntTxt}</span></span>`, "ac-box", drill);
     const r = act / g;
     const v = `<span class="ac-tg"><span class="ac-tg-frac">${fmtNum(conv(act), 0)}/${fmtNum(conv(g), 0)}</span><span class="ac-tg-pct ${r >= 1 ? "tg-ok" : ""}">(${(r * 100).toFixed(1)}%)</span></span>`;
-    return kpiCard(label, v, `<span class="row"><span>${cntTxt}</span><span class="muted">${st.label}</span></span>`, "ac-tgc", drill);
+    return kpiCard(label, v, `<span class="row"><span>${cntTxt}</span><span class="muted">${st.label}</span></span>`, "ac-tgc ac-box", drill);
   }
 
   function targetsOf(year) {
