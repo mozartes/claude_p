@@ -467,8 +467,15 @@ tr.bw-tot td { border-top: 1px solid var(--border); }
 .tg-tools .tg-import { cursor: pointer; padding: 7px 14px; font-size: 13px; box-shadow: var(--shadow); }
 .tg-tools .tg-import:hover { filter: brightness(1.08); }
 .tg-tools .tg-import:focus-within { outline: 2px solid var(--primary); outline-offset: 2px; }
-/* 수주(A+C) 카드: 실적/목표 크게 · 달성율 약간 작게 */
-.ac-tg { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; margin: 2px 0 4px; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
-.ac-tg-frac { font-size: 17px; font-weight: 700; color: var(--text); }
-.ac-tg-pct { font-size: 14px; font-weight: 600; color: var(--text-2); }
-.ac-tg-pct.tg-ok { color: var(--ok); }
+/* 수주(A+C) 카드: 큰 숫자 = 실적/목표, 달성율은 약간 작게 */
+.ac-tg { display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 6px; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+.kpi.ac-tgc .value .ac-tg-frac { font-size: 22px; letter-spacing: -.02em; font-weight: 700; color: var(--text); white-space: nowrap; }
+.kpi.ac-tgc .value .ac-tg-pct { font-size: 16px; font-weight: 600; color: var(--text-2); white-space: nowrap; }
+.kpi.ac-tgc .value .ac-tg-pct.tg-ok { color: var(--ok); }
+.kpi.ac-tgc .value { overflow: visible; }
+/* 목표 카드가 있는 줄: A+C+R 수주(hero) 폭을 줄이고 수주(A+C) 카드 폭 확보 */
+@media (min-width: 1281px) {
+  .strip.five:has(.ac-tgc) { grid-template-columns: minmax(0, 1.25fr) repeat(2, minmax(0, 1fr)) minmax(0, 1.2fr) minmax(0, 1.55fr); }
+  .strip.five:has(.ac-tgc):has(.rgrid) { grid-template-columns: minmax(0, 1.15fr) repeat(2, minmax(0, .9fr)) minmax(0, 1.45fr) minmax(0, 1.5fr); }
+}
+@media (min-width: 1281px) and (max-width: 1440px) { .kpi.ac-tgc .value .ac-tg-frac { font-size: 20px; } .kpi.ac-tgc .value .ac-tg-pct { font-size: 15px; } }
