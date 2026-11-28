@@ -434,6 +434,15 @@
       <span class="rec-k">R 증감 구분</span>${cell(sp.big, "기존 월매출 100만원 이상", "rbig")}${cell(sp.small, "100만원 미만", "rsmall")}</div>`;
   }
   // 기여매출 구성(총 계약기간 구간): 일회성(1개월) · 단기(2~11개월) · Recurring(12개월 이상, 회사 기준). 세 칸 합 = A+C+R 기여매출
+  // A+C+R 기여매출 카드 안 ‘계약기간별’ 링크 → 아래 계약기간별(일회성·단기·Recurring) 내역 펼치기/접기
+  function recLink(v) {
+    if (!(v && v.term_bands)) return "";
+    return `<span class="row"><span class="rec-link" data-rec="1" role="button" tabindex="0" aria-expanded="${S.ui.recOpen ? "true" : "false"}">계약기간별 ${S.ui.recOpen ? "▴ 접기" : "▾ 보기"}</span></span>`;
+  }
+  function recBox(v) {
+    const h = recurringLine(v); if (!h) return "";
+    return `<div class="rec-box" id="recBox"${S.ui.recOpen ? "" : " hidden"}>${h}</div>`;
+  }
   function recurringLine(v) {
     const tb = v && v.term_bands; if (!tb) return "";
     const tot = tb.one.ACR + tb.short.ACR + tb.long.ACR;
@@ -662,7 +671,7 @@
     h += `<section class="ov-sec"><div class="ov-h"><h3>ACR 기여매출 ${sub(`${esc(S.f.ym_from)}~${esc(S.f.ym_to)} ${S.f.mode === "term" ? "실제 발생분(계약기간 반영)" : "신규 발생분(매출개시월)"}`)} ${info(`${S.f.mode === "term" ? "확정 ACR 중 조회기간에 매출이 발생하는 부분(계약기간 동안 매월 반영)" : "확정 ACR 중 매출발생년월이 조회기간 안인 건의 월매출(그 달에 새로 시작된 매출만, 다음 달부터는 미반영 · 사이드바 ‘ACR 기준’에서 계약기간 반영으로 전환 가능)"} · ${ml} · A+C+R = A + C + R 증감(재계약 증감 + 해지 감소)${rt.amount === null ? " · 상품 선택 시 R은 재계약 증감 기준" : ""}`)}</h3><span class="unit">단위 ${esc(unitName())}</span></div>
     <div class="gen-row">${genStrip(a.AC, a.funnels_A + a.funnels_C, rt, "A+C 기여매출 + R 발생매출", true)}
     <div class="strip five six">
-      ${kpiCard("A+C+R 기여매출", amt(acrNet), heroMeta(a, rChg, `고유 ${cnt(a.funnels)}건`), "hero", { scope: "acr" })}
+      ${kpiCard("A+C+R 기여매출", amt(acrNet), heroMeta(a, rChg, `고유 ${cnt(a.funnels)}건`) + recLink(acrOv), "hero", { scope: "acr" })}
       ${kpiCard("A 기여매출", amt(a.A), row(`${cnt(a.funnels_A)}건`, `A+C 중 ${pctOf(a.A, a.AC)}`), "a", { scope: "acr", acr_type: ["A"] })}
       ${kpiCard("C 기여매출", amt(a.C), row(`${cnt(a.funnels_C)}건`, `A+C 중 ${pctOf(a.C, a.AC)}`), "c", { scope: "acr", acr_type: ["C"] })}
       ${rcCard(rdX, chX.amount, chX.funnels, { status: ["해지확정"], period: "rev_ym" }, acrOv && acrOv.r_split)}
@@ -670,7 +679,7 @@
       ${genRCard(rt, "r")}
     </div>
     </div>
-    ${recurringLine(acrOv)}${rSplitLine(acrOv)}</section>`;
+    ${recBox(acrOv)}${rSplitLine(acrOv)}</section>`;
     // ③ 확인 필요 — 음수·위험 신호를 한 곳에 모음(값은 기존 계산 그대로)
     const ch = k.churn_acr || { amount: 0, funnels: 0, excluded: {} };
     const chEx = Object.values(ch.excluded || {}).reduce((x, y) => x + y, 0);
@@ -967,14 +976,14 @@
     const rcA = rdA + chA.amount;
     let h = `<div class="ov-h" style="margin-top:16px"><h3>요약 <span class="h-period">${esc(lbl)} · ${esc(S.f.ym_from)}~${esc(S.f.ym_to)}</span> <span class="info-i" title="${esc(`${d.mode_label} — ${d.basis["주의"]} · A+C+R = A + C + R 증감(재계약 증감 + 해지 감소)${exA ? ` · 해지 계산 제외 ${exA}건` : ""}`)}" tabindex="0">i</span></h3><span class="unit">단위 ${esc(unitName())}</span></div>
     <div class="strip five">
-      ${kpiCard("A+C+R. 기여매출", amt(t.A + t.C + rcA), `<span class="row"><span>A+C ${amt(t.AC)} + R 증감 ${amt(rcA)}</span><span>고유 ${cnt(t.funnels)}건</span></span><div class="mini" aria-hidden="true"><span style="width:${t.AC > 0 && t.A > 0 ? (t.A / t.AC * 100).toFixed(1) : 0}%;background:var(--series-a)"></span><span style="width:${t.AC > 0 && t.C > 0 ? (t.C / t.AC * 100).toFixed(1) : 0}%;background:var(--series-c)"></span></div>`, "hero", { scope: "acr" })}
+      ${kpiCard("A+C+R. 기여매출", amt(t.A + t.C + rcA), `<span class="row"><span>A+C ${amt(t.AC)} + R 증감 ${amt(rcA)}</span><span>고유 ${cnt(t.funnels)}건</span></span><div class="mini" aria-hidden="true"><span style="width:${t.AC > 0 && t.A > 0 ? (t.A / t.AC * 100).toFixed(1) : 0}%;background:var(--series-a)"></span><span style="width:${t.AC > 0 && t.C > 0 ? (t.C / t.AC * 100).toFixed(1) : 0}%;background:var(--series-c)"></span></div>` + recLink(d), "hero", { scope: "acr" })}
       ${kpiCard("A. 기여매출", amt(t.A), `<span class="row"><span>${cnt(t.funnels_A)}건</span><span>A+C 중 ${t.AC > 0 ? (t.A / t.AC * 100).toFixed(1) + "%" : "—"}</span></span>`, "a", { scope: "acr", acr_type: ["A"] })}
       ${kpiCard("C. 기여매출", amt(t.C), `<span class="row"><span>${cnt(t.funnels_C)}건</span><span>A+C 중 ${t.AC > 0 ? (t.C / t.AC * 100).toFixed(1) + "%" : "—"}</span></span>`, "c", { scope: "acr", acr_type: ["C"] })}
       ${kpiCard("R. 증감", amt(rcA), rCardMeta(d.r_split, rdA, chA.amount, chA.funnels), "neg", { status: ["해지확정"], period: "rev_ym" })}
       ${kpiCard("A+C. 기여매출", amt(t.AC), `<span class="row"><span>${cnt(t.funnels_A + t.funnels_C)}건</span></span>`, "", { scope: "acr", acr_type: ["A", "C"] })}
     </div>
     ${genStrip(t.AC, t.funnels_A + t.funnels_C, rtA, `R = 재계약 후 매출(감소분 반영) · ${lbl}`)}
-    <p class="ov-ref">고유 Funnel 수는 월별 반복 반영 횟수가 아님 · R. 발생매출은 R. 증감(기여매출)과 달리 재계약 후 매출 전체입니다.</p>${recurringLine(d)}${rSplitLine(d)}
+    <p class="ov-ref">고유 Funnel 수는 월별 반복 반영 횟수가 아님 · R. 발생매출은 R. 증감(기여매출)과 달리 재계약 후 매출 전체입니다.</p>${recBox(d)}${rSplitLine(d)}
     ${acrByWinCard(byWin)}
     ${acrYearsCard(ay, ayWin, aySpan)}
     ${Object.keys(d.excluded).length ? `<div class="notice warn">확정 조건이지만 이 지표에서 제외: ${Object.entries(d.excluded).map(([r, n]) => `${esc(r)} ${n}건`).join(", ")} <span class="link" data-drill='${esc(JSON.stringify({ scope: "acr_excluded" }))}'>목록 보기</span></div>` : ""}
@@ -1809,6 +1818,13 @@
     $("toggleFilters").addEventListener("click", () => $("sidebar").classList.toggle("show-filters"));
     // 위임: 드릴다운·원본 행·이동
     $("view").addEventListener("click", (e) => {
+      const recEl = e.target.closest("[data-rec]");
+      if (recEl) {
+        e.stopPropagation(); S.ui.recOpen = !S.ui.recOpen; store.set("ui", S.ui);
+        const box = $("recBox"); if (box) { box.hidden = !S.ui.recOpen; if (S.ui.recOpen) box.scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+        document.querySelectorAll("[data-rec]").forEach((x) => { x.textContent = `계약기간별 ${S.ui.recOpen ? "▴ 접기" : "▾ 보기"}`; x.setAttribute("aria-expanded", S.ui.recOpen ? "true" : "false"); });
+        return;
+      }
       const dEl = e.target.closest("[data-drill]");
       if (dEl) { e.stopPropagation(); try { openDetail(JSON.parse(dEl.dataset.drill)); } catch (err) { /* noop */ } return; }
       const gEl = e.target.closest("[data-goto]");
@@ -1835,7 +1851,7 @@
       const t = document.getElementById(b.dataset.colmore); if (!t) return;
       t.classList.toggle("show-all"); b.textContent = t.classList.contains("show-all") ? "핵심 열만" : "열 더 보기";
     });
-    $("view").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches(".kpi[data-drill], .alert[data-drill], .alert[data-goto]")) e.target.click(); });
+    $("view").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.matches(".kpi[data-drill], .alert[data-drill], .alert[data-goto], [data-rec]")) e.target.click(); });
   }
 
   async function init() {

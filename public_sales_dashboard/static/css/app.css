@@ -512,3 +512,8 @@ tr.bw-tot td { border-top: 1px solid var(--border); }
 .ot-sw.f { background: color-mix(in srgb, var(--series-c) 35%, transparent); border: 1px solid var(--series-c); margin-left: 8px; }
 .ot-tbl { margin-top: 8px; } .ot-tbl summary { cursor: pointer; font-size: 13px; color: var(--text-2); }
 .tg-chart { height: 300px; }
+/* A+C+R 기여매출 카드 안 ‘계약기간별’ 링크 */
+.rec-link { color: var(--primary); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; margin-top: 4px; }
+.rec-link:hover { filter: brightness(1.15); }
+.rec-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 3px; }
+.rec-box { margin-top: 8px; }
