@@ -617,7 +617,7 @@
         ${kpiCard("C 수주", amt(tk.C), row(`${cnt(tk.funnels_C)}건`, `A+C 중 ${pctOf(tk.C, tk.AC)}`), "c", tdk({ acr_type: ["C"] }))}
         ${rcCard(rdT, cr.amount, cr.count, { status: ["해지확정"], period: "win_ym" }, tk.r_split)}
       </div>
-      <p class="ov-ref">참고 · <b>R 재계약</b>(재계약 후 확보 매출, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify(tdk({ acr_type: ["R"] })))}'>${amt(tk.R)}</span> · ${cnt(tk.funnels_R)}건</p>${rSplitLine(tk)}</section>`;
+      ${rSplitLine(tk)}</section>`;
     }
     // 매출개시월 기준 같은 계산(월별 신규 발생 차트·Recurring 구분용)
     const svOv = S.f.mode === "term" ? (await api("/view/acr", { filters: Object.assign({}, S.f, { mode: "start" }) })).data : null;
@@ -1113,7 +1113,7 @@
       ${kpiCard("C. 수주", amt(t.C), `<span class="row"><span>${cnt(t.funnels_C)}건</span><span>A+C 중 ${t.AC > 0 ? (t.C / t.AC * 100).toFixed(1) + "%" : "—"}</span></span>`, "c", dk({ acr_type: ["C"] }))}
       ${kpiCard("R. 증감", amt(rcT), rCardMeta(d.r_split, rdT, crT.amount, crT.count), "neg", { status: ["해지확정"], period: "win_ym" })}
     </div>
-    <p class="ov-ref">참고 · <b>R 재계약</b>(${pSelT ? "상품 선택: 재계약 증감 × 계약기간" : "변경매출 × 계약기간"}, 합계 미포함) <span class="link" data-drill='${esc(JSON.stringify(dk({ acr_type: ["R"] })))}'>${amt(t.R)}</span> · ${cnt(t.funnels_R)}건 = 기존 계약총액 ${amt(rf.prev_total)} + 재계약 증감 ${amt(rf.new_total - rf.prev_total)}</p>${rSplitLine(d)}
+    ${rSplitLine(d)}
     ${Object.keys(d.excluded).length ? `<div class="notice warn">집계에서 제외: ${Object.entries(d.excluded).map(([k, v]) => `${esc(k)} ${v}건`).join(", ")}</div>` : ""}
     ${d.mismatch ? `<div class="notice warn">계약기간매출이 월매출합계 × 계약기간과 다른 건 ${d.mismatch}건 — 원본 계약기간매출 그대로 합산했습니다.</div>` : ""}
     ${otHtml}
