@@ -473,6 +473,7 @@
     const rows = [["담당 전체", "total", all.totals.AC, t.total, true]]
       .concat((all.by_team || []).slice().sort((a, b) => { const ord = Object.keys((TARGET_DEFAULTS[year] || {}).teams || {}), ia = ord.indexOf(a.key), ib = ord.indexOf(b.key); return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || String(a.key).localeCompare(String(b.key), "ko"); }).map((r) => [r.key, `team:${r.key}`, r.AC, (t.teams || {})[r.key], false]))
       .concat([["전용회선", "leased", le.empty ? 0 : le.totals.AC, t.leased, true], ["전용회선외", "non_leased", nl.empty ? 0 : nl.totals.AC, t.non_leased, true]]);
+    S.tgData = { labels: rows.map((r) => r[0]), tgt: rows.map((r) => toSrc(r[3])), act: rows.map((r) => r[2]) };
     const pctTxt = (a, g) => (g ? `${((a / g) * 100).toFixed(1)}%` : "—");
     const tr = rows.map(([lb, key, act, tg, strong]) => {
       const g = toSrc(tg), rate = g ? act / g : null, w = rate == null ? 0 : Math.min(100, rate * 100);
@@ -483,7 +484,9 @@
         <td class="num">${g == null ? "—" : amt(act - g)}</td></tr>`;
     }).join("");
     return `<section class="ov-sec"><div class="ov-h"><h3>ACR 수주(${year}년) 목표 달성 <span class="h-period">${year}년 수주(A+C) 실적 ÷ 목표</span> <span class="info-i" tabindex="0" title="실적 = ACR 수주 화면의 ${year}년 수주(A+C)(계약 전체 기간, 확정 A·C${totExcl() ? ", 중대형퍼널제외=Y 제외" : ""}). 팀·AM 필터와 무관하게 담당 전체·팀별로 계산. 전용회선 = 국내전용+국제전용 상품 금액, 전용회선외 = 나머지 상품(두 값의 합은 상품별 금액 입력 차이로 전체와 조금 다를 수 있음). 목표는 억원으로 입력, 1억원 = 100백만원. 목표는 이 브라우저에만 저장">i</span></h3><span class="unit">단위 ${esc(unitName())} · 목표 억원</span></div>
-      <div class="card"><div class="table-wrap"><table class="t tg-t"><thead><tr><th>구분</th><th class="num">목표</th><th class="num">실적 ${year}년 수주(A+C)</th><th class="num">달성율 (실적 / 목표)</th><th>진척</th><th class="num">차이</th></tr></thead><tbody>${tr}</tbody></table></div>
+      <div class="card"><div class="chart-box tg-chart"><canvas id="tgChart" role="img" aria-label="${year}년 수주 목표 대비 실적 막대그래프"></canvas></div>
+      <p class="desc ot-legend"><i class="ot-sw t"></i>목표 <i class="ot-sw a"></i>실적 · 막대 위 % = 달성율(100% 이상 초록, 70% 미만 빨강) · 단위 ${esc(unitName())}</p>
+      <details class="ot-tbl"><summary>표로 보기(목표 · 실적 · 달성율 · 차이)</summary><div class="table-wrap"><table class="t tg-t"><thead><tr><th>구분</th><th class="num">목표</th><th class="num">실적 ${year}년 수주(A+C)</th><th class="num">달성율 (실적 / 목표)</th><th>진척</th><th class="num">차이</th></tr></thead><tbody>${tr}</tbody></table></div></details>
       <div class="toolbar tg-tools">${window.XLSX ? `<label class="btn small primary tg-import">목표 엑셀 불러오기<input type="file" id="tgFile" accept=".xlsx,.xls" hidden></label>` : ""}<button type="button" class="btn small" id="tgClear">목표 지우기</button>
         <span class="muted">‘전체 목표’ 시트(구분 · 전체상품 · 전용회선 · 전용회선 외)를 읽어 이 브라우저에만 저장합니다. 파일은 외부로 전송되지 않습니다.</span></div></div></section>`;
   }
@@ -691,6 +694,7 @@
     }));
     bindPeriodToolbar("ovPer");
     bindTargets(tgYear);
+    if (S.tgData) tgBarChart("tgChart", S.tgData.labels, S.tgData.tgt, S.tgData.act);
     acrMonthlyChart("ovChart", ovRows, ["A", "C", "R", "ACR"], (m, key) => openDetail({ scope: "acr", rev_month: m.ym, acr_type: key && ["A", "C", "R"].includes(key) ? [key] : undefined }), ovRef);
   }
 
@@ -858,32 +862,39 @@
       <div class="table-wrap"><table class="t ot-t"><thead><tr><th>구분</th>${OT_PERIODS.map(([lb]) => `<th class="num">${lb}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div></details>
       <p class="desc" style="margin-top:6px">실적 = ${year}년 수주(A+C) 계약기간매출(수주년월 기준${totExcl() ? ", 중대형퍼널제외=Y 제외" : ""}) · 목표 = ${year}년 수주 목표(억원 → 1억원 = 100백만원) · 단위 ${esc(unitName())} · 기준일 이후 분기는 흐리게. 팀·AM 필터와 무관.</p></div>`;
   }  // 목표 대비 달성율 막대그래프: 기간별(선택 조직의 1Q~연간) 또는 조직별(선택 기간의 담당·팀)
+  // 목표·실적 막대그래프 공용(목표 회색, 실적 주황, 막대 위 달성율 %) — 값은 원본 단위
+  function tgBarChart(id, labels, tgt, act, fut) {
+    if (!$(id)) return;
+    fut = fut || labels.map(() => false);
+    const rates = act.map((a, k) => (tgt[k] ? a / tgt[k] : null));
+    const cA = css("--series-c", "#d9690b"), cT = css("--muted", "#6b7280"), ok = css("--ok", "#15803d"), neg = css("--neg", "#c81e1e"), ink = css("--text", "#111827");
+    const alpha = (c, a) => (/^#[0-9a-f]{6}$/i.test(c) ? c + a : c);
+    const ymax = Math.max(1, ...act.map(conv), ...tgt.map((v) => conv(v || 0))) * 1.15;
+    const pctPlugin = { id: "tgPct", afterDatasetsDraw(ch) {
+      const m = ch.getDatasetMeta(1), m0 = ch.getDatasetMeta(0), cx = ch.ctx; if (!m || m.hidden) return;
+      cx.save(); cx.textAlign = "center"; cx.font = `700 12px ${getComputedStyle(document.body).fontFamily}`;
+      m.data.forEach((bar, k) => { const r = rates[k]; if (r == null) return; cx.fillStyle = r >= 1 ? ok : r < 0.7 ? neg : ink; cx.fillText(`${Math.round(r * 100)}%`, bar.x, Math.min(bar.y, m0.data[k] ? m0.data[k].y : bar.y) - 6); });
+      cx.restore(); } };
+    chart(id, { type: "bar", plugins: [pctPlugin],
+      data: { labels, datasets: [
+        { label: "목표", data: tgt.map((v) => (v == null ? null : conv(v))), backgroundColor: alpha(cT, "55"), borderColor: cT, borderWidth: 1, borderRadius: 3, maxBarThickness: 38 },
+        { label: "실적", data: act.map(conv), backgroundColor: fut.map((x) => (x ? alpha(cA, "59") : cA)), borderColor: cA, borderWidth: 1, borderRadius: 3, maxBarThickness: 38 } ] },
+      options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y == null ? "목표 없음" : fmtNum(c.parsed.y, 0).replace(/<[^>]+>/g, "")}`, footer: (it) => { const r = rates[it[0].dataIndex]; return r == null ? "" : `달성율 ${(r * 100).toFixed(1)}%`; } } } },
+        scales: { y: { beginAtZero: true, suggestedMax: ymax, title: { display: true, text: `금액 (${unitName()})` }, ticks: { callback: (v) => fmtNum(v, 0).replace(/<[^>]+>/g, "") } }, x: { grid: { display: false } } } } });
+  }
+  // 목표 대비 달성율 막대그래프: 기간별(선택 조직의 1Q~연간) 또는 조직별(선택 기간의 담당·팀)
   function drawOtChart() {
     const D = S.otData; if (!D || !$("otChart")) return;
     const byOrg = S.ui.otView === "org";
     const oi = Math.max(0, D.names.indexOf(S.ui.otOrg));
     const pk = D.periods.indexOf(S.ui.otPer) >= 0 ? D.periods.indexOf(S.ui.otPer) : D.periods.length - 1;
-    const labels = byOrg ? D.names : D.periods;
-    const tgt = byOrg ? D.names.map((n, i) => D.tgt[i][pk]) : D.tgt[oi];
-    const act = byOrg ? D.names.map((n, i) => D.act[i][pk]) : D.act[oi];
-    const fut = byOrg ? D.names.map(() => D.future[pk]) : D.future;
-    const rates = act.map((a, k) => (tgt[k] ? a / tgt[k] : null));
-    const cA = css("--series-c", "#d9690b"), cT = css("--muted", "#6b7280"), ok = css("--ok", "#15803d"), neg = css("--neg", "#c81e1e"), ink = css("--text", "#111827");
-    const alpha = (c, a) => (/^#[0-9a-f]{6}$/i.test(c) ? c + a : c);
-    const ymax = Math.max(1, ...act.map(conv), ...tgt.map(conv)) * 1.15;
-    const pctPlugin = { id: "otPct", afterDatasetsDraw(ch) {
-      const m = ch.getDatasetMeta(1), cx = ch.ctx; if (!m || m.hidden) return;
-      cx.save(); cx.textAlign = "center"; cx.font = `700 12px ${getComputedStyle(document.body).fontFamily}`;
-      m.data.forEach((bar, k) => { const r = rates[k]; if (r == null) return; cx.fillStyle = r >= 1 ? ok : r < 0.7 ? neg : ink; cx.fillText(`${Math.round(r * 100)}%`, bar.x, Math.min(bar.y, ch.getDatasetMeta(0).data[k].y) - 6); });
-      cx.restore(); } };
-    chart("otChart", { type: "bar", plugins: [pctPlugin],
-      data: { labels, datasets: [
-        { label: "목표", data: tgt.map(conv), backgroundColor: alpha(cT, "55"), borderColor: cT, borderWidth: 1, borderRadius: 3, maxBarThickness: 38 },
-        { label: "실적", data: act.map(conv), backgroundColor: fut.map((f) => (f ? alpha(cA, "59") : cA)), borderColor: cA, borderWidth: 1, borderRadius: 3, maxBarThickness: 38 } ] },
-      options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmtNum(c.parsed.y, 0).replace(/<[^>]+>/g, "")}`, footer: (it) => { const r = rates[it[0].dataIndex]; return r == null ? "" : `달성율 ${(r * 100).toFixed(1)}%`; } } } },
-        scales: { y: { beginAtZero: true, suggestedMax: ymax, title: { display: true, text: `금액 (${unitName()})` }, ticks: { callback: (v) => fmtNum(v, 0).replace(/<[^>]+>/g, "") } }, x: { grid: { display: false } } } } });
+    tgBarChart("otChart", byOrg ? D.names : D.periods,
+      byOrg ? D.names.map((n, i) => D.tgt[i][pk]) : D.tgt[oi],
+      byOrg ? D.names.map((n, i) => D.act[i][pk]) : D.act[oi],
+      byOrg ? D.names.map(() => D.future[pk]) : D.future);
   }
+
 
 
   // ------------------------------------------------------------ 페이지: ACR 수주(기여매출)

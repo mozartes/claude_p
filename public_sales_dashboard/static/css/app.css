@@ -511,3 +511,4 @@ tr.bw-tot td { border-top: 1px solid var(--border); }
 .ot-sw.a { background: var(--series-c); margin-left: 8px; }
 .ot-sw.f { background: color-mix(in srgb, var(--series-c) 35%, transparent); border: 1px solid var(--series-c); margin-left: 8px; }
 .ot-tbl { margin-top: 8px; } .ot-tbl summary { cursor: pointer; font-size: 13px; color: var(--text-2); }
+.tg-chart { height: 300px; }
