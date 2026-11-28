@@ -837,11 +837,52 @@
       return `<td class="num ot-c${future ? " ot-future" : ""}"><span class="ot-frac">${n0(act)}/${n0(g)}</span><b class="ot-pct ${r >= 1 ? "ot-ok" : r < 0.7 ? "ot-low" : ""}">${r == null ? "—" : `${(r * 100).toFixed(0)}%`}</b></td>`;
     };
     const rows = names.map((nm, i) => `<tr class="${nm === "담당 전체" ? "tg-strong" : ""}"><td>${esc(nm)}</td>${OT_PERIODS.map(([lb, m1, m2], k) => cell(sumM(views[i], m1, m2), T[nm][k], m1)).join("")}</tr>`).join("");
+    // 막대그래프 데이터(목표·실적, 단위 = 원본 단위) — drawOtChart가 그림
+    S.otData = { names, periods: OT_PERIODS.map(([lb]) => lb),
+      act: names.map((nm, i) => OT_PERIODS.map(([lb, m1, m2]) => sumM(views[i], m1, m2))),
+      tgt: names.map((nm) => OT_PERIODS.map((p, k) => toSrc(T[nm][k]))),
+      future: OT_PERIODS.map(([lb, m1]) => !!(baseYm && year * 100 + m1 > baseYm)) };
+    const view = S.ui.otView === "org" ? "org" : "period";
+    const org = names.includes(S.ui.otOrg) ? S.ui.otOrg : names[0];
+    const per = OT_PERIODS.some(([lb]) => lb === S.ui.otPer) ? S.ui.otPer : "연간";
+    const seg = (id, items, cur) => `<span class="seg-light" id="${id}">${items.map((v) => `<button type="button" data-v="${esc(v)}" class="${v === cur ? "on" : ""}">${esc(v)}</button>`).join("")}</span>`;
     return `<div class="card ot-card" style="margin-top:16px"><div class="card-head"><h3>${year}년 수주(A+C) 목표 대비 달성율 <span class="h-period">실적/목표 달성율 · 분기·반기·연간</span> <span class="ot-src${up ? " up" : ""}">${esc(srcTxt)}</span></h3>
       <span class="seg-light" id="otProd"><button type="button" data-v="all" class="${prod === "all" ? "on" : ""}">전체 상품</button><button type="button" data-v="leased" class="${prod === "leased" ? "on" : ""}">전용회선</button></span></div>
-      <div class="table-wrap"><table class="t ot-t"><thead><tr><th>구분</th>${OT_PERIODS.map(([lb]) => `<th class="num">${lb}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="toolbar ot-bar"><span class="seg-light" id="otView"><button type="button" data-v="period" class="${view === "period" ? "on" : ""}">기간별(조직 1개)</button><button type="button" data-v="org" class="${view === "org" ? "on" : ""}">조직별(기간 1개)</button></span>
+        ${view === "period" ? seg("otOrg", names, org) : seg("otPer", OT_PERIODS.map(([lb]) => lb), per)}</div>
+      <div class="chart-box ot-chart"><canvas id="otChart" role="img" aria-label="${year}년 수주 목표 대비 실적 막대그래프"></canvas></div>
+      <p class="desc ot-legend"><i class="ot-sw t"></i>목표 <i class="ot-sw a"></i>실적 <i class="ot-sw f"></i>기준일 이후(진행 중) · 막대 위 % = 달성율(100% 이상 초록, 70% 미만 빨강)</p>
+      <details class="ot-tbl"><summary>표로 보기(실적/목표 · 달성율)</summary>
+      <div class="table-wrap"><table class="t ot-t"><thead><tr><th>구분</th>${OT_PERIODS.map(([lb]) => `<th class="num">${lb}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table></div></details>
       <p class="desc" style="margin-top:6px">실적 = ${year}년 수주(A+C) 계약기간매출(수주년월 기준${totExcl() ? ", 중대형퍼널제외=Y 제외" : ""}) · 목표 = ${year}년 수주 목표(억원 → 1억원 = 100백만원) · 단위 ${esc(unitName())} · 기준일 이후 분기는 흐리게. 팀·AM 필터와 무관.</p></div>`;
+  }  // 목표 대비 달성율 막대그래프: 기간별(선택 조직의 1Q~연간) 또는 조직별(선택 기간의 담당·팀)
+  function drawOtChart() {
+    const D = S.otData; if (!D || !$("otChart")) return;
+    const byOrg = S.ui.otView === "org";
+    const oi = Math.max(0, D.names.indexOf(S.ui.otOrg));
+    const pk = D.periods.indexOf(S.ui.otPer) >= 0 ? D.periods.indexOf(S.ui.otPer) : D.periods.length - 1;
+    const labels = byOrg ? D.names : D.periods;
+    const tgt = byOrg ? D.names.map((n, i) => D.tgt[i][pk]) : D.tgt[oi];
+    const act = byOrg ? D.names.map((n, i) => D.act[i][pk]) : D.act[oi];
+    const fut = byOrg ? D.names.map(() => D.future[pk]) : D.future;
+    const rates = act.map((a, k) => (tgt[k] ? a / tgt[k] : null));
+    const cA = css("--series-c", "#d9690b"), cT = css("--muted", "#6b7280"), ok = css("--ok", "#15803d"), neg = css("--neg", "#c81e1e"), ink = css("--text", "#111827");
+    const alpha = (c, a) => (/^#[0-9a-f]{6}$/i.test(c) ? c + a : c);
+    const ymax = Math.max(1, ...act.map(conv), ...tgt.map(conv)) * 1.15;
+    const pctPlugin = { id: "otPct", afterDatasetsDraw(ch) {
+      const m = ch.getDatasetMeta(1), cx = ch.ctx; if (!m || m.hidden) return;
+      cx.save(); cx.textAlign = "center"; cx.font = `700 12px ${getComputedStyle(document.body).fontFamily}`;
+      m.data.forEach((bar, k) => { const r = rates[k]; if (r == null) return; cx.fillStyle = r >= 1 ? ok : r < 0.7 ? neg : ink; cx.fillText(`${Math.round(r * 100)}%`, bar.x, Math.min(bar.y, ch.getDatasetMeta(0).data[k].y) - 6); });
+      cx.restore(); } };
+    chart("otChart", { type: "bar", plugins: [pctPlugin],
+      data: { labels, datasets: [
+        { label: "목표", data: tgt.map(conv), backgroundColor: alpha(cT, "55"), borderColor: cT, borderWidth: 1, borderRadius: 3, maxBarThickness: 38 },
+        { label: "실적", data: act.map(conv), backgroundColor: fut.map((f) => (f ? alpha(cA, "59") : cA)), borderColor: cA, borderWidth: 1, borderRadius: 3, maxBarThickness: 38 } ] },
+      options: { maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${fmtNum(c.parsed.y, 0).replace(/<[^>]+>/g, "")}`, footer: (it) => { const r = rates[it[0].dataIndex]; return r == null ? "" : `달성율 ${(r * 100).toFixed(1)}%`; } } } },
+        scales: { y: { beginAtZero: true, suggestedMax: ymax, title: { display: true, text: `금액 (${unitName()})` }, ticks: { callback: (v) => fmtNum(v, 0).replace(/<[^>]+>/g, "") } }, x: { grid: { display: false } } } } });
   }
+
 
   // ------------------------------------------------------------ 페이지: ACR 수주(기여매출)
   async function pageAcr() {
@@ -1099,6 +1140,8 @@
     document.querySelectorAll("#tyearSel button").forEach((b) => b.addEventListener("click", () => { S.f.total_year = Number(b.dataset.v); store.set("filters", S.f); render(); }));
     const mlT = $("totExclML"); if (mlT) mlT.addEventListener("change", () => { S.ui.totExclML = mlT.checked; store.set("ui", S.ui); render(); });
     document.querySelectorAll("#otProd button").forEach((b) => b.addEventListener("click", () => { S.ui.otProd = b.dataset.v; store.set("ui", S.ui); render(); }));
+    [["otView", "otView"], ["otOrg", "otOrg"], ["otPer", "otPer"]].forEach(([id, key]) => document.querySelectorAll(`#${id} button`).forEach((x) => x.addEventListener("click", () => { S.ui[key] = x.dataset.v; store.set("ui", S.ui); render(); })));
+    drawOtChart();
   }
 
   // ------------------------------------------------------------ 페이지: 팀·AM

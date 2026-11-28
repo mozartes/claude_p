@@ -502,3 +502,12 @@ tr.bw-tot td { border-top: 1px solid var(--border); }
 .kpi.gen-box .label::before { background: var(--series-r); }
 .ot-src { font-size: 11.5px; font-weight: 500; color: var(--warn-ink); background: var(--warn-bg); border-radius: 6px; padding: 2px 8px; margin-left: 6px; }
 .ot-src.up { color: var(--ok-ink); background: var(--ok-bg); }
+/* ACR 수주: 목표 대비 달성율 막대그래프 */
+.ot-bar { margin: 8px 0 4px; gap: 8px; flex-wrap: wrap; }
+.ot-chart { height: 320px; }
+.ot-legend { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.ot-sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; }
+.ot-sw.t { background: color-mix(in srgb, var(--muted) 35%, transparent); border: 1px solid var(--muted); }
+.ot-sw.a { background: var(--series-c); margin-left: 8px; }
+.ot-sw.f { background: color-mix(in srgb, var(--series-c) 35%, transparent); border: 1px solid var(--series-c); margin-left: 8px; }
+.ot-tbl { margin-top: 8px; } .ot-tbl summary { cursor: pointer; font-size: 13px; color: var(--text-2); }
