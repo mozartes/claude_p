@@ -473,6 +473,20 @@
     all[year] = t; store.set("targets", all);
   }
   async function targetSection(year) {
+    S.tgData = null; S.otData = null;
+    const sectionHead = (unit) => `<section class="ov-sec"><div class="ov-h"><h3>ACR 수주(${year}년) 목표 달성 <span class="h-period">${year}년 수주(A+C) 실적 ÷ 목표</span></h3><span class="unit">${unit}</span></div>`;
+    const tools = `<div class="toolbar tg-tools">${window.XLSX ? `<label class="btn small primary tg-import">목표 엑셀 불러오기<input type="file" id="tgFile" accept=".xlsx,.xls" hidden></label>` : ""}<button type="button" class="btn small" id="tgClear">목표 지우기</button>
+        <span class="muted">‘전체 목표’ 시트와 분기별 목표 시트를 읽어 이 브라우저에만 저장합니다. 파일은 외부로 전송되지 않습니다.</span></div>`;
+    // 분기별 목표가 있는 연도(불러온 목표 파일 또는 기본값): 조직별·기간별(분기·반기·연간) 막대그래프
+    if (((store.get("orderTargets", {}) || {})[year]) || ORDER_TARGETS[year]) {
+      const card = await orderTargetCard(year, { embed: true });
+      if (card) return `${sectionHead(`단위 ${esc(unitName())} · 목표 억원`)}${card.replace(/<\/div>$/, `${tools}</div>`)}</section>`;
+    }
+    const tq = targetsOf(year);
+    if (tq.total == null && !Object.keys(tq.teams || {}).length) {
+      // 목표가 없는 연도: 그래프 없이 안내 + 불러오기
+      return `${sectionHead("")}<div class="card"><p class="desc">${year}년 목표가 없습니다. 이 연도의 목표 엑셀을 불러오면 달성율이 표시됩니다.</p>${tools}</div></section>`;
+    }
     const base = Object.assign(totF(), { teams: [], ams: [], products: [], total_year: year });
     const [all, le, nl] = await Promise.all(["all", "leased", "non_leased"].map((g) => api("/view/total", { filters: Object.assign({}, base, { product_group: g }) }).then((x) => x.data || {})));
     if (!all || all.empty) return "";
@@ -704,6 +718,7 @@
     bindPeriodToolbar("ovPer");
     bindTargets(tgYear);
     if (S.tgData) tgBarChart("tgChart", S.tgData.labels, S.tgData.tgt, S.tgData.act);
+    if (S.otData) bindOt();
     acrMonthlyChart("ovChart", ovRows, ["A", "C", "R", "ACR"], (m, key) => openDetail({ scope: "acr", rev_month: m.ym, acr_type: key && ["A", "C", "R"].includes(key) ? [key] : undefined }), ovRef);
   }
 
@@ -835,7 +850,8 @@
       "서부기업고객팀": [21.513, 23.4688, 22.0718, 21.3733, 44.9818, 43.4452, 88.427], "동부기업고객1팀": [19.6423, 21.428, 20.1525, 19.5148, 41.0704, 39.6673, 80.7377],
       "동부기업고객2팀": [21.513, 23.4688, 22.0718, 21.3733, 44.9818, 43.4452, 88.427] } } };
   const OT_PERIODS = [["1Q", 1, 3], ["2Q", 4, 6], ["3Q", 7, 9], ["4Q", 10, 12], ["1H", 1, 6], ["2H", 7, 12], ["연간", 1, 12]];
-  async function orderTargetCard(year) {
+  async function orderTargetCard(year, opts) {
+    opts = opts || {};
     const up = (store.get("orderTargets", {}) || {})[year];
     const tg = up || ORDER_TARGETS[year]; if (!tg) return "";
     const prod = S.ui.otProd === "leased" && tg.leased ? "leased" : "all", T = tg[prod];
@@ -857,11 +873,14 @@
       act: names.map((nm, i) => OT_PERIODS.map(([lb, m1, m2]) => sumM(views[i], m1, m2))),
       tgt: names.map((nm) => OT_PERIODS.map((p, k) => toSrc(T[nm][k]))),
       future: OT_PERIODS.map(([lb, m1]) => !!(baseYm && year * 100 + m1 > baseYm)) };
-    const view = S.ui.otView === "org" ? "org" : "period";
+    const view = (S.ui.otView || (opts.embed ? "org" : "period")) === "org" ? "org" : "period";
+    S.otData.byOrg = view === "org";
     const org = names.includes(S.ui.otOrg) ? S.ui.otOrg : names[0];
     const per = OT_PERIODS.some(([lb]) => lb === S.ui.otPer) ? S.ui.otPer : "연간";
     const seg = (id, items, cur) => `<span class="seg-light" id="${id}">${items.map((v) => `<button type="button" data-v="${esc(v)}" class="${v === cur ? "on" : ""}">${esc(v)}</button>`).join("")}</span>`;
-    return `<div class="card ot-card" style="margin-top:16px"><div class="card-head"><h3>${year}년 수주(A+C) 목표 대비 달성율 <span class="h-period">실적/목표 달성율 · 분기·반기·연간</span> <span class="ot-src${up ? " up" : ""}">${esc(srcTxt)}</span></h3>
+    const head = opts.embed ? `<h3 class="ot-embed-h"><span class="h-period">조직별·기간별 실적/목표 · 분기·반기·연간</span> <span class="ot-src${up ? " up" : ""}">${esc(srcTxt)}</span></h3>`
+      : `<h3>${year}년 수주(A+C) 목표 대비 달성율 <span class="h-period">실적/목표 달성율 · 분기·반기·연간</span> <span class="ot-src${up ? " up" : ""}">${esc(srcTxt)}</span></h3>`;
+    return `<div class="card ot-card${opts.embed ? " ot-embed" : ""}"${opts.embed ? "" : ' style="margin-top:16px"'}><div class="card-head">${head}
       <span class="seg-light" id="otProd"><button type="button" data-v="all" class="${prod === "all" ? "on" : ""}">전체 상품</button><button type="button" data-v="leased" class="${prod === "leased" ? "on" : ""}">전용회선</button></span></div>
       <div class="toolbar ot-bar"><span class="seg-light" id="otView"><button type="button" data-v="period" class="${view === "period" ? "on" : ""}">기간별(조직 1개)</button><button type="button" data-v="org" class="${view === "org" ? "on" : ""}">조직별(기간 1개)</button></span>
         ${view === "period" ? seg("otOrg", names, org) : seg("otPer", OT_PERIODS.map(([lb]) => lb), per)}</div>
@@ -893,9 +912,14 @@
         scales: { y: { beginAtZero: true, suggestedMax: ymax, title: { display: true, text: `금액 (${unitName()})` }, ticks: { callback: (v) => fmtNum(v, 0).replace(/<[^>]+>/g, "") } }, x: { grid: { display: false } } } } });
   }
   // 목표 대비 달성율 막대그래프: 기간별(선택 조직의 1Q~연간) 또는 조직별(선택 기간의 담당·팀)
+  function bindOt() {
+    document.querySelectorAll("#otProd button").forEach((b) => b.addEventListener("click", () => { S.ui.otProd = b.dataset.v; store.set("ui", S.ui); render(); }));
+    [["otView", "otView"], ["otOrg", "otOrg"], ["otPer", "otPer"]].forEach(([id, key]) => document.querySelectorAll(`#${id} button`).forEach((x) => x.addEventListener("click", () => { S.ui[key] = x.dataset.v; store.set("ui", S.ui); render(); })));
+    drawOtChart();
+  }
   function drawOtChart() {
     const D = S.otData; if (!D || !$("otChart")) return;
-    const byOrg = S.ui.otView === "org";
+    const byOrg = !!D.byOrg;
     const oi = Math.max(0, D.names.indexOf(S.ui.otOrg));
     const pk = D.periods.indexOf(S.ui.otPer) >= 0 ? D.periods.indexOf(S.ui.otPer) : D.periods.length - 1;
     tgBarChart("otChart", byOrg ? D.names : D.periods,
@@ -1161,9 +1185,7 @@
     acrMonthlyChart("totChart", tRows, ["A", "C", "R", "ACR"], (m, key) => openDetail(dk({ win_month: m.ym, acr_type: key && ["A", "C", "R"].includes(key) ? [key] : undefined })));
     document.querySelectorAll("#tyearSel button").forEach((b) => b.addEventListener("click", () => { S.f.total_year = Number(b.dataset.v); store.set("filters", S.f); render(); }));
     const mlT = $("totExclML"); if (mlT) mlT.addEventListener("change", () => { S.ui.totExclML = mlT.checked; store.set("ui", S.ui); render(); });
-    document.querySelectorAll("#otProd button").forEach((b) => b.addEventListener("click", () => { S.ui.otProd = b.dataset.v; store.set("ui", S.ui); render(); }));
-    [["otView", "otView"], ["otOrg", "otOrg"], ["otPer", "otPer"]].forEach(([id, key]) => document.querySelectorAll(`#${id} button`).forEach((x) => x.addEventListener("click", () => { S.ui[key] = x.dataset.v; store.set("ui", S.ui); render(); })));
-    drawOtChart();
+    bindOt();
   }
 
   // ------------------------------------------------------------ 페이지: 팀·AM
