@@ -400,6 +400,8 @@
   }
   // R 증감 구분: 기존 월매출(재계약 전) 100만원 이상 / 미만
   function rSplitLine(v) {
+    // 2026-11: ‘R 증감 구분’ 줄은 표시하지 않음(R 증감 카드 안 표에 같은 내용)
+    if (v || !v) return "";
     const sp = v && v.r_split; if (!sp) return "";
     const cell = (b, lb, cls) => `<span class="rec-c ${cls}"><b>${lb}</b> ${amt(b.R)} <span class="muted">재계약 ${amt(b.renew)} · ${cnt(b.renew_n)}건 / 해지 ${amt(b.churn)} · ${cnt(b.churn_n)}건</span></span>`;
     return `<div class="ov-ref rec-line" title="R 증감 = 재계약 증감(변경매출 − 기존매출) + 해지 감소. 기존 월매출(재계약 전 월매출)이 100만원 이상인 건과 미만(미입력 포함)인 건으로 나눔. 두 값의 합 = R 증감">
